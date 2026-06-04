@@ -76,7 +76,8 @@ export async function GET(req: NextRequest) {
     })
 
     return res
-  } catch {
+  } catch (err) {
+    console.error('[oauth_callback]', err)
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/login?error=oauth_failed`)
   }
 }
