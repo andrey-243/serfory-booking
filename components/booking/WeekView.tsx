@@ -1,9 +1,12 @@
 'use client'
 
-import { format, startOfWeek, addDays, isSameDay, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { format, addDays, isSameDay, parseISO } from 'date-fns'
+import { enUS, et, ru } from 'date-fns/locale'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
+import { useLang } from '@/lib/language-context'
+
+const dateFnsLocales = { en: enUS, et, ru }
 
 type TeacherSlots = {
   teacher: Teacher
@@ -19,7 +22,7 @@ type Props = {
   onNextWeek: () => void
 }
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 8) // 8h → 20h
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 8)
 
 function slotToGridRow(start: string, end: string) {
   const s = parseISO(start)
@@ -32,6 +35,8 @@ function slotToGridRow(start: string, end: string) {
 }
 
 export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, weekStart, onPrevWeek, onNextWeek }: Props) {
+  const { t, lang } = useLang()
+  const locale = dateFnsLocales[lang]
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
   return (
@@ -41,16 +46,16 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
           onClick={onPrevWeek}
           className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
         >
-          ← Sem. préc.
+          {t.week.prev}
         </button>
         <span className="text-sm font-medium text-gray-700">
-          {format(weekStart, 'd MMM', { locale: fr })} – {format(addDays(weekStart, 6), 'd MMM yyyy', { locale: fr })}
+          {format(weekStart, 'd MMM', { locale })} – {format(addDays(weekStart, 6), 'd MMM yyyy', { locale })}
         </span>
         <button
           onClick={onNextWeek}
           className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
         >
-          Sem. suiv. →
+          {t.week.next}
         </button>
       </div>
 
@@ -63,7 +68,6 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
             minWidth: `${48 + Math.max(days.length * teacherSlots.length, 7) * 80}px`,
           }}
         >
-          {/* Header jours */}
           <div />
           {days.map(day =>
             teacherSlots.length > 0
@@ -72,7 +76,7 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
                     key={`${day.toISOString()}-${ts.teacher.id}`}
                     className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex flex-col items-center justify-center"
                   >
-                    <span className="uppercase">{format(day, 'EEE', { locale: fr })}</span>
+                    <span className="uppercase">{format(day, 'EEE', { locale })}</span>
                     <span className="text-gray-400 text-[10px]">{ts.teacher.name.split(' ')[0]}</span>
                   </div>
                 ))
@@ -81,12 +85,11 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
                     key={day.toISOString()}
                     className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex items-center justify-center"
                   >
-                    {format(day, 'EEE d', { locale: fr })}
+                    {format(day, 'EEE d', { locale })}
                   </div>
                 )
           )}
 
-          {/* Lignes heures */}
           {HOURS.flatMap(h => [0, 30].map(m => {
             const label = m === 0 ? `${h}h` : ''
             const rowIndex = (h - 8) * 2 + (m === 30 ? 1 : 0) + 2
@@ -101,7 +104,6 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
             )
           }))}
 
-          {/* Lignes fond */}
           {HOURS.flatMap(h => [0, 30].map(m => {
             const rowIndex = (h - 8) * 2 + (m === 30 ? 1 : 0) + 2
             const colCount = teacherSlots.length > 0 ? days.length * teacherSlots.length : 7
@@ -114,7 +116,6 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
             )
           }))}
 
-          {/* Créneaux */}
           {teacherSlots.flatMap((ts, tsIdx) =>
             ts.slots.map((slot, sIdx) => {
               const slotDate = parseISO(slot.start)

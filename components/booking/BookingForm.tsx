@@ -2,9 +2,12 @@
 
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { enUS, et, ru } from 'date-fns/locale'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
+import { useLang } from '@/lib/language-context'
+
+const dateFnsLocales = { en: enUS, et, ru }
 
 type Props = {
   teacher: Teacher
@@ -25,6 +28,8 @@ type FormData = {
 }
 
 export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel }: Props) {
+  const { t, lang } = useLang()
+  const ft = t.form
   const [form, setForm] = useState<FormData>({
     student_name: '',
     student_email: '',
@@ -62,23 +67,25 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Erreur inconnue')
+        throw new Error(data.error || 'Error')
       }
 
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue')
+      setError(err instanceof Error ? err.message : 'Error')
     } finally {
       setLoading(false)
     }
   }
 
+  const locale = dateFnsLocales[lang]
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="mb-4">
-        <p className="text-xs text-gray-500 mb-1">Cours avec {teacher.name}</p>
-        <p className="font-semibold text-gray-900">
-          {format(parseISO(slot.start), "EEEE d MMMM 'à' HH'h'mm", { locale: fr })}
+        <p className="text-xs text-gray-500 mb-1">{ft.courseWith} {teacher.name}</p>
+        <p className="font-semibold text-gray-900 capitalize">
+          {format(parseISO(slot.start), ft.dateFormat, { locale })}
         </p>
         <p className="text-sm text-gray-500">
           {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
@@ -86,40 +93,40 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        <Field label="Nom complet" required>
+        <Field label={ft.fullName} required>
           <input
             type="text"
             value={form.student_name}
             onChange={e => set('student_name', e.target.value)}
             required
             className={inputClass}
-            placeholder="Prénom Nom"
+            placeholder={ft.namePlaceholder}
           />
         </Field>
 
-        <Field label="Email" required>
+        <Field label={ft.email} required>
           <input
             type="email"
             value={form.student_email}
             onChange={e => set('student_email', e.target.value)}
             required
             className={inputClass}
-            placeholder="exemple@email.com"
+            placeholder="example@email.com"
           />
         </Field>
 
-        <Field label="Téléphone" required>
+        <Field label={ft.phone} required>
           <input
             type="tel"
             value={form.student_phone}
             onChange={e => set('student_phone', e.target.value)}
             required
             className={inputClass}
-            placeholder="+372 5..."
+            placeholder="+372 5…"
           />
         </Field>
 
-        <Field label="Contact favori" required>
+        <Field label={ft.preferredContact} required>
           <select
             value={form.contact_pref}
             onChange={e => set('contact_pref', e.target.value as 'whatsapp' | 'telegram')}
@@ -146,29 +153,29 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
               }`}
             />
           </button>
-          <span className="text-sm text-gray-700">Je suis mineur / Je réserve pour un enfant</span>
+          <span className="text-sm text-gray-700">{ft.minor}</span>
         </div>
 
         {form.is_minor && (
-          <div className="pl-0 space-y-3 pt-1">
-            <Field label="Nom du responsable légal" required>
+          <div className="space-y-3 pt-1">
+            <Field label={ft.parentName} required>
               <input
                 type="text"
                 value={form.parent_name}
                 onChange={e => set('parent_name', e.target.value)}
                 required
                 className={inputClass}
-                placeholder="Prénom Nom"
+                placeholder={ft.namePlaceholder}
               />
             </Field>
-            <Field label="Contact du parent (tél. ou email)" required>
+            <Field label={ft.parentContact} required>
               <input
                 type="text"
                 value={form.parent_contact}
                 onChange={e => set('parent_contact', e.target.value)}
                 required
                 className={inputClass}
-                placeholder="+372 5... ou parent@email.com"
+                placeholder={ft.parentPlaceholder}
               />
             </Field>
           </div>
@@ -186,14 +193,14 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
             onClick={onCancel}
             className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
           >
-            Annuler
+            {ft.cancel}
           </button>
           <button
             type="submit"
             disabled={loading}
             className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-60"
           >
-            {loading ? 'Envoi…' : 'Confirmer'}
+            {loading ? ft.sending : ft.confirm}
           </button>
         </div>
       </form>

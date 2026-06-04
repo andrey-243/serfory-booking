@@ -10,10 +10,10 @@ export default async function LoginPage({
   const { error: errorCode } = await searchParams
 
   const errorMessages: Record<string, string> = {
-    unauthorized: 'Ce compte n\'est pas autorisé à accéder à cette plateforme.',
-    oauth_failed: 'La connexion avec Google a échoué. Réessayez.',
-    invalid_callback: 'Paramètres de connexion invalides.',
-    no_id_token: 'Impossible de récupérer les informations du compte Google.',
+    unauthorized: 'This account is not authorized to access this platform.',
+    oauth_failed: 'Google sign-in failed. Please try again.',
+    invalid_callback: 'Invalid sign-in parameters.',
+    no_id_token: 'Could not retrieve Google account information.',
   }
 
   const error = errorCode ? errorMessages[errorCode] : null
@@ -27,8 +27,8 @@ export default async function LoginPage({
         <span className="text-2xl font-bold tracking-tight text-gray-900">Serfory</span>
 
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-gray-900">Espace professeurs</h1>
-          <p className="text-sm text-gray-500 mt-1">Connectez-vous avec votre compte Google</p>
+          <h1 className="text-xl font-semibold text-gray-900">Teacher portal</h1>
+          <p className="text-sm text-gray-500 mt-1">Sign in with your Google account</p>
         </div>
 
         {error && (
@@ -42,11 +42,11 @@ export default async function LoginPage({
           className="flex items-center gap-3 w-full justify-center px-5 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
         >
           <GoogleIcon />
-          Se connecter avec Google
+          Sign in with Google
         </a>
 
         <p className="text-xs text-gray-400 text-center">
-          Accès réservé aux professeurs et administrateurs Serfory.
+          Access reserved for Serfory teachers and administrators.
         </p>
       </div>
     </div>

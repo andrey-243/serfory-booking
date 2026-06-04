@@ -1,6 +1,6 @@
 'use client'
 
-const COURSES = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Music'] as const
+const COURSES = ['Russian', 'English', 'Estonian', 'Spanish', 'Math'] as const
 export type Course = (typeof COURSES)[number]
 
 type Props = {
