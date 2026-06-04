@@ -81,13 +81,13 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
   const locale = dateFnsLocales[lang]
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="mb-4">
-        <p className="text-xs text-gray-500 mb-1">{ft.courseWith} {teacher.name}</p>
-        <p className="font-semibold text-gray-900 capitalize">
+    <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div className="mb-4 pb-3 border-b border-gray-100">
+        <p className="text-xs text-gray-500 mb-0.5">{ft.courseWith} {teacher.name}</p>
+        <p className="font-semibold text-gray-900 text-sm">
           {format(parseISO(slot.start), ft.dateFormat, { locale })}
         </p>
-        <p className="text-sm text-gray-500">
+        <p className="text-xs text-gray-500 mt-0.5">
           {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
         </p>
       </div>
@@ -137,7 +137,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           </select>
         </Field>
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2.5 pt-1">
           <button
             type="button"
             role="switch"
@@ -191,7 +191,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+            className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium"
           >
             {ft.cancel}
           </button>
@@ -209,12 +209,12 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 }
 
 const inputClass =
-  'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
+  'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
 
 function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">
+      <label className="block text-xs font-medium text-gray-700 mb-1">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       {children}

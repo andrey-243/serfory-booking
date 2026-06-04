@@ -1,6 +1,7 @@
 'use client'
 
 import { Teacher } from '@/lib/supabase'
+import { useLang } from '@/lib/language-context'
 
 type Props = {
   teacher: Teacher
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export default function TeacherCard({ teacher, selected, onClick }: Props) {
+  const { t } = useLang()
   const photo = teacher.photo_url || teacher.google_photo_url
   const initials = teacher.name.split(' ').map(n => n[0]).join('')
 
@@ -42,12 +44,12 @@ export default function TeacherCard({ teacher, selected, onClick }: Props) {
       </div>
 
       <div className="space-y-1.5 border-t border-gray-100 pt-3">
-        {teacher.levels && (
+        {(teacher.levels || teacher.subjects?.length > 0) && (
           <div className="flex items-start gap-2 text-[11px] text-gray-500">
             <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
-            <span>{teacher.levels}</span>
+            <span>{teacher.levels || teacher.subjects.join(' · ')}</span>
           </div>
         )}
         {teacher.experience_years && (
@@ -55,7 +57,7 @@ export default function TeacherCard({ teacher, selected, onClick }: Props) {
             <svg className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>{teacher.experience_years} ans d&apos;expérience</span>
+            <span>{t.booking.experienceYears.replace('{n}', String(teacher.experience_years))}</span>
           </div>
         )}
         {teacher.teaching_languages?.length > 0 && (
@@ -64,15 +66,6 @@ export default function TeacherCard({ teacher, selected, onClick }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
             </svg>
             <span>{teacher.teaching_languages.join(' · ')}</span>
-          </div>
-        )}
-        {teacher.subjects?.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            {teacher.subjects.map(s => (
-              <span key={s} className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">
-                {s}
-              </span>
-            ))}
           </div>
         )}
       </div>
