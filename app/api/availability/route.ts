@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'teacherId is required' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('teacher_availability')
     .select('*')
     .eq('teacher_id', teacherId)
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Remplace toutes les dispos du prof d'un coup
-  const { error: deleteError } = await supabaseAdmin
+  const { error: deleteError } = await getSupabaseAdmin()
     .from('teacher_availability')
     .delete()
     .eq('teacher_id', teacher_id)
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     end_time: a.end_time,
   }))
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('teacher_availability')
     .insert(rows)
     .select()

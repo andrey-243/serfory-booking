@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { createCalendarEvent } from '@/lib/google-calendar'
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const { data: teacher } = await supabaseAdmin
+  const { data: teacher } = await getSupabaseAdmin()
     .from('teachers')
     .select('name, google_refresh_token, google_calendar_id')
     .eq('id', teacher_id)
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     } catch {}
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from('bookings')
     .insert({
       teacher_id,
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
   // BUG FIXÉ : query doit être réassigné sinon .eq() est appelé mais ignoré
   // (Supabase query builder est immutable — chaque méthode retourne une nouvelle instance)
-  let query = supabaseAdmin
+  let query = getSupabaseAdmin()
     .from('bookings')
     .select('*, teachers(name)')
     .order('slot_start', { ascending: true })

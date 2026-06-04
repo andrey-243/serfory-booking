@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { exchangeCodeForTokens, getGoogleUserInfo } from '@/lib/google-calendar'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { signSession } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
@@ -22,14 +22,14 @@ export async function GET(req: NextRequest) {
     const email = userInfo.email
 
     // Vérifie si admin
-    const { data: admin } = await supabaseAdmin
+    const { data: admin } = await getSupabaseAdmin()
       .from('admins')
       .select('email')
       .eq('email', email)
       .single()
 
     // Vérifie si teacher
-    const { data: teacher } = await supabaseAdmin
+    const { data: teacher } = await getSupabaseAdmin()
       .from('teachers')
       .select('id, name')
       .eq('email', email)
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
     // Stocke le refresh_token pour les teachers
     if (teacher && tokens.refresh_token) {
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('teachers')
         .update({ google_refresh_token: tokens.refresh_token })
         .eq('email', email)
