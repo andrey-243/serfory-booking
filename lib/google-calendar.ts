@@ -27,7 +27,7 @@ export async function getAuthUrl() {
   })
 }
 
-export async function getGoogleUserInfo(accessToken: string): Promise<{ email: string; name: string }> {
+export async function getGoogleUserInfo(accessToken: string): Promise<{ email: string; name: string; picture?: string }> {
   const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
