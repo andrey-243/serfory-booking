@@ -28,7 +28,7 @@ export default function TeacherPage() {
   const [user, setUser] = useState<User | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
-    DAYS.map((_, i) => ({ day_of_week: i, start_time: '09:00', end_time: '18:00', enabled: i >= 1 && i <= 5 }))
+    DAYS.map((_, i) => ({ day_of_week: i, start_time: '08:00', end_time: '20:00', enabled: i >= 1 && i <= 5 }))
   )
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
@@ -129,14 +129,16 @@ export default function TeacherPage() {
                     <input
                       type="time"
                       value={row.start_time}
-                      onChange={e => setAvailability(prev => prev.map((r, j) => j === i ? { ...r, start_time: e.target.value } : r))}
+                      onChange={e => e.target.value && setAvailability(prev => prev.map((r, j) => j === i ? { ...r, start_time: e.target.value } : r))}
+                      onBlur={e => { if (!e.target.value) setAvailability(prev => prev.map((r, j) => j === i ? { ...r, start_time: '08:00' } : r)) }}
                       className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                     <span className="text-gray-400 text-sm">–</span>
                     <input
                       type="time"
                       value={row.end_time}
-                      onChange={e => setAvailability(prev => prev.map((r, j) => j === i ? { ...r, end_time: e.target.value } : r))}
+                      onChange={e => e.target.value && setAvailability(prev => prev.map((r, j) => j === i ? { ...r, end_time: e.target.value } : r))}
+                      onBlur={e => { if (!e.target.value) setAvailability(prev => prev.map((r, j) => j === i ? { ...r, end_time: '20:00' } : r)) }}
                       className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
