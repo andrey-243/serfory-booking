@@ -39,6 +39,11 @@ export type Teacher = {
   photo_url: string | null
   google_refresh_token: string | null
   google_calendar_id: string | null
+  google_photo_url: string | null
+  title: string | null
+  teaching_languages: string[]
+  levels: string | null
+  experience_years: number | null
   created_at: string
 }
 

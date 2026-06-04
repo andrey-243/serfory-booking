@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
     const userInfo = await getGoogleUserInfo(tokens.access_token!)
     const email = userInfo.email
+    const googlePhotoUrl = userInfo.picture ?? null
 
     // Vérifie si admin
     const { data: admin } = await getSupabaseAdmin()
@@ -42,11 +43,16 @@ export async function GET(req: NextRequest) {
     const role = admin ? 'admin' : 'teacher'
 
     // Stocke le refresh_token pour les teachers
-    if (teacher && tokens.refresh_token) {
-      await getSupabaseAdmin()
-        .from('teachers')
-        .update({ google_refresh_token: tokens.refresh_token })
-        .eq('email', email)
+    if (teacher) {
+      const updates: Record<string, string> = {}
+      if (tokens.refresh_token) updates.google_refresh_token = tokens.refresh_token
+      if (googlePhotoUrl) updates.google_photo_url = googlePhotoUrl
+      if (Object.keys(updates).length > 0) {
+        await getSupabaseAdmin()
+          .from('teachers')
+          .update(updates)
+          .eq('email', email)
+      }
     }
 
     const session = await signSession({

@@ -24,6 +24,7 @@ export default function BookingPage() {
 function BookingPageInner() {
   const { t } = useLang()
   const [selectedCourse, setSelectedCourse] = useState<Course>('Russian')
+  const [selectedLang, setSelectedLang] = useState<string>('')
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [teacherSlots, setTeacherSlots] = useState<TeacherSlots[]>([])
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
@@ -33,14 +34,16 @@ function BookingPageInner() {
   const [booked, setBooked] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/teachers?subject=${selectedCourse}`)
+    const params = new URLSearchParams({ subject: selectedCourse })
+    if (selectedLang) params.set('teachingLang', selectedLang)
+    fetch(`/api/teachers?${params}`)
       .then(r => r.json())
       .then(d => {
         setTeachers(d.teachers || [])
         setSelectedTeacher(null)
         setSelectedSlot(null)
       })
-  }, [selectedCourse])
+  }, [selectedCourse, selectedLang])
 
   const loadSlots = useCallback(async (teacherList: Teacher[], week: Date) => {
     setLoadingSlots(true)
@@ -96,7 +99,10 @@ function BookingPageInner() {
     <main className="min-h-screen bg-[#EEF2FF] p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t.booking.title}</h1>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Serfory" className="h-8 w-8 rounded-lg object-cover" />
+            <h1 className="text-2xl font-bold text-gray-900">{t.booking.title}</h1>
+          </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <a href="/login" className="p-2 rounded-full hover:bg-white/60 transition-colors text-gray-400 hover:text-gray-600" title="Teacher portal">
@@ -108,8 +114,18 @@ function BookingPageInner() {
           </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           <CourseTabFilter selected={selectedCourse} onChange={course => { setSelectedCourse(course); setBooked(false) }} />
+          <select
+            value={selectedLang}
+            onChange={e => { setSelectedLang(e.target.value); setBooked(false) }}
+            className="h-9 rounded-full border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+          >
+            <option value="">{t.booking.allLanguages}</option>
+            <option value="Russian">Russian</option>
+            <option value="Estonian">Estonian</option>
+            <option value="English">English</option>
+          </select>
         </div>
 
         <div className="flex gap-5">

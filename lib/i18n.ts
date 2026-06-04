@@ -12,6 +12,15 @@ export const translations = {
       confirmed: 'Booking confirmed!',
       confirmedDesc: 'Your request has been recorded. The teacher will contact you shortly.',
       bookAnother: 'Book another lesson',
+      teachesIn: 'Teaches in',
+      allLanguages: 'Course provided in',
+      courses: {
+        Russian: 'Russian',
+        English: 'English',
+        Estonian: 'Estonian',
+        Spanish: 'Spanish',
+        Math: 'Math',
+      },
     },
     form: {
       courseWith: 'Lesson with',
@@ -55,6 +64,15 @@ export const translations = {
       confirmed: 'Broneering kinnitatud!',
       confirmedDesc: 'Teie soov on registreeritud. Õpetaja võtab teiega peagi ühendust.',
       bookAnother: 'Broneeri veel üks tund',
+      teachesIn: 'Õpetab keeles',
+      allLanguages: 'Kursuse keel',
+      courses: {
+        Russian: 'Vene keel',
+        English: 'Inglise keel',
+        Estonian: 'Eesti keel',
+        Spanish: 'Hispaania keel',
+        Math: 'Matemaatika',
+      },
     },
     form: {
       courseWith: 'Tund koos',
@@ -98,6 +116,15 @@ export const translations = {
       confirmed: 'Бронирование подтверждено!',
       confirmedDesc: 'Ваш запрос зарегистрирован. Преподаватель свяжется с вами в ближайшее время.',
       bookAnother: 'Записаться ещё раз',
+      teachesIn: 'Язык обучения',
+      allLanguages: 'Язык курса',
+      courses: {
+        Russian: 'Русский',
+        English: 'Английский',
+        Estonian: 'Эстонский',
+        Spanish: 'Испанский',
+        Math: 'Математика',
+      },
     },
     form: {
       courseWith: 'Урок с',
