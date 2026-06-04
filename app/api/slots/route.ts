@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getAvailableSlots } from '@/lib/google-calendar'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const teacherId = searchParams.get('teacherId')
-  const weekStart = searchParams.get('weekStart') // ISO date string
+  const weekStart = searchParams.get('weekStart')
 
   if (!teacherId || !weekStart) {
     return NextResponse.json({ error: 'teacherId and weekStart are required' }, { status: 400 })
   }
 
-  const { data: teacher, error } = await supabaseAdmin
+  const { data: teacher, error } = await getSupabaseAdmin()
     .from('teachers')
     .select('google_refresh_token, google_calendar_id')
     .eq('id', teacherId)
@@ -25,11 +25,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ slots: [] })
   }
 
+  const { data: availabilities } = await getSupabaseAdmin()
+    .from('teacher_availability')
+    .select('*')
+    .eq('teacher_id', teacherId)
+
   try {
     const slots = await getAvailableSlots(
       teacher.google_refresh_token,
       teacher.google_calendar_id || 'primary',
-      new Date(weekStart)
+      new Date(weekStart),
+      availabilities ?? []
     )
     return NextResponse.json({ slots })
   } catch {

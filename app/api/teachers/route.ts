@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const subject = searchParams.get('subject')
 
-  let query = supabaseAdmin
+  let query = getSupabaseAdmin()
     .from('teachers')
     .select('id, name, email, subjects, photo_url, google_calendar_id, created_at')
     .order('name')
