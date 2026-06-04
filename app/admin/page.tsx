@@ -44,7 +44,12 @@ export default function AdminPage() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Administration</h1>
-          <span className="text-sm text-gray-500">{bookings.length} réservation(s) au total</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">{bookings.length} réservation(s)</span>
+            <a href="/api/auth/logout" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              Déconnexion
+            </a>
+          </div>
         </div>
 
         {/* Filtres */}
