@@ -83,13 +83,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const teacherId = searchParams.get('teacherId')
 
-  const query = supabaseAdmin
+  // BUG FIXÉ : query doit être réassigné sinon .eq() est appelé mais ignoré
+  // (Supabase query builder est immutable — chaque méthode retourne une nouvelle instance)
+  let query = supabaseAdmin
     .from('bookings')
     .select('*, teachers(name)')
     .order('slot_start', { ascending: true })
 
   if (teacherId) {
-    query.eq('teacher_id', teacherId)
+    query = query.eq('teacher_id', teacherId)
   }
 
   const { data, error } = await query

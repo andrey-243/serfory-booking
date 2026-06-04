@@ -54,3 +54,11 @@ export type Booking = {
   google_event_id: string | null
   created_at: string
 }
+
+export type TeacherAvailability = {
+  id: string
+  teacher_id: string
+  day_of_week: number  // 0=dim, 1=lun, 2=mar, 3=mer, 4=jeu, 5=ven, 6=sam
+  start_time: string   // 'HH:MM:SS'
+  end_time: string     // 'HH:MM:SS'
+}

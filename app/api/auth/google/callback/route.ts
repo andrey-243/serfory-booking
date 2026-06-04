@@ -1,37 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { exchangeCodeForTokens } from '@/lib/google-calendar'
+import { exchangeCodeForTokens, getGoogleUserInfo } from '@/lib/google-calendar'
 import { supabaseAdmin } from '@/lib/supabase'
+import { signSession } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const code = searchParams.get('code')
-  const teacherEmail = searchParams.get('state')
 
-  if (!code || !teacherEmail) {
-    return NextResponse.json({ error: 'Invalid callback' }, { status: 400 })
+  if (!code) {
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/login?error=invalid_callback`)
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code)
 
-    if (!tokens.refresh_token) {
-      return NextResponse.json(
-        { error: 'No refresh_token received — make sure OAuth prompt is set to consent' },
-        { status: 400 }
-      )
+    if (!tokens.id_token) {
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/login?error=no_id_token`)
     }
 
-    const { error } = await supabaseAdmin
+    const userInfo = await getGoogleUserInfo(tokens.access_token!)
+    const email = userInfo.email
+
+    // Vérifie si admin
+    const { data: admin } = await supabaseAdmin
+      .from('admins')
+      .select('email')
+      .eq('email', email)
+      .single()
+
+    // Vérifie si teacher
+    const { data: teacher } = await supabaseAdmin
       .from('teachers')
-      .update({ google_refresh_token: tokens.refresh_token })
-      .eq('email', teacherEmail)
+      .select('id, name')
+      .eq('email', email)
+      .single()
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to save token' }, { status: 500 })
+    if (!admin && !teacher) {
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/login?error=unauthorized`)
     }
 
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/teacher?connected=true`)
+    const role = admin ? 'admin' : 'teacher'
+
+    // Stocke le refresh_token pour les teachers
+    if (teacher && tokens.refresh_token) {
+      await supabaseAdmin
+        .from('teachers')
+        .update({ google_refresh_token: tokens.refresh_token })
+        .eq('email', email)
+    }
+
+    const session = await signSession({
+      email,
+      role,
+      teacherId: teacher?.id ?? null,
+      name: teacher?.name ?? email,
+    })
+
+    const redirectUrl = role === 'admin'
+      ? `${process.env.NEXT_PUBLIC_BASE_URL}/admin`
+      : `${process.env.NEXT_PUBLIC_BASE_URL}/teacher`
+
+    const res = NextResponse.redirect(redirectUrl)
+    res.cookies.set('session', session, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 jours
+      path: '/',
+    })
+
+    return res
   } catch {
-    return NextResponse.json({ error: 'OAuth exchange failed' }, { status: 500 })
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/login?error=oauth_failed`)
   }
 }
