@@ -3,10 +3,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) throw new Error('SUPABASE_URL is not set')
+  return createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
 export async function createSupabaseServerClient() {
