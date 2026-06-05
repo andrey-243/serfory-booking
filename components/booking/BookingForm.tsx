@@ -21,7 +21,7 @@ type FormData = {
   student_name: string
   student_email: string
   student_phone: string
-  contact_pref: 'whatsapp' | 'telegram'
+  contact_pref: 'whatsapp' | 'telegram' | 'email'
   is_minor: boolean
   parent_name: string
   parent_contact: string
@@ -129,11 +129,12 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         <Field label={ft.preferredContact} required>
           <select
             value={form.contact_pref}
-            onChange={e => set('contact_pref', e.target.value as 'whatsapp' | 'telegram')}
+            onChange={e => set('contact_pref', e.target.value as 'whatsapp' | 'telegram' | 'email')}
             className={inputClass}
           >
             <option value="whatsapp">WhatsApp</option>
             <option value="telegram">Telegram</option>
+            <option value="email">Email</option>
           </select>
         </Field>
 

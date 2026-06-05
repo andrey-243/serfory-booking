@@ -55,7 +55,7 @@ export type Booking = {
   student_name: string
   student_email: string
   student_phone: string
-  contact_pref: 'whatsapp' | 'telegram'
+  contact_pref: 'whatsapp' | 'telegram' | 'email'
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null

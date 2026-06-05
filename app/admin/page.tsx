@@ -20,17 +20,18 @@ type Booking = {
   teachers: { name: string } | null
 }
 
+type Combo = { subject: string; teacher: string; count: number }
+
 type StudentRow = {
   name: string
   email: string
   phone: string
-  contact_pref: string
+  prefs: string[]  // all unique contact_pref values used across bookings
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
   total: number
-  bySubject: Record<string, number>
-  byTeacher: Record<string, number>
+  combos: Combo[]
 }
 
 const T = {
@@ -48,8 +49,9 @@ const T = {
     emptyCrm: 'Aucun élève.',
     status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé' },
     cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Étudiant', contact: 'Contact', status: 'Statut' },
-    crmCols: { student: 'Élève', contact: 'Contact', courses: 'Cours réservés' },
+    crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
     minor: 'Mineur',
+    minorsOnly: 'Mineurs',
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'à' HH'h'mm",
     locale: fr,
@@ -68,8 +70,9 @@ const T = {
     emptyCrm: 'No students.',
     status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled' },
     cols: { date: 'Date / Time', teacher: 'Teacher', course: 'Course', student: 'Student', contact: 'Contact', status: 'Status' },
-    crmCols: { student: 'Student', contact: 'Contact', courses: 'Bookings' },
+    crmCols: { student: 'Student', contact: 'Contact', courses: 'Courses', teachers: 'Teachers' },
     minor: 'Minor',
+    minorsOnly: 'Minors',
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
@@ -93,6 +96,8 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterCourse, setFilterCourse] = useState<string>('all')
   const [filterTeacher, setFilterTeacher] = useState<string>('all')
+  // CRM filters
+  const [filterMinors, setFilterMinors] = useState(false)
 
   const t = T[lang]
 
@@ -123,20 +128,22 @@ export default function AdminPage() {
           name: b.student_name,
           email: b.student_email,
           phone: b.student_phone,
-          contact_pref: b.contact_pref,
+          prefs: [],
           is_minor: b.is_minor,
           parent_name: b.parent_name,
           parent_contact: b.parent_contact,
           total: 0,
-          bySubject: {},
-          byTeacher: {},
+          combos: [],
         })
       }
       const s = map.get(key)!
       s.total++
-      s.bySubject[b.subject] = (s.bySubject[b.subject] || 0) + 1
+      if (!s.prefs.includes(b.contact_pref)) s.prefs.push(b.contact_pref)
       const tName = b.teachers?.name ?? '—'
-      s.byTeacher[tName] = (s.byTeacher[tName] || 0) + 1
+      const comboKey = `${b.subject}||${tName}`
+      const existing = s.combos.find(c => `${c.subject}||${c.teacher}` === comboKey)
+      if (existing) existing.count++
+      else s.combos.push({ subject: b.subject, teacher: tName, count: 1 })
     })
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [bookings])
@@ -277,26 +284,38 @@ export default function AdminPage() {
                         <td className="px-4 py-3 text-gray-700">{b.teachers?.name ?? '—'}</td>
                         <td className="px-4 py-3 text-gray-700">{b.subject}</td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{b.student_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">{b.student_name}</p>
+                            {b.is_minor && (
+                              <span className="text-[10px] font-bold text-orange-500 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 leading-none flex-shrink-0">
+                                ⚠ {t.minor}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400">{b.student_email}</p>
-                          {b.is_minor && (
-                            <span className="mt-0.5 text-xs text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 inline-block">
-                              {t.minor} — {b.parent_name}
-                            </span>
+                          {b.is_minor && b.parent_name && (
+                            <p className="text-xs text-orange-500 mt-0.5">{b.parent_name}{b.parent_contact && ` · ${b.parent_contact}`}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">{b.student_phone}</span>
-                            {b.contact_pref === 'whatsapp' ? (
+                            {b.contact_pref === 'whatsapp' && (
                               <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full font-medium transition-colors">
+                                className="flex items-center gap-1 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2 py-0.5 rounded-full font-medium transition-colors">
                                 <WaIcon /> WA
                               </a>
-                            ) : (
+                            )}
+                            {b.contact_pref === 'telegram' && (
                               <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-xs text-sky-600 bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded-full font-medium transition-colors">
+                                className="flex items-center gap-1 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2 py-0.5 rounded-full font-medium transition-colors">
                                 <TgIcon /> TG
+                              </a>
+                            )}
+                            {b.contact_pref === 'email' && (
+                              <a href={`mailto:${b.student_email}`}
+                                className="flex items-center gap-1 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full font-medium transition-colors">
+                                <EmailIcon /> Email
                               </a>
                             )}
                           </div>
@@ -323,9 +342,23 @@ export default function AdminPage() {
         {/* ── CRM VIEW ── */}
         {view === 'crm' && (
           <div>
+            {/* CRM filter bar */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setFilterMinors(f => !f)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  filterMinors
+                    ? 'bg-orange-400 text-white border-orange-400'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'
+                }`}
+              >
+                <span>⚠</span> {t.minorsOnly}
+              </button>
+            </div>
+
             {loading ? (
               <p className="text-sm text-gray-400">{t.loading}</p>
-            ) : students.length === 0 ? (
+            ) : students.filter(s => !filterMinors || s.is_minor).length === 0 ? (
               <p className="text-sm text-gray-400">{t.emptyCrm}</p>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -335,33 +368,40 @@ export default function AdminPage() {
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.student}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.contact}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.courses}</th>
+                      <th className="text-left px-4 py-3 font-medium">{t.crmCols.teachers}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map(s => (
+                    {students.filter(s => !filterMinors || s.is_minor).map(s => (
                       <tr key={s.email} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-top">
                         {/* Student info */}
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-900">{s.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">{s.name}</p>
+                            {s.is_minor && (
+                              <span className="flex-shrink-0 text-[10px] font-bold text-orange-500 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 leading-none">
+                                ⚠ {t.minor}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400 mt-0.5">{s.email}</p>
                           {s.is_minor && s.parent_name && (
-                            <div className="mt-1 text-xs text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 inline-block">
-                              {t.minor} — {s.parent_name}
-                              {s.parent_contact && <span className="text-orange-500 ml-1">({s.parent_contact})</span>}
-                            </div>
+                            <p className="text-xs text-orange-500 mt-0.5">
+                              {s.parent_name}{s.parent_contact && ` · ${s.parent_contact}`}
+                            </p>
                           )}
                         </td>
 
                         {/* Contact + deep links */}
                         <td className="px-4 py-3">
                           <p className="text-sm text-gray-700">{s.phone}</p>
-                          <div className="flex gap-2 mt-1.5">
+                          <div className="flex flex-wrap gap-2 mt-1.5">
                             <a
                               href={waLink(s.phone)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                                s.contact_pref === 'whatsapp'
+                                s.prefs.includes('whatsapp')
                                   ? 'bg-emerald-500 text-white hover:bg-emerald-600'
                                   : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
                               }`}
@@ -373,32 +413,46 @@ export default function AdminPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                                s.contact_pref === 'telegram'
+                                s.prefs.includes('telegram')
                                   ? 'bg-sky-500 text-white hover:bg-sky-600'
                                   : 'bg-sky-50 text-sky-600 hover:bg-sky-100'
                               }`}
                             >
                               <TgIcon /> Telegram
                             </a>
+                            <a
+                              href={`mailto:${s.email}`}
+                              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                                s.prefs.includes('email')
+                                  ? 'bg-violet-500 text-white hover:bg-violet-600'
+                                  : 'bg-violet-50 text-violet-600 hover:bg-violet-100'
+                              }`}
+                            >
+                              <EmailIcon /> Email
+                            </a>
                           </div>
                         </td>
 
-                        {/* Bookings summary */}
+                        {/* Courses column */}
                         <td className="px-4 py-3">
                           <p className="text-xs text-gray-400 mb-1.5">{t.total(s.total)}</p>
-                          <div className="space-y-1">
-                            {Object.entries(s.bySubject).map(([subject, count]) => (
-                              <div key={subject} className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-gray-700">{subject}</span>
-                                <span className="text-xs text-gray-400">×{count}</span>
-                                <span className="text-xs text-gray-300">·</span>
-                                {Object.entries(s.byTeacher)
-                                  .filter(([, c]) => c > 0)
-                                  .map(([teacher, tCount]) => (
-                                    <span key={teacher} className="text-xs text-gray-400">
-                                      {teacher.split(' ')[0]} ×{tCount}
-                                    </span>
-                                  ))}
+                          <div className="space-y-1.5">
+                            {s.combos.map((c, i) => (
+                              <div key={i} className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium text-gray-800">{c.subject}</span>
+                                <span className="text-xs font-semibold text-blue-500">×{c.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Teachers column — aligned with combos */}
+                        <td className="px-4 py-3">
+                          <p className="text-xs text-gray-400 mb-1.5">&nbsp;</p>
+                          <div className="space-y-1.5">
+                            {s.combos.map((c, i) => (
+                              <div key={i} className="text-xs text-gray-500">
+                                {c.teacher.split(' ')[0]}
                               </div>
                             ))}
                           </div>
@@ -428,6 +482,14 @@ function TgIcon() {
   return (
     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
       <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+    </svg>
+  )
+}
+
+function EmailIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   )
 }
