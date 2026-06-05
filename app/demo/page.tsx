@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,8 @@ type StudentRow = {
 }
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
+type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
+type FilterMinors = 'all' | 'minors' | 'to_contact' | 'contacted' | 'answered'
 
 // ── Demo data ────────────────────────────────────────────────────────────────
 // Covers: same course × different teachers, different courses × same teacher, minor with parent
@@ -97,7 +99,14 @@ export default function DemoPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCourse, setFilterCourse] = useState('all')
   const [filterTeacher, setFilterTeacher] = useState('all')
-  const [filterMinors, setFilterMinors] = useState<'all' | 'minors' | 'not_reached'>('all')
+  const [filterMinors, setFilterMinors] = useState<FilterMinors>('all')
+  const [sortCol, setSortCol] = useState<SortCol>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function handleSort(col: SortCol) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
   const [parentStatus, setParentStatus] = useState<Record<string, ParentStatus>>(loadStatus)
 
   function cycleStatus(email: string) {
@@ -130,7 +139,7 @@ export default function DemoPage() {
     if (filterCourse !== 'all' && b.subject !== filterCourse) return false
     if (filterTeacher !== 'all' && b.teacher !== filterTeacher) return false
     if (filterMinors === 'minors' && !b.is_minor) return false
-    if (filterMinors === 'not_reached' && (!b.is_minor || (parentStatus[b.student_email] ?? 'to_contact') !== 'to_contact')) return false
+    if (['to_contact', 'contacted', 'answered'].includes(filterMinors) && (!b.is_minor || (parentStatus[b.student_email] ?? 'to_contact') !== filterMinors)) return false
     return true
   })
 
@@ -151,9 +160,29 @@ export default function DemoPage() {
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [])
 
+  const sorted = (() => {
+    const arr = [...filtered]
+    arr.sort((a, b) => {
+      let cmp = 0
+      switch (sortCol) {
+        case 'date': cmp = a.slot_start.localeCompare(b.slot_start); break
+        case 'teacher': cmp = a.teacher.localeCompare(b.teacher); break
+        case 'course': cmp = a.subject.localeCompare(b.subject); break
+        case 'student': cmp = a.student_name.localeCompare(b.student_name); break
+        case 'status': {
+          const ord: Record<string, number> = { confirmed: 0, pending: 1, cancelled: 2 }
+          cmp = (ord[a.status] ?? 1) - (ord[b.status] ?? 1)
+          break
+        }
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return arr
+  })()
+
   return (
     <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-screen-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -214,11 +243,13 @@ export default function DemoPage() {
                 {teachers.map(tc => <option key={tc} value={tc}>{tc}</option>)}
               </select>
               <div className="h-5 w-px bg-gray-200" />
-              <select value={filterMinors} onChange={e => setFilterMinors(e.target.value as 'all' | 'minors' | 'not_reached')}
+              <select value={filterMinors} onChange={e => setFilterMinors(e.target.value as FilterMinors)}
                 className={`text-xs border rounded-full px-3 py-1 bg-white focus:outline-none cursor-pointer transition-colors ${filterMinors !== 'all' ? 'text-orange-500 border-orange-400 font-medium' : 'text-gray-500 border-gray-200 hover:border-orange-300'}`}>
                 <option value="all">All</option>
                 <option value="minors">Minors</option>
-                <option value="not_reached">Parent not reached</option>
+                <option value="to_contact">To contact</option>
+                <option value="contacted">Contacted</option>
+                <option value="answered">Answered</option>
               </select>
             </div>
 
@@ -227,16 +258,16 @@ export default function DemoPage() {
                 <thead>
                   <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                     <th className="w-6 px-3 py-3" />
-                    <th className="text-left px-4 py-3 font-medium">Date / Time</th>
-                    <th className="text-left px-4 py-3 font-medium">Teacher</th>
-                    <th className="text-left px-4 py-3 font-medium">Course</th>
-                    <th className="text-left px-4 py-3 font-medium">Élève</th>
+                    <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleSort('date')}>Date / Time<SortIndicator active={sortCol === 'date'} dir={sortDir} /></th>
+                    <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleSort('teacher')}>Teacher<SortIndicator active={sortCol === 'teacher'} dir={sortDir} /></th>
+                    <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleSort('course')}>Course<SortIndicator active={sortCol === 'course'} dir={sortDir} /></th>
+                    <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleSort('student')}>Student<SortIndicator active={sortCol === 'student'} dir={sortDir} /></th>
                     <th className="text-left px-4 py-3 font-medium">Contact</th>
-                    <th className="text-left px-4 py-3 font-medium">Status</th>
                     <th className="w-24 px-3 py-3" />
+                    <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleSort('status')}>Status<SortIndicator active={sortCol === 'status'} dir={sortDir} /></th>
                   </tr>
                 </thead>
-                {filtered.map(b => {
+                {sorted.map(b => {
                   const pStatus = b.is_minor ? (parentStatus[b.student_email] ?? 'to_contact') : 'to_contact'
                   const hasParent = b.is_minor && !!b.parent_contact
                   const span = hasParent ? 2 : 1
@@ -249,11 +280,16 @@ export default function DemoPage() {
                   return (
                     <tbody key={b.id} className="group">
                       <tr className={`group-hover:bg-gray-50 transition-colors ${!hasParent ? 'border-b border-gray-200' : ''}`}>
-                        <td rowSpan={span} className="px-3 py-3 text-center align-middle">
+                        <td rowSpan={span} className="px-3 pt-3 pb-0 align-top">
                           {b.is_minor && <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotColor(pStatus)}`} />}
                         </td>
                         <td rowSpan={span} className="px-4 py-3 text-gray-700 whitespace-nowrap align-middle">{fmtDate(b.slot_start)}</td>
-                        <td rowSpan={span} className="px-4 py-3 text-gray-700 align-middle">{b.teacher.split(' ')[0]}</td>
+                        <td rowSpan={span} className="px-4 py-3 text-gray-700 align-middle">
+                          <div className="flex items-center gap-2">
+                            <TeacherAvatar name={b.teacher} />
+                            <span>{b.teacher.split(' ')[0]}</span>
+                          </div>
+                        </td>
                         <td rowSpan={span} className="px-4 py-3 text-gray-700 align-middle">{b.subject}</td>
                         <td className="px-4 py-3" style={divStyle}>
                           <p className="font-semibold text-gray-900">{b.student_name}</p>
@@ -262,7 +298,6 @@ export default function DemoPage() {
                           <p className="text-xs text-gray-400">{b.student_email}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
                         </td>
-                        <td rowSpan={span} className="px-4 py-3 align-middle">{statusBadge}</td>
                         <td className="px-3 py-3" style={divStyle}>
                           {b.contact_pref === 'whatsapp' && (
                             <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
@@ -283,12 +318,13 @@ export default function DemoPage() {
                             </a>
                           )}
                         </td>
+                        <td rowSpan={span} className="px-4 pt-3 pb-0 align-top">{statusBadge}</td>
                       </tr>
                       {hasParent && (
                         <tr className="border-b border-gray-200 group-hover:bg-gray-50 transition-colors">
                           {/* dot, date, teacher, course, status spanned */}
                           <td className="px-4 py-3">
-                            <p className="font-semibold text-gray-900">{b.parent_name}</p>
+                            <p className="font-semibold text-gray-900"><ParentIcon />{b.parent_name}</p>
                           </td>
                           <td className="px-4 py-3">
                             <p className="text-xs text-gray-400">{b.parent_contact}</p>
@@ -334,7 +370,7 @@ export default function DemoPage() {
                 return (
                   <tbody key={s.email} className="group">
                     <tr className={`group-hover:bg-gray-50 transition-colors ${!s.is_minor ? 'border-b border-gray-200' : ''}`}>
-                      <td rowSpan={s.is_minor ? 2 : 1} className="px-3 py-3 text-center align-middle">
+                      <td rowSpan={s.is_minor ? 2 : 1} className="px-3 pt-3 pb-0 align-top">
                         {s.is_minor && <span className={`inline-block w-2.5 h-2.5 rounded-full cursor-help ${dotColor(pStatus)}`} />}
                       </td>
                       <td className="px-4 py-3" style={s.is_minor ? sep : {}}>
@@ -382,7 +418,7 @@ export default function DemoPage() {
                       <tr className="border-b border-gray-200 group-hover:bg-gray-50 transition-colors">
                         {/* dot spanned */}
                         <td className="px-4 py-3">
-                          {s.parent_name && <p className="font-semibold text-gray-900">{s.parent_name}</p>}
+                          {s.parent_name && <p className="font-semibold text-gray-900"><ParentIcon />{s.parent_name}</p>}
                           {s.parent_contact && <p className="text-xs text-gray-400 mt-0.5">{s.parent_contact}</p>}
                           <button
                             onClick={() => cycleStatus(s.email)}
@@ -419,6 +455,30 @@ export default function DemoPage() {
         )}
       </div>
     </main>
+  )
+}
+
+function SortIndicator({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  if (!active) return <span className="ml-1 opacity-25">↕</span>
+  return <span className="ml-1 text-blue-500">{dir === 'asc' ? '↑' : '↓'}</span>
+}
+
+function teacherColor(name: string): string {
+  const colors = ['bg-violet-100 text-violet-700', 'bg-sky-100 text-sky-700', 'bg-pink-100 text-pink-700', 'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700', 'bg-indigo-100 text-indigo-700', 'bg-rose-100 text-rose-700']
+  let h = 0; for (const c of name) h = (h + c.charCodeAt(0)) % colors.length; return colors[h]
+}
+
+function TeacherAvatar({ name }: { name: string }) {
+  const parts = name.trim().split(' ')
+  const initials = parts.length >= 2 ? parts[0][0] + parts[1][0] : name.slice(0, 2)
+  return <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-bold shrink-0 ${teacherColor(name)}`}>{initials.toUpperCase()}</span>
+}
+
+function ParentIcon() {
+  return (
+    <svg className="w-3 h-3 inline-block mr-1 opacity-40 relative -top-px" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+    </svg>
   )
 }
 
