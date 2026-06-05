@@ -13,6 +13,8 @@ import { CalendarSlot } from '@/lib/google-calendar'
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
+const TEACHING_LANGS = ['Russian', 'Estonian', 'English'] as const
+
 export default function BookingPage() {
   return (
     <LanguageProvider>
@@ -24,18 +26,27 @@ export default function BookingPage() {
 function BookingPageInner() {
   const { t } = useLang()
   const [selectedCourse, setSelectedCourse] = useState<Course>('Russian')
-  const [selectedLang, setSelectedLang] = useState<string>('')
+  const [selectedLangs, setSelectedLangs] = useState<string[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [teacherSlots, setTeacherSlots] = useState<TeacherSlots[]>([])
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{ teacherId: string; slot: CalendarSlot } | null>(null)
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [loadingTeachers, setLoadingTeachers] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
 
+  function toggleLang(lang: string) {
+    setSelectedLangs(prev =>
+      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
+    )
+    setSelectedTeacher(null)
+    setSelectedSlot(null)
+  }
+
   useEffect(() => {
+    setLoadingTeachers(true)
     const params = new URLSearchParams({ subject: selectedCourse })
-    if (selectedLang) params.set('teachingLang', selectedLang)
     fetch(`/api/teachers?${params}`)
       .then(r => r.json())
       .then(d => {
@@ -43,7 +54,8 @@ function BookingPageInner() {
         setSelectedTeacher(null)
         setSelectedSlot(null)
       })
-  }, [selectedCourse, selectedLang])
+      .finally(() => setLoadingTeachers(false))
+  }, [selectedCourse])
 
   const loadSlots = useCallback(async (teacherList: Teacher[], week: Date) => {
     setLoadingSlots(true)
@@ -73,14 +85,24 @@ function BookingPageInner() {
     setSelectedSlot({ teacherId, slot })
   }
 
-  // Only show teachers who have at least one slot this week (after slots are loaded)
-  const teachersWithSlots = loadingSlots
+  const isLoading = loadingTeachers || loadingSlots
+
+  // Client-side lang filter (OR: teacher must teach in at least one selected lang)
+  const teachersAfterLang = selectedLangs.length === 0
     ? teachers
-    : teachers.filter(t => teacherSlots.find(ts => ts.teacher.id === t.id && ts.slots.length > 0))
+    : teachers.filter(t => t.teaching_languages.some(l => selectedLangs.includes(l)))
+
+  // Hide teachers with no slots this week (only after loading is done)
+  const visibleTeachers = isLoading
+    ? []
+    : teachersAfterLang.filter(t => teacherSlots.find(ts => ts.teacher.id === t.id && ts.slots.length > 0))
 
   const visibleTeacherSlots = selectedTeacher
     ? teacherSlots.filter(ts => ts.teacher.id === selectedTeacher.id)
-    : teacherSlots.filter(ts => ts.slots.length > 0)
+    : teacherSlots.filter(ts =>
+        ts.slots.length > 0 &&
+        (selectedLangs.length === 0 || ts.teacher.teaching_languages.some(l => selectedLangs.includes(l)))
+      )
 
   if (booked) {
     return (
@@ -130,36 +152,33 @@ function BookingPageInner() {
             selected={selectedCourse}
             onChange={course => { setSelectedCourse(course); setBooked(false) }}
           />
-          <div className="relative">
-            <select
-              value={selectedLang}
-              onChange={e => { setSelectedLang(e.target.value); setBooked(false) }}
-              className="h-9 appearance-none rounded-full border border-gray-300 bg-white pl-3 pr-8 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
-            >
-              <option value="">{t.booking.allLanguages}</option>
-              <option value="Russian">Russian</option>
-              <option value="Estonian">Estonian</option>
-              <option value="English">English</option>
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+          {/* Teaching language multi-select pills */}
+          <div className="flex items-center gap-1.5 pl-2 border-l border-gray-300">
+            {TEACHING_LANGS.map(lang => (
+              <button
+                key={lang}
+                onClick={() => toggleLang(lang)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  selectedLangs.includes(lang)
+                    ? 'bg-gray-700 text-white border-gray-700'
+                    : 'bg-white text-gray-500 border-gray-300 hover:border-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {lang}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Main layout: fixed height so form never overflows below calendar */}
+        {/* Main layout */}
         <div className="flex gap-5 items-stretch h-[600px]">
           {/* Left panel */}
           <div className={`flex-shrink-0 flex flex-col gap-3 overflow-y-auto transition-all duration-200 ${
-            selectedSlot ? 'w-72' : 'w-64'
+            selectedSlot ? 'w-96' : 'w-64'
           }`}>
             {selectedTeacher && selectedSlot ? (
               <>
-                <TeacherCard
-                  teacher={selectedTeacher}
-                  selected={true}
-                  onClick={() => {}}
-                />
+                <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
                 <BookingForm
                   teacher={selectedTeacher}
                   slot={selectedSlot.slot}
@@ -168,32 +187,33 @@ function BookingPageInner() {
                   onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
                 />
               </>
-            ) : (
+            ) : isLoading ? (
+              // Skeleton while loading — prevents flash of unfiltered teachers
               <>
-                {teachers.length === 0 ? (
-                  <p className="text-sm text-gray-400">{t.booking.noProfessors}</p>
-                ) : teachersWithSlots.length === 0 && !loadingSlots ? (
-                  <p className="text-sm text-gray-400">{t.booking.noProfessors}</p>
-                ) : (
-                  teachersWithSlots.map(teacher => (
-                    <TeacherCard
-                      key={teacher.id}
-                      teacher={teacher}
-                      selected={selectedTeacher?.id === teacher.id}
-                      onClick={() => {
-                        setSelectedTeacher(prev => prev?.id === teacher.id ? null : teacher)
-                        setSelectedSlot(null)
-                      }}
-                    />
-                  ))
-                )}
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-[104px] rounded-2xl bg-gray-200/70 animate-pulse" />
+                ))}
               </>
+            ) : visibleTeachers.length === 0 ? (
+              <p className="text-sm text-gray-400">{t.booking.noProfessors}</p>
+            ) : (
+              visibleTeachers.map(teacher => (
+                <TeacherCard
+                  key={teacher.id}
+                  teacher={teacher}
+                  selected={selectedTeacher?.id === teacher.id}
+                  onClick={() => {
+                    setSelectedTeacher(prev => prev?.id === teacher.id ? null : teacher)
+                    setSelectedSlot(null)
+                  }}
+                />
+              ))
             )}
           </div>
 
           {/* Right panel — calendar */}
           <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 overflow-auto">
-            {loadingSlots ? (
+            {isLoading ? (
               <div className="flex items-center justify-center h-full text-gray-400 text-sm">
                 {t.booking.loading}
               </div>
