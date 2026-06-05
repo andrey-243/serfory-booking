@@ -9,6 +9,104 @@ import { useLang } from '@/lib/language-context'
 
 const dateFnsLocales = { en: enUS, et, ru }
 
+// ── Country list ─────────────────────────────────────────────────────────────
+// Priority: EE, RU, then bordering countries, then alphabetical
+
+type Country = { code: string; flag: string; dial: string; name: string }
+
+const PRIORITY_COUNTRIES: Country[] = [
+  { code: 'EE', flag: '🇪🇪', dial: '+372', name: 'Estonia' },
+  { code: 'RU', flag: '🇷🇺', dial: '+7',   name: 'Russia' },
+  { code: 'FI', flag: '🇫🇮', dial: '+358', name: 'Finland' },
+  { code: 'LV', flag: '🇱🇻', dial: '+371', name: 'Latvia' },
+  { code: 'LT', flag: '🇱🇹', dial: '+370', name: 'Lithuania' },
+  { code: 'BY', flag: '🇧🇾', dial: '+375', name: 'Belarus' },
+  { code: 'UA', flag: '🇺🇦', dial: '+380', name: 'Ukraine' },
+  { code: 'NO', flag: '🇳🇴', dial: '+47',  name: 'Norway' },
+]
+
+const OTHER_COUNTRIES: Country[] = [
+  { code: 'AT', flag: '🇦🇹', dial: '+43',  name: 'Austria' },
+  { code: 'BE', flag: '🇧🇪', dial: '+32',  name: 'Belgium' },
+  { code: 'CA', flag: '🇨🇦', dial: '+1',   name: 'Canada' },
+  { code: 'CH', flag: '🇨🇭', dial: '+41',  name: 'Switzerland' },
+  { code: 'CZ', flag: '🇨🇿', dial: '+420', name: 'Czech Republic' },
+  { code: 'DE', flag: '🇩🇪', dial: '+49',  name: 'Germany' },
+  { code: 'DK', flag: '🇩🇰', dial: '+45',  name: 'Denmark' },
+  { code: 'ES', flag: '🇪🇸', dial: '+34',  name: 'Spain' },
+  { code: 'FR', flag: '🇫🇷', dial: '+33',  name: 'France' },
+  { code: 'GB', flag: '🇬🇧', dial: '+44',  name: 'UK' },
+  { code: 'GE', flag: '🇬🇪', dial: '+995', name: 'Georgia' },
+  { code: 'GR', flag: '🇬🇷', dial: '+30',  name: 'Greece' },
+  { code: 'HR', flag: '🇭🇷', dial: '+385', name: 'Croatia' },
+  { code: 'HU', flag: '🇭🇺', dial: '+36',  name: 'Hungary' },
+  { code: 'IE', flag: '🇮🇪', dial: '+353', name: 'Ireland' },
+  { code: 'IT', flag: '🇮🇹', dial: '+39',  name: 'Italy' },
+  { code: 'NL', flag: '🇳🇱', dial: '+31',  name: 'Netherlands' },
+  { code: 'PL', flag: '🇵🇱', dial: '+48',  name: 'Poland' },
+  { code: 'PT', flag: '🇵🇹', dial: '+351', name: 'Portugal' },
+  { code: 'RO', flag: '🇷🇴', dial: '+40',  name: 'Romania' },
+  { code: 'SE', flag: '🇸🇪', dial: '+46',  name: 'Sweden' },
+  { code: 'SK', flag: '🇸🇰', dial: '+421', name: 'Slovakia' },
+  { code: 'US', flag: '🇺🇸', dial: '+1',   name: 'USA' },
+]
+
+function isValidEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
+}
+function isValidLocalPhone(num: string) {
+  return num.replace(/\D/g, '').length >= 6
+}
+
+// ── PhoneInput ────────────────────────────────────────────────────────────────
+function PhoneInput({
+  onChange,
+  placeholder,
+}: {
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  const [dial, setDial] = useState(PRIORITY_COUNTRIES[0].dial)
+  const [num, setNum] = useState('')
+
+  function update(d: string, n: string) {
+    onChange(n ? d + n : '')
+  }
+
+  return (
+    <div className="flex rounded-lg border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 bg-white">
+      <select
+        value={dial}
+        onChange={e => { setDial(e.target.value); update(e.target.value, num) }}
+        className="border-r border-gray-100 pl-2 pr-1 py-2 text-sm bg-white focus:outline-none cursor-pointer text-gray-700 flex-shrink-0 max-w-[110px]"
+      >
+        <optgroup label="─────────────">
+          {PRIORITY_COUNTRIES.map(c => (
+            <option key={c.code} value={c.dial}>
+              {c.flag} {c.dial} {c.name}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="─────────────">
+          {OTHER_COUNTRIES.map(c => (
+            <option key={c.code} value={c.dial}>
+              {c.flag} {c.dial} {c.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      <input
+        type="tel"
+        value={num}
+        onChange={e => { const n = e.target.value; setNum(n); update(dial, n) }}
+        placeholder={placeholder || '55 123 456'}
+        className="flex-1 px-3 py-2 text-sm text-gray-900 focus:outline-none bg-white min-w-0"
+      />
+    </div>
+  )
+}
+
+// ── Main form ─────────────────────────────────────────────────────────────────
 type Props = {
   teacher: Teacher
   slot: CalendarSlot
@@ -39,14 +137,25 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     parent_name: '',
     parent_contact: '',
   })
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const set = (key: keyof FormData, value: string | boolean) =>
     setForm(f => ({ ...f, [key]: value }))
 
+  function validate(): boolean {
+    const errs: Partial<Record<keyof FormData, string>> = {}
+    if (!isValidEmail(form.student_email)) errs.student_email = ft.invalidEmail
+    if (!isValidLocalPhone(form.student_phone)) errs.student_phone = ft.invalidPhone
+    if (form.is_minor && !isValidLocalPhone(form.parent_contact)) errs.parent_contact = ft.invalidPhone
+    setFieldErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!validate()) return
     setLoading(true)
     setError(null)
 
@@ -92,7 +201,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} noValidate className="space-y-3">
         <Field label={ft.fullName} required>
           <input
             type="text"
@@ -104,26 +213,24 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           />
         </Field>
 
-        <Field label={ft.email} required>
+        <Field label={ft.email} required error={fieldErrors.student_email}>
           <input
             type="email"
             value={form.student_email}
-            onChange={e => set('student_email', e.target.value)}
-            required
-            className={inputClass}
+            onChange={e => { set('student_email', e.target.value); setFieldErrors(f => ({ ...f, student_email: undefined })) }}
+            className={`${inputClass} ${fieldErrors.student_email ? 'border-red-300 focus:ring-red-300' : ''}`}
             placeholder="example@email.com"
           />
         </Field>
 
-        <Field label={ft.phone} required>
-          <input
-            type="tel"
-            value={form.student_phone}
-            onChange={e => set('student_phone', e.target.value)}
-            required
-            className={inputClass}
-            placeholder="+372 5…"
+        <Field label={ft.phone} required error={fieldErrors.student_phone}>
+          <PhoneInput
+            onChange={v => { set('student_phone', v); setFieldErrors(f => ({ ...f, student_phone: undefined })) }}
+            placeholder={ft.parentPlaceholder}
           />
+          {fieldErrors.student_phone && (
+            <p className="text-xs text-red-500 mt-1">{fieldErrors.student_phone}</p>
+          )}
         </Field>
 
         <Field label={ft.preferredContact} required>
@@ -169,15 +276,14 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
                 placeholder={ft.namePlaceholder}
               />
             </Field>
-            <Field label={ft.parentContact} required>
-              <input
-                type="text"
-                value={form.parent_contact}
-                onChange={e => set('parent_contact', e.target.value)}
-                required
-                className={inputClass}
+            <Field label={ft.parentContact} required error={fieldErrors.parent_contact}>
+              <PhoneInput
+                onChange={v => { set('parent_contact', v); setFieldErrors(f => ({ ...f, parent_contact: undefined })) }}
                 placeholder={ft.parentPlaceholder}
               />
+              {fieldErrors.parent_contact && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors.parent_contact}</p>
+              )}
             </Field>
           </div>
         )}
@@ -212,13 +318,24 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 const inputClass =
   'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
 
-function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
+function Field({
+  label,
+  children,
+  required,
+  error,
+}: {
+  label: string
+  children: React.ReactNode
+  required?: boolean
+  error?: string
+}) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-700 mb-1">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   )
 }

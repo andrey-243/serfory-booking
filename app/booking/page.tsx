@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { startOfWeek, addWeeks, subWeeks } from 'date-fns'
+import { startOfDay, addDays, subDays } from 'date-fns'
 import CourseTabFilter, { Course } from '@/components/booking/CourseTabFilter'
 import TeacherCard from '@/components/booking/TeacherCard'
 import WeekView from '@/components/booking/WeekView'
@@ -33,7 +33,7 @@ function BookingPageInner() {
   const [teacherSlots, setTeacherSlots] = useState<TeacherSlots[]>([])
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{ teacherId: string; slot: CalendarSlot } | null>(null)
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()))
   const [loadingTeachers, setLoadingTeachers] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
@@ -261,8 +261,8 @@ function BookingPageInner() {
                 selectedSlot={selectedSlot}
                 onSelectSlot={handleSelectSlot}
                 weekStart={weekStart}
-                onPrevWeek={() => setWeekStart(w => subWeeks(w, 1))}
-                onNextWeek={() => setWeekStart(w => addWeeks(w, 1))}
+                onPrevWeek={() => setWeekStart(w => subDays(w, 7))}
+                onNextWeek={() => setWeekStart(w => addDays(w, 7))}
               />
             )}
           </div>

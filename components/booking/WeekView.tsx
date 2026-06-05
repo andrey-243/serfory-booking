@@ -1,6 +1,6 @@
 'use client'
 
-import { format, addDays, isSameDay, parseISO, startOfWeek, isAfter } from 'date-fns'
+import { format, addDays, isSameDay, parseISO, isAfter, isBefore, startOfDay } from 'date-fns'
 import { enUS, et, ru } from 'date-fns/locale'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
@@ -49,8 +49,9 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
   const locale = dateFnsLocales[lang]
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
-  const todayWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
-  const canGoPrev = isAfter(weekStart, todayWeekStart)
+  const todayStart = startOfDay(new Date())
+  const now = new Date()
+  const canGoPrev = isAfter(weekStart, todayStart)
 
   // Assign a stable color index per teacher
   const teacherColorMap: Record<string, number> = {}
@@ -59,9 +60,11 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
   })
 
   // Group slots by (dayIndex, slotStart) → list of {teacher, slot}
+  // Skip past slots (before now)
   const grouped = new Map<string, SlotEntry[]>()
   teacherSlots.forEach(ts => {
     ts.slots.forEach(slot => {
+      if (isBefore(parseISO(slot.start), now)) return
       const dayIdx = days.findIndex(d => isSameDay(d, parseISO(slot.start)))
       if (dayIdx === -1) return
       const key = `${dayIdx}|${slot.start}`
@@ -102,15 +105,19 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
         >
           {/* Header */}
           <div />
-          {days.map((day, i) => (
-            <div
-              key={i}
-              className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex flex-col items-center justify-center"
-            >
-              <span className="uppercase">{format(day, 'EEE', { locale })}</span>
-              <span className="text-gray-400 text-[10px]">{format(day, 'd MMM', { locale })}</span>
-            </div>
-          ))}
+          {days.map((day, i) => {
+            const isPast = isBefore(day, todayStart)
+            const isToday = isSameDay(day, now)
+            return (
+              <div
+                key={i}
+                className={`text-center text-xs font-medium border-b border-gray-100 flex flex-col items-center justify-center ${isPast ? 'opacity-30' : 'text-gray-500'}`}
+              >
+                <span className={`uppercase ${isToday ? 'text-blue-500 font-bold' : ''}`}>{format(day, 'EEE', { locale })}</span>
+                <span className={`text-[10px] ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>{format(day, 'd MMM', { locale })}</span>
+              </div>
+            )
+          })}
 
           {/* Hour labels */}
           {HOURS.flatMap(h => [0, 30].map(m => {
