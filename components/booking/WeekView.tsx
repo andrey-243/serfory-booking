@@ -79,7 +79,7 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
         <button
           onClick={onPrevWeek}
           disabled={!canGoPrev}
-          className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-3 py-1 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           {t.week.prev}
         </button>
@@ -88,7 +88,7 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
         </span>
         <button
           onClick={onNextWeek}
-          className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
+          className="px-3 py-1 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600"
         >
           {t.week.next}
         </button>

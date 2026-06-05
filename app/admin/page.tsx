@@ -34,6 +34,8 @@ type StudentRow = {
   combos: Combo[]
 }
 
+type ParentStatus = 'to_contact' | 'contacted' | 'answered'
+
 const T = {
   fr: {
     title: 'Administration',
@@ -55,8 +57,10 @@ const T = {
     crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
     minor: 'Mineur',
     responsible: 'Responsable',
-    parentContacted: 'Parent contacté',
-    markContacted: 'Marquer contacté',
+    parent: 'Parent',
+    toContact: 'Marquer contacté',
+    contacted: 'Contacté',
+    answered: 'A répondu',
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'à' HH'h'mm",
     locale: fr,
@@ -81,8 +85,10 @@ const T = {
     crmCols: { student: 'Student', contact: 'Contact', courses: 'Courses', teachers: 'Teachers' },
     minor: 'Minor',
     responsible: 'Responsible',
-    parentContacted: 'Parent contacted',
-    markContacted: 'Mark contacted',
+    parent: 'Parent',
+    toContact: 'Mark contacted',
+    contacted: 'Contacted',
+    answered: 'Answered',
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
@@ -92,12 +98,24 @@ const T = {
 function waLink(phone: string) { return `https://wa.me/${phone.replace(/\D/g, '')}` }
 function tgLink(phone: string) { return `https://t.me/+${phone.replace(/\D/g, '')}` }
 
-const LS_KEY = 'admin_parent_contacted'
-function loadContacted(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]')) } catch { return new Set() }
+const LS_STATUS_KEY = 'admin_parent_status'
+function loadStatus(): Record<string, ParentStatus> {
+  try { return JSON.parse(localStorage.getItem(LS_STATUS_KEY) || '{}') } catch { return {} }
 }
-function saveContacted(s: Set<string>) {
-  localStorage.setItem(LS_KEY, JSON.stringify([...s]))
+function saveStatus(s: Record<string, ParentStatus>) {
+  localStorage.setItem(LS_STATUS_KEY, JSON.stringify(s))
+}
+
+function dotColorClass(status: ParentStatus): string {
+  if (status === 'answered') return 'bg-green-400'
+  if (status === 'contacted') return 'bg-amber-400'
+  return 'bg-orange-400'
+}
+
+const CYCLE: Record<ParentStatus, ParentStatus> = {
+  to_contact: 'contacted',
+  contacted: 'answered',
+  answered: 'to_contact',
 }
 
 export default function AdminPage() {
@@ -106,30 +124,40 @@ export default function AdminPage() {
   const [lang, setLang] = useState<'fr' | 'en'>('fr')
   const [view, setView] = useState<'bookings' | 'crm'>('bookings')
 
-  // Bookings filters
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterCourse, setFilterCourse] = useState<string>('all')
   const [filterTeacher, setFilterTeacher] = useState<string>('all')
   const [filterMinors, setFilterMinors] = useState<'all' | 'minors' | 'not_reached'>('all')
 
-  // CRM filter
   const [crmFilterMinors, setCrmFilterMinors] = useState(false)
 
-  // Parent contacted — stored in localStorage
-  const [parentContacted, setParentContacted] = useState<Set<string>>(new Set())
-  useEffect(() => { setParentContacted(loadContacted()) }, [])
+  const [parentStatus, setParentStatus] = useState<Record<string, ParentStatus>>({})
+  useEffect(() => { setParentStatus(loadStatus()) }, [])
 
-  function toggleParentContacted(email: string) {
-    setParentContacted(prev => {
-      const next = new Set(prev)
-      if (next.has(email)) next.delete(email)
-      else next.add(email)
-      saveContacted(next)
-      return next
+  function cycleParentStatus(email: string) {
+    setParentStatus(prev => {
+      const current = prev[email] ?? 'to_contact'
+      const updated = { ...prev, [email]: CYCLE[current] }
+      saveStatus(updated)
+      return updated
     })
   }
 
   const t = T[lang]
+
+  function statusLabel(email: string): string {
+    const s = parentStatus[email] ?? 'to_contact'
+    if (s === 'answered') return `✓ ${t.answered}`
+    if (s === 'contacted') return t.contacted
+    return t.toContact
+  }
+
+  function statusButtonClass(email: string): string {
+    const s = parentStatus[email] ?? 'to_contact'
+    if (s === 'answered') return 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
+    if (s === 'contacted') return 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200'
+    return 'bg-orange-50 text-orange-500 border-orange-200 hover:bg-orange-100'
+  }
 
   useEffect(() => {
     fetch('/api/bookings')
@@ -145,7 +173,7 @@ export default function AdminPage() {
     if (filterCourse !== 'all' && b.subject !== filterCourse) return false
     if (filterTeacher !== 'all' && b.teachers?.name !== filterTeacher) return false
     if (filterMinors === 'minors' && !b.is_minor) return false
-    if (filterMinors === 'not_reached' && (!b.is_minor || parentContacted.has(b.student_email))) return false
+    if (filterMinors === 'not_reached' && (!b.is_minor || (parentStatus[b.student_email] ?? 'to_contact') !== 'to_contact')) return false
     return true
   })
 
@@ -276,67 +304,72 @@ export default function AdminPage() {
                       <th className="text-left px-4 py-3 font-medium">{t.cols.course}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.cols.student}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.cols.contact}</th>
-                      <th className="text-left px-4 py-3 font-medium">{t.cols.status}</th>
                       <th className="w-20 px-3 py-3" />
+                      <th className="text-left px-4 py-3 font-medium">{t.cols.status}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map(b => (
-                      <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-middle">
-                        {/* Minor dot */}
-                        <td className="px-3 py-3 text-center">
-                          {b.is_minor && (
-                            <span title="Minor — reach their parent"
-                              className="inline-block w-2.5 h-2.5 rounded-full bg-orange-400 cursor-help" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                          {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{b.teachers?.name ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-700">{b.subject}</td>
-                        {/* Student: name only */}
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{b.student_name}</p>
-                        </td>
-                        {/* Contact: email + phone */}
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-gray-500">{b.student_email}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
-                        </td>
-                        {/* Status */}
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                            b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {t.status[b.status as keyof typeof t.status] ?? b.status}
-                          </span>
-                        </td>
-                        {/* CTA: preferred contact */}
-                        <td className="px-3 py-3">
-                          {b.contact_pref === 'whatsapp' && (
-                            <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <WaIcon /> WhatsApp
-                            </a>
-                          )}
-                          {b.contact_pref === 'telegram' && (
-                            <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <TgIcon /> Telegram
-                            </a>
-                          )}
-                          {b.contact_pref === 'email' && (
-                            <a href={`mailto:${b.student_email}`}
-                              className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <EmailIcon /> Email
-                            </a>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {filtered.map(b => {
+                      const pStatus = b.is_minor ? (parentStatus[b.student_email] ?? 'to_contact') : 'to_contact'
+                      return (
+                        <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-middle">
+                          {/* Minor dot — color reflects parent status */}
+                          <td className="px-3 py-3 text-center">
+                            {b.is_minor && (
+                              <span
+                                title={`Minor — ${pStatus === 'answered' ? 'parent answered' : pStatus === 'contacted' ? 'parent contacted' : 'reach their parent'}`}
+                                className={`inline-block w-2.5 h-2.5 rounded-full cursor-help ${dotColorClass(pStatus)}`}
+                              />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                            {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">{b.teachers?.name ?? '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{b.subject}</td>
+                          {/* Student: name only */}
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{b.student_name}</p>
+                          </td>
+                          {/* Contact: email + phone */}
+                          <td className="px-4 py-3">
+                            <p className="text-xs text-gray-500">{b.student_email}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
+                          </td>
+                          {/* CTA: preferred contact */}
+                          <td className="px-3 py-3">
+                            {b.contact_pref === 'whatsapp' && (
+                              <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <WaIcon /> WhatsApp
+                              </a>
+                            )}
+                            {b.contact_pref === 'telegram' && (
+                              <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <TgIcon /> Telegram
+                              </a>
+                            )}
+                            {b.contact_pref === 'email' && (
+                              <a href={`mailto:${b.student_email}`}
+                                className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <EmailIcon /> Email
+                              </a>
+                            )}
+                          </td>
+                          {/* Status */}
+                          <td className="px-4 py-3">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                              b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {t.status[b.status as keyof typeof t.status] ?? b.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -376,90 +409,110 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleStudents.map(s => (
-                      <tr key={s.email} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-middle">
+                    {visibleStudents.map(s => {
+                      const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
+                      return (
+                        <tr key={s.email} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-top">
 
-                        {/* Minor dot column */}
-                        <td className="px-3 py-3 text-center">
-                          {s.is_minor && (
-                            <span title="Minor — reach their parent"
-                              className="inline-block w-2.5 h-2.5 rounded-full bg-orange-400 cursor-help mt-1" />
-                          )}
-                        </td>
+                          {/* Minor dot — color reflects parent status */}
+                          <td className="px-3 pt-4 text-center">
+                            {s.is_minor && (
+                              <span
+                                title={`Minor — ${pStatus === 'answered' ? 'parent answered' : pStatus === 'contacted' ? 'parent contacted' : 'reach their parent'}`}
+                                className={`inline-block w-2.5 h-2.5 rounded-full cursor-help ${dotColorClass(pStatus)}`}
+                              />
+                            )}
+                          </td>
 
-                        {/* Student section + Responsible section */}
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-gray-900">{s.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{s.phone}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{s.email}</p>
+                          {/* Student + Responsible section */}
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-gray-900">{s.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{s.phone}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{s.email}</p>
 
-                          {s.is_minor && (
-                            <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">{t.responsible}</p>
-                              {s.parent_name && (
-                                <p className="text-xs text-gray-700 font-medium">{s.parent_name}</p>
-                              )}
-                              <button
-                                onClick={() => toggleParentContacted(s.email)}
-                                className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${
-                                  parentContacted.has(s.email)
-                                    ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
-                                    : 'bg-orange-50 text-orange-500 border-orange-200 hover:bg-orange-100'
-                                }`}
-                              >
-                                {parentContacted.has(s.email)
-                                  ? <><CheckIcon /> {t.parentContacted}</>
-                                  : t.markContacted
-                                }
-                              </button>
+                            {s.is_minor && (
+                              <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">{t.responsible}</p>
+                                {s.parent_name && (
+                                  <p className="text-xs text-gray-700 font-medium">{s.parent_name}</p>
+                                )}
+                                {s.parent_contact && (
+                                  <p className="text-xs text-gray-400 mt-0.5">{s.parent_contact}</p>
+                                )}
+                                <button
+                                  onClick={() => cycleParentStatus(s.email)}
+                                  className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${statusButtonClass(s.email)}`}
+                                >
+                                  {pStatus === 'answered' && <CheckIcon />}
+                                  {statusLabel(s.email)}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Contact: student CTAs + parent CTAs for minors */}
+                          <td className="px-4 py-3">
+                            {/* Student CTAs */}
+                            <div className="flex flex-wrap gap-2">
+                              <a href={waLink(s.phone)} target="_blank" rel="noopener noreferrer"
+                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('whatsapp') ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
+                                <WaIcon /> WhatsApp
+                              </a>
+                              <a href={tgLink(s.phone)} target="_blank" rel="noopener noreferrer"
+                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('telegram') ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
+                                <TgIcon /> Telegram
+                              </a>
+                              <a href={`mailto:${s.email}`}
+                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('email') ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}>
+                                <EmailIcon /> Email
+                              </a>
                             </div>
-                          )}
-                        </td>
 
-                        {/* Contact */}
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <a href={waLink(s.phone)} target="_blank" rel="noopener noreferrer"
-                              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('whatsapp') ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
-                              <WaIcon /> WhatsApp
-                            </a>
-                            <a href={tgLink(s.phone)} target="_blank" rel="noopener noreferrer"
-                              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('telegram') ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
-                              <TgIcon /> Telegram
-                            </a>
-                            <a href={`mailto:${s.email}`}
-                              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('email') ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}>
-                              <EmailIcon /> Email
-                            </a>
-                          </div>
-                        </td>
-
-                        {/* Courses */}
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-gray-400 mb-1.5">{t.total(s.total)}</p>
-                          <div className="space-y-1.5">
-                            {s.combos.map((c, i) => (
-                              <div key={i} className="flex items-center gap-1.5">
-                                <span className="text-xs font-medium text-gray-800">{c.subject}</span>
-                                <span className="text-xs font-semibold text-blue-500">×{c.count}</span>
+                            {/* Parent CTAs for minors */}
+                            {s.is_minor && s.parent_contact && (
+                              <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">{t.parent}</p>
+                                <div className="flex flex-wrap gap-2">
+                                  <a href={waLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-emerald-50 text-emerald-600 hover:bg-emerald-100">
+                                    <WaIcon /> WhatsApp
+                                  </a>
+                                  <a href={tgLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-sky-50 text-sky-600 hover:bg-sky-100">
+                                    <TgIcon /> Telegram
+                                  </a>
+                                </div>
                               </div>
-                            ))}
-                          </div>
-                        </td>
+                            )}
+                          </td>
 
-                        {/* Teachers */}
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-gray-400 mb-1.5">&nbsp;</p>
-                          <div className="space-y-1.5">
-                            {s.combos.map((c, i) => (
-                              <div key={i} className="text-xs text-gray-500">
-                                {c.teacher.split(' ')[0]}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          {/* Courses */}
+                          <td className="px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1.5">{t.total(s.total)}</p>
+                            <div className="space-y-1.5">
+                              {s.combos.map((c, i) => (
+                                <div key={i} className="flex items-center gap-1.5">
+                                  <span className="text-xs font-medium text-gray-800">{c.subject}</span>
+                                  <span className="text-xs font-semibold text-blue-500">×{c.count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+
+                          {/* Teachers */}
+                          <td className="px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1.5">&nbsp;</p>
+                            <div className="space-y-1.5">
+                              {s.combos.map((c, i) => (
+                                <div key={i} className="text-xs text-gray-500">
+                                  {c.teacher.split(' ')[0]}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
