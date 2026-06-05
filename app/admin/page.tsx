@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { Fragment, useEffect, useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { fr, enUS } from 'date-fns/locale'
 
@@ -53,7 +53,7 @@ const T = {
     empty: 'Aucune réservation.',
     emptyCrm: 'Aucun élève.',
     status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé' },
-    cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Étudiant', contact: 'Contact', status: 'Statut' },
+    cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Élève', contact: 'Contact', status: 'Statut' },
     crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
     minor: 'Mineur',
     responsible: 'Responsable',
@@ -251,7 +251,30 @@ export default function AdminPage() {
                 ))}
               </div>
 
-              {/* Minors filter */}
+              {/* Courses */}
+              {courses.length > 1 && <div className="h-5 w-px bg-gray-200" />}
+              {courses.length > 1 && (
+                <div className="flex gap-1.5">
+                  {['all', ...courses].map(c => (
+                    <button key={c} onClick={() => setFilterCourse(c)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCourse === c ? 'bg-violet-500 text-white border-violet-500' : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300'}`}>
+                      {c === 'all' ? t.allCourses : c}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Teachers dropdown */}
+              {teachers.length > 1 && <div className="h-5 w-px bg-gray-200" />}
+              {teachers.length > 1 && (
+                <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}
+                  className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-600 focus:outline-none cursor-pointer">
+                  <option value="all">{t.allTeachers}</option>
+                  {teachers.map(tc => <option key={tc} value={tc}>{tc}</option>)}
+                </select>
+              )}
+
+              {/* Minors dropdown — always last */}
               <div className="h-5 w-px bg-gray-200" />
               <select
                 value={filterMinors}
@@ -266,27 +289,6 @@ export default function AdminPage() {
                 <option value="minors">{t.minorsOnly}</option>
                 <option value="not_reached">{t.parentNotReached}</option>
               </select>
-
-              {courses.length > 1 && <div className="h-5 w-px bg-gray-200" />}
-              {courses.length > 1 && (
-                <div className="flex gap-1.5">
-                  {['all', ...courses].map(c => (
-                    <button key={c} onClick={() => setFilterCourse(c)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCourse === c ? 'bg-violet-500 text-white border-violet-500' : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300'}`}>
-                      {c === 'all' ? t.allCourses : c}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {teachers.length > 1 && <div className="h-5 w-px bg-gray-200" />}
-              {teachers.length > 1 && (
-                <select value={filterTeacher} onChange={e => setFilterTeacher(e.target.value)}
-                  className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-600 focus:outline-none cursor-pointer">
-                  <option value="all">{t.allTeachers}</option>
-                  {teachers.map(tc => <option key={tc} value={tc}>{tc}</option>)}
-                </select>
-              )}
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -304,17 +306,28 @@ export default function AdminPage() {
                       <th className="text-left px-4 py-3 font-medium">{t.cols.course}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.cols.student}</th>
                       <th className="text-left px-4 py-3 font-medium">{t.cols.contact}</th>
-                      <th className="w-20 px-3 py-3" />
                       <th className="text-left px-4 py-3 font-medium">{t.cols.status}</th>
+                      <th className="w-20 px-3 py-3" />
                     </tr>
                   </thead>
-                  <tbody>
-                    {filtered.map(b => {
-                      const pStatus = b.is_minor ? (parentStatus[b.student_email] ?? 'to_contact') : 'to_contact'
-                      return (
-                        <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-middle">
-                          {/* Minor dot — color reflects parent status */}
-                          <td className="px-3 py-3 text-center">
+                  {filtered.map(b => {
+                    const pStatus = b.is_minor ? (parentStatus[b.student_email] ?? 'to_contact') : 'to_contact'
+                    const hasParent = b.is_minor && !!b.parent_contact
+                    const span = hasParent ? 2 : 1
+                    const divStyle = hasParent ? { borderBottom: '1px solid #e5e7eb' } : {}
+                    const statusBadge = (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                        b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {t.status[b.status as keyof typeof t.status] ?? b.status}
+                      </span>
+                    )
+                    return (
+                      <tbody key={b.id} className="group">
+                        <tr className={`group-hover:bg-gray-50 transition-colors ${!hasParent ? 'border-b border-gray-200' : ''}`}>
+                          <td rowSpan={span} className="px-3 py-3 text-center align-middle">
                             {b.is_minor && (
                               <span
                                 title={`Minor — ${pStatus === 'answered' ? 'parent answered' : pStatus === 'contacted' ? 'parent contacted' : 'reach their parent'}`}
@@ -322,22 +335,20 @@ export default function AdminPage() {
                               />
                             )}
                           </td>
-                          <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                          <td rowSpan={span} className="px-4 py-3 text-gray-700 whitespace-nowrap align-middle">
                             {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
                           </td>
-                          <td className="px-4 py-3 text-gray-700">{b.teachers?.name ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-700">{b.subject}</td>
-                          {/* Student: name only */}
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-gray-900">{b.student_name}</p>
+                          <td rowSpan={span} className="px-4 py-3 text-gray-700 align-middle">{b.teachers?.name ?? '—'}</td>
+                          <td rowSpan={span} className="px-4 py-3 text-gray-700 align-middle">{b.subject}</td>
+                          <td className="px-4 py-3" style={divStyle}>
+                            <p className="font-semibold text-gray-900">{b.student_name}</p>
                           </td>
-                          {/* Contact: email + phone */}
-                          <td className="px-4 py-3">
-                            <p className="text-xs text-gray-500">{b.student_email}</p>
+                          <td className="px-4 py-3" style={divStyle}>
+                            <p className="text-xs text-gray-400">{b.student_email}</p>
                             <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
                           </td>
-                          {/* CTA: preferred contact */}
-                          <td className="px-3 py-3">
+                          <td rowSpan={span} className="px-4 py-3 align-middle">{statusBadge}</td>
+                          <td className="px-3 py-3" style={divStyle}>
                             {b.contact_pref === 'whatsapp' && (
                               <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
                                 className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
@@ -357,20 +368,33 @@ export default function AdminPage() {
                               </a>
                             )}
                           </td>
-                          {/* Status */}
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                              b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                              'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              {t.status[b.status as keyof typeof t.status] ?? b.status}
-                            </span>
-                          </td>
                         </tr>
-                      )
-                    })}
-                  </tbody>
+                        {hasParent && (
+                          <tr className="border-b border-gray-200 group-hover:bg-gray-50 transition-colors">
+                            {/* dot, date, teacher, course, status spanned */}
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-gray-900">{b.parent_name}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-xs text-gray-400">{b.parent_contact}</p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex flex-col gap-1">
+                                <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                  <WaIcon /> WhatsApp
+                                </a>
+                                <a href={tgLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-sky-600 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                  <TgIcon /> Telegram
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    )
+                  })}
                 </table>
               )}
             </div>
@@ -408,14 +432,14 @@ export default function AdminPage() {
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.teachers}</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {visibleStudents.map(s => {
-                      const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
-                      return (
-                        <tr key={s.email} className="border-b border-gray-50 hover:bg-gray-50 transition-colors align-top">
-
-                          {/* Minor dot — color reflects parent status */}
-                          <td className="px-3 pt-4 text-center">
+                  {visibleStudents.map(s => {
+                    const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
+                    const sep = { borderBottom: '1px solid #f3f4f6' }
+                    return (
+                      <tbody key={s.email} className="group">
+                        <tr className={`group-hover:bg-gray-50 transition-colors ${!s.is_minor ? 'border-b border-gray-200' : ''}`}>
+                          {/* Dot — rowspan 2 for minors, no border on it */}
+                          <td rowSpan={s.is_minor ? 2 : 1} className="px-3 py-3 text-center align-middle">
                             {s.is_minor && (
                               <span
                                 title={`Minor — ${pStatus === 'answered' ? 'parent answered' : pStatus === 'contacted' ? 'parent contacted' : 'reach their parent'}`}
@@ -423,36 +447,12 @@ export default function AdminPage() {
                               />
                             )}
                           </td>
-
-                          {/* Student + Responsible section */}
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" style={s.is_minor ? sep : {}}>
                             <p className="font-semibold text-gray-900">{s.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{s.phone}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{s.phone}</p>
                             <p className="text-xs text-gray-400 mt-0.5">{s.email}</p>
-
-                            {s.is_minor && (
-                              <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">{t.responsible}</p>
-                                {s.parent_name && (
-                                  <p className="text-xs text-gray-700 font-medium">{s.parent_name}</p>
-                                )}
-                                {s.parent_contact && (
-                                  <p className="text-xs text-gray-400 mt-0.5">{s.parent_contact}</p>
-                                )}
-                                <button
-                                  onClick={() => cycleParentStatus(s.email)}
-                                  className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${statusButtonClass(s.email)}`}
-                                >
-                                  {pStatus === 'answered' && <CheckIcon />}
-                                  {statusLabel(s.email)}
-                                </button>
-                              </div>
-                            )}
                           </td>
-
-                          {/* Contact: student CTAs + parent CTAs for minors */}
-                          <td className="px-4 py-3">
-                            {/* Student CTAs */}
+                          <td className="px-4 py-3" style={s.is_minor ? sep : {}}>
                             <div className="flex flex-wrap gap-2">
                               <a href={waLink(s.phone)} target="_blank" rel="noopener noreferrer"
                                 className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${s.prefs.includes('whatsapp') ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
@@ -467,27 +467,8 @@ export default function AdminPage() {
                                 <EmailIcon /> Email
                               </a>
                             </div>
-
-                            {/* Parent CTAs for minors */}
-                            {s.is_minor && s.parent_contact && (
-                              <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">{t.parent}</p>
-                                <div className="flex flex-wrap gap-2">
-                                  <a href={waLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-emerald-50 text-emerald-600 hover:bg-emerald-100">
-                                    <WaIcon /> WhatsApp
-                                  </a>
-                                  <a href={tgLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-sky-50 text-sky-600 hover:bg-sky-100">
-                                    <TgIcon /> Telegram
-                                  </a>
-                                </div>
-                              </div>
-                            )}
                           </td>
-
-                          {/* Courses */}
-                          <td className="px-4 py-3">
+                          <td rowSpan={s.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                             <p className="text-xs text-gray-400 mb-1.5">{t.total(s.total)}</p>
                             <div className="space-y-1.5">
                               {s.combos.map((c, i) => (
@@ -498,22 +479,51 @@ export default function AdminPage() {
                               ))}
                             </div>
                           </td>
-
-                          {/* Teachers */}
-                          <td className="px-4 py-3">
+                          <td rowSpan={s.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                             <p className="text-xs text-gray-400 mb-1.5">&nbsp;</p>
                             <div className="space-y-1.5">
                               {s.combos.map((c, i) => (
-                                <div key={i} className="text-xs text-gray-500">
-                                  {c.teacher.split(' ')[0]}
-                                </div>
+                                <div key={i} className="text-xs text-gray-500">{c.teacher.split(' ')[0]}</div>
                               ))}
                             </div>
                           </td>
                         </tr>
-                      )
-                    })}
-                  </tbody>
+                        {s.is_minor && (
+                          <tr className="border-b border-gray-200 group-hover:bg-gray-50 transition-colors">
+                            {/* dot spanned */}
+                            <td className="px-4 py-3">
+                              {s.parent_name && <p className="font-semibold text-gray-900">{s.parent_name}</p>}
+                              {s.parent_contact && <p className="text-xs text-gray-400 mt-0.5">{s.parent_contact}</p>}
+                              <button
+                                onClick={() => cycleParentStatus(s.email)}
+                                className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${statusButtonClass(s.email)}`}
+                              >
+                                {pStatus === 'answered' && <CheckIcon />}
+                                {statusLabel(s.email)}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3">
+                              {s.parent_contact ? (
+                                <div className="flex flex-wrap gap-2">
+                                  <a href={waLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-emerald-50 text-emerald-600 hover:bg-emerald-100">
+                                    <WaIcon /> WhatsApp
+                                  </a>
+                                  <a href={tgLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors bg-sky-50 text-sky-600 hover:bg-sky-100">
+                                    <TgIcon /> Telegram
+                                  </a>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-300">—</p>
+                              )}
+                            </td>
+                            {/* courses + teachers spanned */}
+                          </tr>
+                        )}
+                      </tbody>
+                    )
+                  })}
                 </table>
               </div>
             )}
