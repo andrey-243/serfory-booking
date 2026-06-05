@@ -13,7 +13,8 @@ export const translations = {
       confirmedDesc: 'Your request has been recorded. The teacher will contact you shortly.',
       bookAnother: 'Book another lesson',
       teachesIn: 'Teaches in',
-      allLanguages: 'Course provided in',
+      taughtIn: 'Taught in',
+      allLanguages: 'All languages',
       experienceYears: '{n} years of experience',
       courses: {
         Russian: 'Russian',
@@ -66,7 +67,8 @@ export const translations = {
       confirmedDesc: 'Teie soov on registreeritud. Õpetaja võtab teiega peagi ühendust.',
       bookAnother: 'Broneeri veel üks tund',
       teachesIn: 'Õpetab keeles',
-      allLanguages: 'Kursuse keel',
+      taughtIn: 'Õpetatakse keeles',
+      allLanguages: 'Kõik keeled',
       experienceYears: '{n} aastat kogemust',
       courses: {
         Russian: 'Vene keel',
@@ -119,7 +121,8 @@ export const translations = {
       confirmedDesc: 'Ваш запрос зарегистрирован. Преподаватель свяжется с вами в ближайшее время.',
       bookAnother: 'Записаться ещё раз',
       teachesIn: 'Язык обучения',
-      allLanguages: 'Язык курса',
+      taughtIn: 'Язык обучения',
+      allLanguages: 'Все языки',
       experienceYears: '{n} лет опыта',
       courses: {
         Russian: 'Русский',

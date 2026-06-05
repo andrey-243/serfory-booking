@@ -14,15 +14,15 @@ export default function CourseTabFilter({ selected, onChange }: Props) {
   const { t } = useLang()
 
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
       {COURSES.map(course => (
         <button
           key={course}
           onClick={() => onChange(course)}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
             selected === course
-              ? 'bg-blue-500 text-white border-blue-500'
-              : 'bg-white text-gray-500 border-gray-300 hover:border-blue-400 hover:text-blue-500'
+              ? 'bg-blue-500 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
           }`}
         >
           {t.booking.courses[course]}
