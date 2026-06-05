@@ -13,12 +13,6 @@ const dateFnsLocales = { en: enUS, et, ru }
 
 type Country = { code: string; dial: string; name: string }
 
-function toFlag(code: string): string {
-  return [...code.toUpperCase()]
-    .map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65))
-    .join('')
-}
-
 const PRIORITY_COUNTRIES: Country[] = [
   { code: 'EE', dial: '+372', name: 'Estonia' },
   { code: 'RU', dial: '+7',   name: 'Russia' },
@@ -88,14 +82,14 @@ function PhoneInput({
         <optgroup label="─────────────">
           {PRIORITY_COUNTRIES.map(c => (
             <option key={c.code} value={c.dial}>
-              {toFlag(c.code)} {c.dial} {c.name}
+              {c.code} {c.dial} {c.name}
             </option>
           ))}
         </optgroup>
         <optgroup label="─────────────">
           {OTHER_COUNTRIES.map(c => (
             <option key={c.code} value={c.dial}>
-              {toFlag(c.code)} {c.dial} {c.name}
+              {c.code} {c.dial} {c.name}
             </option>
           ))}
         </optgroup>
@@ -183,6 +177,7 @@ type FormData = {
   is_minor: boolean
   parent_name: string
   parent_contact: string
+  parent_email: string
   parent_pref: string[]
 }
 
@@ -197,6 +192,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     is_minor: false,
     parent_name: '',
     parent_contact: '',
+    parent_email: '',
     parent_pref: [],
   })
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
@@ -211,6 +207,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     if (!isValidEmail(form.student_email)) errs.student_email = ft.invalidEmail
     if (!isValidLocalPhone(form.student_phone)) errs.student_phone = ft.invalidPhone
     if (form.is_minor && !isValidLocalPhone(form.parent_contact)) errs.parent_contact = ft.invalidPhone
+    if (form.is_minor && form.parent_email && !isValidEmail(form.parent_email)) errs.parent_email = ft.invalidEmail
     setFieldErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -237,6 +234,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           is_minor: form.is_minor,
           parent_name: form.is_minor ? form.parent_name : null,
           parent_contact: form.is_minor ? form.parent_contact : null,
+          parent_email: form.is_minor ? (form.parent_email || null) : null,
           parent_pref: form.is_minor ? (form.parent_pref.join(',') || null) : null,
         }),
       })
@@ -346,6 +344,15 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
               {fieldErrors.parent_contact && (
                 <p className="text-xs text-red-500 mt-1">{fieldErrors.parent_contact}</p>
               )}
+            </Field>
+            <Field label={ft.parentEmail} error={fieldErrors.parent_email}>
+              <input
+                type="email"
+                value={form.parent_email}
+                onChange={e => { set('parent_email', e.target.value); setFieldErrors(f => ({ ...f, parent_email: undefined })) }}
+                className={`${inputClass} ${fieldErrors.parent_email ? 'border-red-300 focus:ring-red-300' : ''}`}
+                placeholder="parent@email.com"
+              />
             </Field>
             <Field label={ft.parentPref}>
               <ContactPills

@@ -208,7 +208,7 @@ function BookingPageInner() {
         <div className="flex gap-5 items-stretch h-[600px]">
           {/* Left panel */}
           <div className={`flex-shrink-0 flex flex-col gap-3 overflow-y-auto transition-all duration-200 ${
-            selectedSlot ? 'w-96' : 'w-64'
+            selectedSlot ? 'w-[440px]' : 'w-72'
           }`}>
             {selectedTeacher && selectedSlot ? (
               <>

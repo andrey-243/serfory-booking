@@ -16,6 +16,7 @@ type Booking = {
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
+  parent_email: string | null
   parent_pref: string | null
   status: string
   teachers: { name: string } | null
@@ -31,13 +32,14 @@ type StudentRow = {
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
+  parent_email: string | null
   total: number
   combos: Combo[]
 }
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
 type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
-type FilterMinors = 'all' | 'minors' | 'to_contact' | 'contacted' | 'answered'
+type FilterMinors = 'all' | 'minors' | 'non_minors' | 'to_contact' | 'contacted' | 'answered'
 
 const T = {
   fr: {
@@ -51,6 +53,7 @@ const T = {
     allTeachers: 'Tous les profs',
     allMinors: 'Tous',
     minorsOnly: 'Mineurs',
+    nonMinors: 'Non mineurs',
     parentNotReached: 'Parent non contacté',
     loading: 'Chargement…',
     empty: 'Aucune réservation.',
@@ -80,6 +83,7 @@ const T = {
     allTeachers: 'All teachers',
     allMinors: 'All',
     minorsOnly: 'Minors',
+    nonMinors: 'Non-minors',
     parentNotReached: 'Parent not reached',
     loading: 'Loading…',
     empty: 'No bookings.',
@@ -136,7 +140,7 @@ export default function AdminPage() {
 
   const [crmFilterCourse, setCrmFilterCourse] = useState<string>('all')
   const [crmFilterTeacher, setCrmFilterTeacher] = useState<string>('all')
-  const [crmFilterMinors, setCrmFilterMinors] = useState<'all' | 'minors'>('all')
+  const [crmFilterMinors, setCrmFilterMinors] = useState<FilterMinors>('all')
   const [crmSortCol, setCrmSortCol] = useState<'name' | 'total'>('total')
   const [crmSortDir, setCrmSortDir] = useState<'asc' | 'desc'>('desc')
   const [sortCol, setSortCol] = useState<SortCol>('date')
@@ -194,6 +198,7 @@ export default function AdminPage() {
     if (filterCourse !== 'all' && b.subject !== filterCourse) return false
     if (filterTeacher !== 'all' && b.teachers?.name !== filterTeacher) return false
     if (filterMinors === 'minors' && !b.is_minor) return false
+    if (filterMinors === 'non_minors' && b.is_minor) return false
     if (['to_contact', 'contacted', 'answered'].includes(filterMinors) && (!b.is_minor || (parentStatus[b.student_email] ?? 'to_contact') !== filterMinors)) return false
     return true
   })
@@ -231,6 +236,7 @@ export default function AdminPage() {
           is_minor: b.is_minor,
           parent_name: b.parent_name,
           parent_contact: b.parent_contact,
+          parent_email: b.parent_email,
           total: 0,
           combos: [],
         })
@@ -250,6 +256,9 @@ export default function AdminPage() {
   const visibleStudents = useMemo(() => {
     let result = students
     if (crmFilterMinors === 'minors') result = result.filter(s => s.is_minor)
+    else if (crmFilterMinors === 'non_minors') result = result.filter(s => !s.is_minor)
+    else if (['to_contact', 'contacted', 'answered'].includes(crmFilterMinors))
+      result = result.filter(s => s.is_minor && (parentStatus[s.email] ?? 'to_contact') === crmFilterMinors)
     if (crmFilterCourse !== 'all') result = result.filter(s => s.combos.some(c => c.subject === crmFilterCourse))
     if (crmFilterTeacher !== 'all') result = result.filter(s => s.combos.some(c => c.teacher === crmFilterTeacher))
     return [...result].sort((a, b) => {
@@ -337,6 +346,7 @@ export default function AdminPage() {
               >
                 <option value="all">{t.allMinors}</option>
                 <option value="minors">{t.minorsOnly}</option>
+                <option value="non_minors">{t.nonMinors}</option>
                 <option value="to_contact">{t.parentStatusFilter.to_contact}</option>
                 <option value="contacted">{t.parentStatusFilter.contacted}</option>
                 <option value="answered">{t.parentStatusFilter.answered}</option>
@@ -436,6 +446,7 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3">
                               <p className="text-xs text-gray-400">{b.parent_contact}</p>
+                              {b.parent_email && <p className="text-xs text-gray-400 mt-0.5">{b.parent_email}</p>}
                             </td>
                             <td className="px-3 py-3">
                               <div className="flex flex-col gap-1">
@@ -443,6 +454,7 @@ export default function AdminPage() {
                                   const pp = b.parent_pref?.split(',') ?? []
                                   const waActive = pp.length > 0 ? pp.includes('whatsapp') : true
                                   const tgActive = pp.length > 0 ? pp.includes('telegram') : true
+                                  const emActive = pp.includes('email')
                                   return (<>
                                     <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
                                       className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${waActive ? 'text-white bg-emerald-500 hover:bg-emerald-600' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}>
@@ -452,6 +464,12 @@ export default function AdminPage() {
                                       className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${tgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
                                       <TgIcon /> Telegram
                                     </a>
+                                    {b.parent_email && (
+                                      <a href={`mailto:${b.parent_email}`}
+                                        className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${emActive ? 'text-white bg-violet-500 hover:bg-violet-600' : 'text-violet-600 bg-violet-50 hover:bg-violet-100'}`}>
+                                        <EmailIcon /> Email
+                                      </a>
+                                    )}
                                   </>)
                                 })()}
                               </div>
@@ -491,13 +509,24 @@ export default function AdminPage() {
                   {teachers.map(tc => <option key={tc} value={tc}>{tc}</option>)}
                 </select>
               )}
-              {/* Minors toggle */}
+              {/* Minors / parent status dropdown */}
               <div className="h-5 w-px bg-gray-200" />
-              <button onClick={() => setCrmFilterMinors(f => f === 'all' ? 'minors' : 'all')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${crmFilterMinors === 'minors' ? 'bg-orange-400 text-white border-orange-400' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'}`}>
-                <span className="w-2 h-2 rounded-full bg-orange-400 border border-orange-500 inline-block" />
-                {t.minorsOnly}
-              </button>
+              <select
+                value={crmFilterMinors}
+                onChange={e => setCrmFilterMinors(e.target.value as FilterMinors)}
+                className={`text-xs border rounded-full px-3 py-1 bg-white focus:outline-none cursor-pointer transition-colors ${
+                  crmFilterMinors !== 'all'
+                    ? 'text-orange-500 border-orange-400 font-medium'
+                    : 'text-gray-500 border-gray-200 hover:border-orange-300'
+                }`}
+              >
+                <option value="all">{t.allMinors}</option>
+                <option value="minors">{t.minorsOnly}</option>
+                <option value="non_minors">{t.nonMinors}</option>
+                <option value="to_contact">{t.parentStatusFilter.to_contact}</option>
+                <option value="contacted">{t.parentStatusFilter.contacted}</option>
+                <option value="answered">{t.parentStatusFilter.answered}</option>
+              </select>
             </div>
 
             {loading ? (
@@ -578,6 +607,7 @@ export default function AdminPage() {
                             <td className="px-4 py-3">
                               {s.parent_name && <p className="font-semibold text-gray-900"><ParentIcon />{s.parent_name}</p>}
                               {s.parent_contact && <p className="text-xs text-gray-400 mt-0.5">{s.parent_contact}</p>}
+                              {s.parent_email && <p className="text-xs text-gray-400 mt-0.5">{s.parent_email}</p>}
                               <button
                                 onClick={() => cycleParentStatus(s.email)}
                                 className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${statusButtonClass(s.email)}`}

@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     is_minor,
     parent_name,
     parent_contact,
+    parent_email,
     parent_pref,
   } = body
 
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
       is_minor: is_minor ?? false,
       parent_name: is_minor ? parent_name : null,
       parent_contact: is_minor ? parent_contact : null,
+      parent_email: is_minor ? (parent_email || null) : null,
       parent_pref: is_minor ? (parent_pref || null) : null,
       google_event_id,
     })
