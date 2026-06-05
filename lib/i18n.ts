@@ -14,6 +14,7 @@ export const translations = {
       bookAnother: 'Book another lesson',
       teachesIn: 'Teaches in',
       allLanguages: 'Course provided in',
+      experienceYears: '{n} years of experience',
       courses: {
         Russian: 'Russian',
         English: 'English',
@@ -66,6 +67,7 @@ export const translations = {
       bookAnother: 'Broneeri veel üks tund',
       teachesIn: 'Õpetab keeles',
       allLanguages: 'Kursuse keel',
+      experienceYears: '{n} aastat kogemust',
       courses: {
         Russian: 'Vene keel',
         English: 'Inglise keel',
@@ -118,6 +120,7 @@ export const translations = {
       bookAnother: 'Записаться ещё раз',
       teachesIn: 'Язык обучения',
       allLanguages: 'Язык курса',
+      experienceYears: '{n} лет опыта',
       courses: {
         Russian: 'Русский',
         English: 'Английский',

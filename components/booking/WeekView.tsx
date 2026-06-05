@@ -1,12 +1,20 @@
 'use client'
 
-import { format, addDays, isSameDay, parseISO } from 'date-fns'
+import { format, addDays, isSameDay, parseISO, startOfWeek, isAfter } from 'date-fns'
 import { enUS, et, ru } from 'date-fns/locale'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
 import { useLang } from '@/lib/language-context'
 
 const dateFnsLocales = { en: enUS, et, ru }
+
+const TEACHER_COLORS = [
+  { normal: 'bg-blue-100 text-blue-700 hover:bg-blue-200', selected: 'bg-blue-500 text-white' },
+  { normal: 'bg-violet-100 text-violet-700 hover:bg-violet-200', selected: 'bg-violet-500 text-white' },
+  { normal: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200', selected: 'bg-emerald-500 text-white' },
+  { normal: 'bg-amber-100 text-amber-700 hover:bg-amber-200', selected: 'bg-amber-500 text-white' },
+  { normal: 'bg-rose-100 text-rose-700 hover:bg-rose-200', selected: 'bg-rose-500 text-white' },
+]
 
 type TeacherSlots = {
   teacher: Teacher
@@ -34,17 +42,41 @@ function slotToGridRow(start: string, end: string) {
   return { rowStart, rowSpan: Math.max(rowSpan, 1) }
 }
 
+type SlotEntry = { teacher: Teacher; slot: CalendarSlot }
+
 export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, weekStart, onPrevWeek, onNextWeek }: Props) {
   const { t, lang } = useLang()
   const locale = dateFnsLocales[lang]
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+
+  const todayWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+  const canGoPrev = isAfter(weekStart, todayWeekStart)
+
+  // Assign a stable color index per teacher
+  const teacherColorMap: Record<string, number> = {}
+  teacherSlots.forEach((ts, i) => {
+    teacherColorMap[ts.teacher.id] = i % TEACHER_COLORS.length
+  })
+
+  // Group slots by (dayIndex, slotStart) → list of {teacher, slot}
+  const grouped = new Map<string, SlotEntry[]>()
+  teacherSlots.forEach(ts => {
+    ts.slots.forEach(slot => {
+      const dayIdx = days.findIndex(d => isSameDay(d, parseISO(slot.start)))
+      if (dayIdx === -1) return
+      const key = `${dayIdx}|${slot.start}`
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push({ teacher: ts.teacher, slot })
+    })
+  })
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
         <button
           onClick={onPrevWeek}
-          className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
+          disabled={!canGoPrev}
+          className="px-3 py-1 rounded-lg border border-gray-200 text-sm hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           {t.week.prev}
         </button>
@@ -63,88 +95,86 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `48px repeat(${days.length * teacherSlots.length || 7}, minmax(80px, 1fr))`,
+            gridTemplateColumns: `48px repeat(7, minmax(80px, 1fr))`,
             gridTemplateRows: `32px repeat(${HOURS.length * 2}, 24px)`,
-            minWidth: `${48 + Math.max(days.length * teacherSlots.length, 7) * 80}px`,
+            minWidth: `${48 + 7 * 80}px`,
           }}
         >
+          {/* Header */}
           <div />
-          {days.map(day =>
-            teacherSlots.length > 0
-              ? teacherSlots.map(ts => (
-                  <div
-                    key={`${day.toISOString()}-${ts.teacher.id}`}
-                    className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex flex-col items-center justify-center"
-                  >
-                    <span className="uppercase">{format(day, 'EEE', { locale })}</span>
-                    <span className="text-gray-400 text-[10px]">{ts.teacher.name.split(' ')[0]}</span>
-                  </div>
-                ))
-              : (
-                  <div
-                    key={day.toISOString()}
-                    className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex items-center justify-center"
-                  >
-                    {format(day, 'EEE d', { locale })}
-                  </div>
-                )
-          )}
+          {days.map((day, i) => (
+            <div
+              key={i}
+              className="text-center text-xs font-medium text-gray-500 border-b border-gray-100 flex flex-col items-center justify-center"
+            >
+              <span className="uppercase">{format(day, 'EEE', { locale })}</span>
+              <span className="text-gray-400 text-[10px]">{format(day, 'd MMM', { locale })}</span>
+            </div>
+          ))}
 
+          {/* Hour labels */}
           {HOURS.flatMap(h => [0, 30].map(m => {
-            const label = m === 0 ? `${h}h` : ''
             const rowIndex = (h - 8) * 2 + (m === 30 ? 1 : 0) + 2
             return (
               <div
-                key={`${h}:${m}`}
+                key={`lbl-${h}:${m}`}
                 style={{ gridRow: rowIndex, gridColumn: 1 }}
                 className="text-[10px] text-gray-400 flex items-start justify-end pr-2 pt-0.5"
               >
-                {label}
+                {m === 0 ? `${h}h` : ''}
               </div>
             )
           }))}
 
+          {/* Background grid lines */}
           {HOURS.flatMap(h => [0, 30].map(m => {
             const rowIndex = (h - 8) * 2 + (m === 30 ? 1 : 0) + 2
-            const colCount = teacherSlots.length > 0 ? days.length * teacherSlots.length : 7
             return (
               <div
                 key={`bg-${h}:${m}`}
-                style={{ gridRow: rowIndex, gridColumn: `2 / span ${colCount}` }}
+                style={{ gridRow: rowIndex, gridColumn: '2 / span 7' }}
                 className={`border-t ${m === 0 ? 'border-gray-200' : 'border-gray-100'}`}
               />
             )
           }))}
 
-          {teacherSlots.flatMap((ts, tsIdx) =>
-            ts.slots.map((slot, sIdx) => {
-              const slotDate = parseISO(slot.start)
-              const dayIdx = days.findIndex(d => isSameDay(d, slotDate))
-              if (dayIdx === -1) return null
+          {/* Slot cells */}
+          {Array.from(grouped.entries()).map(([key, entries]) => {
+            const dayIdx = parseInt(key.split('|')[0])
+            const { rowStart, rowSpan } = slotToGridRow(entries[0].slot.start, entries[0].slot.end)
 
-              const colIndex = dayIdx * teacherSlots.length + tsIdx + 2
-              const { rowStart, rowSpan } = slotToGridRow(slot.start, slot.end)
-              const isSelected =
-                selectedSlot?.teacherId === ts.teacher.id &&
-                selectedSlot.slot.start === slot.start
+            return (
+              <div
+                key={key}
+                style={{ gridRow: `${rowStart} / span ${rowSpan}`, gridColumn: dayIdx + 2 }}
+                className="px-0.5 py-0.5 flex gap-0.5"
+              >
+                {entries.map(({ teacher, slot }) => {
+                  const colorIdx = teacherColorMap[teacher.id] ?? 0
+                  const colors = TEACHER_COLORS[colorIdx]
+                  const isSelected =
+                    selectedSlot?.teacherId === teacher.id &&
+                    selectedSlot.slot.start === slot.start
+                  const label = entries.length === 1
+                    ? format(parseISO(slot.start), 'HH:mm')
+                    : teacher.name.split(' ')[0]
 
-              return (
-                <button
-                  key={`${ts.teacher.id}-${sIdx}`}
-                  style={{ gridRow: `${rowStart} / span ${rowSpan}`, gridColumn: colIndex }}
-                  onClick={() => onSelectSlot(ts.teacher.id, slot)}
-                  className={`mx-0.5 my-0.5 rounded text-[10px] font-medium transition-colors truncate px-1 ${
-                    isSelected
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  }`}
-                  title={`${format(parseISO(slot.start), 'HH:mm')} – ${format(parseISO(slot.end), 'HH:mm')}`}
-                >
-                  {format(parseISO(slot.start), 'HH:mm')}
-                </button>
-              )
-            })
-          )}
+                  return (
+                    <button
+                      key={teacher.id}
+                      onClick={() => onSelectSlot(teacher.id, slot)}
+                      className={`flex-1 rounded text-[9px] font-semibold transition-colors truncate px-0.5 min-w-0 ${
+                        isSelected ? colors.selected : colors.normal
+                      }`}
+                      title={`${teacher.name} – ${format(parseISO(slot.start), 'HH:mm')}–${format(parseISO(slot.end), 'HH:mm')}`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
