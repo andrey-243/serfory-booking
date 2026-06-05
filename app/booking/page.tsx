@@ -124,8 +124,8 @@ function BookingPageInner() {
   }
 
   return (
-    <main className="min-h-screen bg-[#EEF2FF] p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+    <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
+      <div className="max-w-screen-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">

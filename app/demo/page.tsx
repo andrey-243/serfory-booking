@@ -15,6 +15,7 @@ type Booking = {
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
+  parent_pref: string | null
   status: string
   teacher: string
 }
@@ -42,28 +43,28 @@ type FilterMinors = 'all' | 'minors' | 'to_contact' | 'contacted' | 'answered'
 
 const DEMO: Booking[] = [
   // Sophie — English with 2 different teachers (Elizabeth ×3, Mihhail ×2)
-  { id: 'b1', subject: 'English', slot_start: '2026-06-02T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
-  { id: 'b2', subject: 'English', slot_start: '2026-06-04T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
-  { id: 'b3', subject: 'English', slot_start: '2026-06-06T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
-  { id: 'b4', subject: 'English', slot_start: '2026-06-03T14:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Mihhail Skvortsov' },
-  { id: 'b5', subject: 'English', slot_start: '2026-06-05T14:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
+  { id: 'b1', subject: 'English', slot_start: '2026-06-02T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
+  { id: 'b2', subject: 'English', slot_start: '2026-06-04T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
+  { id: 'b3', subject: 'English', slot_start: '2026-06-06T10:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
+  { id: 'b4', subject: 'English', slot_start: '2026-06-03T14:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Mihhail Skvortsov' },
+  { id: 'b5', subject: 'English', slot_start: '2026-06-05T14:00:00', student_name: 'Sophie Dubois', student_email: 'sophie@gmail.com', student_phone: '+33612345678', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
 
   // Lucas — different courses × same teacher (Elizabeth: Estonian ×2 + English ×3)
-  { id: 'b6',  subject: 'Estonian', slot_start: '2026-06-02T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
-  { id: 'b7',  subject: 'Estonian', slot_start: '2026-06-04T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
-  { id: 'b8',  subject: 'English',  slot_start: '2026-06-03T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
-  { id: 'b9',  subject: 'English',  slot_start: '2026-06-05T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
-  { id: 'b10', subject: 'English',  slot_start: '2026-06-07T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
+  { id: 'b6',  subject: 'Estonian', slot_start: '2026-06-02T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
+  { id: 'b7',  subject: 'Estonian', slot_start: '2026-06-04T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
+  { id: 'b8',  subject: 'English',  slot_start: '2026-06-03T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
+  { id: 'b9',  subject: 'English',  slot_start: '2026-06-05T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Elizabeth Kivonen' },
+  { id: 'b10', subject: 'English',  slot_start: '2026-06-07T11:00:00', student_name: 'Lucas Martin', student_email: 'lucas@gmail.com', student_phone: '+33698765432', contact_pref: 'telegram', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Elizabeth Kivonen' },
 
   // Emma — minor, different courses × same teacher (Dominika: Russian ×1 + Estonian ×2)
-  { id: 'b11', subject: 'Russian',  slot_start: '2026-06-02T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', status: 'confirmed', teacher: 'Dominika Fält' },
-  { id: 'b12', subject: 'Estonian', slot_start: '2026-06-04T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', status: 'confirmed', teacher: 'Dominika Fält' },
-  { id: 'b13', subject: 'Estonian', slot_start: '2026-06-06T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', status: 'pending',   teacher: 'Dominika Fält' },
+  { id: 'b11', subject: 'Russian',  slot_start: '2026-06-02T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', parent_pref: 'whatsapp', status: 'confirmed', teacher: 'Dominika Fält' },
+  { id: 'b12', subject: 'Estonian', slot_start: '2026-06-04T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', parent_pref: 'whatsapp', status: 'confirmed', teacher: 'Dominika Fält' },
+  { id: 'b13', subject: 'Estonian', slot_start: '2026-06-06T15:00:00', student_name: 'Emma Leroy', student_email: 'emma@gmail.com', student_phone: '+33677889900', contact_pref: 'email', is_minor: true, parent_name: 'Marie Leroy', parent_contact: '+33644556677', parent_pref: 'whatsapp', status: 'pending',   teacher: 'Dominika Fält' },
 
   // Tom — same teacher (Mihhail), different courses (Spanish ×2 + English ×1)
-  { id: 'b14', subject: 'Spanish', slot_start: '2026-06-03T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'confirmed', teacher: 'Mihhail Skvortsov' },
-  { id: 'b15', subject: 'Spanish', slot_start: '2026-06-05T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
-  { id: 'b16', subject: 'English', slot_start: '2026-06-07T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
+  { id: 'b14', subject: 'Spanish', slot_start: '2026-06-03T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'confirmed', teacher: 'Mihhail Skvortsov' },
+  { id: 'b15', subject: 'Spanish', slot_start: '2026-06-05T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
+  { id: 'b16', subject: 'English', slot_start: '2026-06-07T16:00:00', student_name: 'Tom Bernard', student_email: 'tom@gmail.com', student_phone: '+33655443322', contact_pref: 'whatsapp', is_minor: false, parent_name: null, parent_contact: null, parent_pref: null, status: 'pending',   teacher: 'Mihhail Skvortsov' },
 ]
 
 // ── Utils ────────────────────────────────────────────────────────────────────
@@ -151,7 +152,7 @@ export default function DemoPage() {
       }
       const s = map.get(b.student_email)!
       s.total++
-      if (!s.prefs.includes(b.contact_pref)) s.prefs.push(b.contact_pref)
+      b.contact_pref?.split(',').forEach(p => { if (!s.prefs.includes(p)) s.prefs.push(p) })
       const key = `${b.subject}||${b.teacher}`
       const existing = s.combos.find(c => `${c.subject}||${c.teacher}` === key)
       if (existing) existing.count++
@@ -299,24 +300,26 @@ export default function DemoPage() {
                           <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
                         </td>
                         <td className="px-3 py-3" style={divStyle}>
-                          {b.contact_pref === 'whatsapp' && (
-                            <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <WaIcon /> WhatsApp
-                            </a>
-                          )}
-                          {b.contact_pref === 'telegram' && (
-                            <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <TgIcon /> Telegram
-                            </a>
-                          )}
-                          {b.contact_pref === 'email' && (
-                            <a href={`mailto:${b.student_email}`}
-                              className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                              <EmailIcon /> Email
-                            </a>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {b.contact_pref?.split(',').map(pref => (
+                              pref === 'whatsapp' ? (
+                                <a key="wa" href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                  <WaIcon /> WhatsApp
+                                </a>
+                              ) : pref === 'telegram' ? (
+                                <a key="tg" href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                  <TgIcon /> Telegram
+                                </a>
+                              ) : (
+                                <a key="em" href={`mailto:${b.student_email}`}
+                                  className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                  <EmailIcon /> Email
+                                </a>
+                              )
+                            ))}
+                          </div>
                         </td>
                         <td rowSpan={span} className="px-4 pt-3 pb-0 align-top">{statusBadge}</td>
                       </tr>
@@ -331,14 +334,21 @@ export default function DemoPage() {
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex flex-col gap-1">
-                              <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                <WaIcon /> WhatsApp
-                              </a>
-                              <a href={tgLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-sky-600 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                <TgIcon /> Telegram
-                              </a>
+                              {(() => {
+                                const pp = b.parent_pref?.split(',') ?? []
+                                const waActive = pp.length > 0 ? pp.includes('whatsapp') : true
+                                const tgActive = pp.length > 0 ? pp.includes('telegram') : true
+                                return (<>
+                                  <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${waActive ? 'text-white bg-emerald-500 hover:bg-emerald-600' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}>
+                                    <WaIcon /> WhatsApp
+                                  </a>
+                                  <a href={tgLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${tgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
+                                    <TgIcon /> Telegram
+                                  </a>
+                                </>)
+                              })()}
                             </div>
                           </td>
                         </tr>

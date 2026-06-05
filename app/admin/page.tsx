@@ -16,6 +16,7 @@ type Booking = {
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
+  parent_pref: string | null
   status: string
   teachers: { name: string } | null
 }
@@ -133,13 +134,22 @@ export default function AdminPage() {
   const [filterTeacher, setFilterTeacher] = useState<string>('all')
   const [filterMinors, setFilterMinors] = useState<FilterMinors>('all')
 
-  const [crmFilterMinors, setCrmFilterMinors] = useState(false)
+  const [crmFilterCourse, setCrmFilterCourse] = useState<string>('all')
+  const [crmFilterTeacher, setCrmFilterTeacher] = useState<string>('all')
+  const [crmFilterMinors, setCrmFilterMinors] = useState<'all' | 'minors'>('all')
+  const [crmSortCol, setCrmSortCol] = useState<'name' | 'total'>('total')
+  const [crmSortDir, setCrmSortDir] = useState<'asc' | 'desc'>('desc')
   const [sortCol, setSortCol] = useState<SortCol>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
+  }
+
+  function handleCrmSort(col: 'name' | 'total') {
+    if (crmSortCol === col) setCrmSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setCrmSortCol(col); setCrmSortDir(col === 'total' ? 'desc' : 'asc') }
   }
 
   const [parentStatus, setParentStatus] = useState<Record<string, ParentStatus>>({})
@@ -227,7 +237,7 @@ export default function AdminPage() {
       }
       const s = map.get(key)!
       s.total++
-      if (!s.prefs.includes(b.contact_pref)) s.prefs.push(b.contact_pref)
+      b.contact_pref?.split(',').forEach(p => { if (!s.prefs.includes(p)) s.prefs.push(p) })
       const tName = b.teachers?.name ?? '—'
       const comboKey = `${b.subject}||${tName}`
       const existing = s.combos.find(c => `${c.subject}||${c.teacher}` === comboKey)
@@ -237,7 +247,16 @@ export default function AdminPage() {
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [bookings])
 
-  const visibleStudents = students.filter(s => !crmFilterMinors || s.is_minor)
+  const visibleStudents = useMemo(() => {
+    let result = students
+    if (crmFilterMinors === 'minors') result = result.filter(s => s.is_minor)
+    if (crmFilterCourse !== 'all') result = result.filter(s => s.combos.some(c => c.subject === crmFilterCourse))
+    if (crmFilterTeacher !== 'all') result = result.filter(s => s.combos.some(c => c.teacher === crmFilterTeacher))
+    return [...result].sort((a, b) => {
+      const cmp = crmSortCol === 'name' ? a.name.localeCompare(b.name) : a.total - b.total
+      return crmSortDir === 'asc' ? cmp : -cmp
+    })
+  }, [students, crmFilterMinors, crmFilterCourse, crmFilterTeacher, crmSortCol, crmSortDir])
 
   return (
     <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
@@ -386,24 +405,26 @@ export default function AdminPage() {
                             <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
                           </td>
                           <td className="px-3 py-3" style={divStyle}>
-                            {b.contact_pref === 'whatsapp' && (
-                              <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                <WaIcon /> WhatsApp
-                              </a>
-                            )}
-                            {b.contact_pref === 'telegram' && (
-                              <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                <TgIcon /> Telegram
-                              </a>
-                            )}
-                            {b.contact_pref === 'email' && (
-                              <a href={`mailto:${b.student_email}`}
-                                className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                <EmailIcon /> Email
-                              </a>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {b.contact_pref?.split(',').map(pref => (
+                                pref === 'whatsapp' ? (
+                                  <a key="wa" href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                    <WaIcon /> WhatsApp
+                                  </a>
+                                ) : pref === 'telegram' ? (
+                                  <a key="tg" href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                    <TgIcon /> Telegram
+                                  </a>
+                                ) : (
+                                  <a key="em" href={`mailto:${b.student_email}`}
+                                    className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                    <EmailIcon /> Email
+                                  </a>
+                                )
+                              ))}
+                            </div>
                           </td>
                           <td rowSpan={span} className="px-4 pt-3 pb-0 align-top">{statusBadge}</td>
                         </tr>
@@ -418,14 +439,21 @@ export default function AdminPage() {
                             </td>
                             <td className="px-3 py-3">
                               <div className="flex flex-col gap-1">
-                                <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                  <WaIcon /> WhatsApp
-                                </a>
-                                <a href={tgLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 text-xs text-sky-600 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                  <TgIcon /> Telegram
-                                </a>
+                                {(() => {
+                                  const pp = b.parent_pref?.split(',') ?? []
+                                  const waActive = pp.length > 0 ? pp.includes('whatsapp') : true
+                                  const tgActive = pp.length > 0 ? pp.includes('telegram') : true
+                                  return (<>
+                                    <a href={waLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${waActive ? 'text-white bg-emerald-500 hover:bg-emerald-600' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}>
+                                      <WaIcon /> WhatsApp
+                                    </a>
+                                    <a href={tgLink(b.parent_contact!)} target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit ${tgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
+                                      <TgIcon /> Telegram
+                                    </a>
+                                  </>)
+                                })()}
                               </div>
                             </td>
                           </tr>
@@ -442,13 +470,31 @@ export default function AdminPage() {
         {/* ── CRM VIEW ── */}
         {view === 'crm' && (
           <div>
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setCrmFilterMinors(f => !f)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  crmFilterMinors ? 'bg-orange-400 text-white border-orange-400' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'
-                }`}
-              >
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* Course pills */}
+              {courses.length > 1 && (
+                <div className="flex gap-1.5">
+                  {(['all', ...courses] as string[]).map(c => (
+                    <button key={c} onClick={() => setCrmFilterCourse(c)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${crmFilterCourse === c ? 'bg-violet-500 text-white border-violet-500' : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300'}`}>
+                      {c === 'all' ? t.allCourses : c}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Teacher dropdown */}
+              {teachers.length > 1 && <div className="h-5 w-px bg-gray-200" />}
+              {teachers.length > 1 && (
+                <select value={crmFilterTeacher} onChange={e => setCrmFilterTeacher(e.target.value)}
+                  className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-600 focus:outline-none cursor-pointer">
+                  <option value="all">{t.allTeachers}</option>
+                  {teachers.map(tc => <option key={tc} value={tc}>{tc}</option>)}
+                </select>
+              )}
+              {/* Minors toggle */}
+              <div className="h-5 w-px bg-gray-200" />
+              <button onClick={() => setCrmFilterMinors(f => f === 'all' ? 'minors' : 'all')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${crmFilterMinors === 'minors' ? 'bg-orange-400 text-white border-orange-400' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'}`}>
                 <span className="w-2 h-2 rounded-full bg-orange-400 border border-orange-500 inline-block" />
                 {t.minorsOnly}
               </button>
@@ -464,9 +510,9 @@ export default function AdminPage() {
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                       <th className="w-6 px-3 py-3" />
-                      <th className="text-left px-4 py-3 font-medium">{t.crmCols.student}</th>
+                      <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleCrmSort('name')}>{t.crmCols.student}<SortIndicator active={crmSortCol === 'name'} dir={crmSortDir} /></th>
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.contact}</th>
-                      <th className="text-left px-4 py-3 font-medium">{t.crmCols.courses}</th>
+                      <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleCrmSort('total')}>{t.crmCols.courses}<SortIndicator active={crmSortCol === 'total'} dir={crmSortDir} /></th>
                       <th className="text-left px-4 py-3 font-medium">{t.crmCols.teachers}</th>
                     </tr>
                   </thead>
