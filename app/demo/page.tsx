@@ -24,11 +24,11 @@ type Student = {
   email: string
   phone: string
   avatar: string
-  prefs: ('whatsapp' | 'telegram' | 'email')[]
+  prefs: ('telegram' | 'email')[]
   is_minor: boolean
   parent_name?: string
   parent_phone?: string
-  parent_prefs?: ('whatsapp' | 'telegram')[]
+  parent_prefs?: ('telegram')[]
   courses: { subject: string; teacher: string; teacherInitials: string; teacherColor: string; teacherBg: string; count: number }[]
 }
 
@@ -38,7 +38,7 @@ const STUDENTS: Student[] = [
     email: 'sophie@gmail.com',
     phone: '+33612345678',
     avatar: 'SD',
-    prefs: ['whatsapp'],
+    prefs: ['telegram'],
     is_minor: false,
     courses: [
       { subject: 'English', teacher: 'Elizabeth Kivonen', teacherInitials: 'EK', teacherColor: 'text-violet-700', teacherBg: 'bg-violet-100', count: 3 },
@@ -66,7 +66,7 @@ const STUDENTS: Student[] = [
     is_minor: true,
     parent_name: 'Marie Leroy',
     parent_phone: '+33644556677',
-    parent_prefs: ['whatsapp'],
+    parent_prefs: ['telegram'],
     courses: [
       { subject: 'Russian',  teacher: 'Dominika Fält', teacherInitials: 'DF', teacherColor: 'text-pink-700', teacherBg: 'bg-pink-100', count: 1 },
       { subject: 'Estonian', teacher: 'Dominika Fält', teacherInitials: 'DF', teacherColor: 'text-pink-700', teacherBg: 'bg-pink-100', count: 2 },
@@ -77,7 +77,7 @@ const STUDENTS: Student[] = [
     email: 'tom@gmail.com',
     phone: '+33655443322',
     avatar: 'TB',
-    prefs: ['whatsapp'],
+    prefs: ['telegram'],
     is_minor: false,
     courses: [
       { subject: 'Spanish', teacher: 'Mihhail Skvortsov', teacherInitials: 'MS', teacherColor: 'text-sky-700', teacherBg: 'bg-sky-100', count: 2 },
@@ -124,19 +124,10 @@ function avatarColor(name: string) { let h = 0; for (const c of name) h = (h + c
 function parentDotColor(s: ParentStatus) { return s === 'answered' ? 'bg-green-400' : s === 'contacted' ? 'bg-amber-400' : 'bg-orange-400' }
 function parentBtnClass(s: ParentStatus) { return s === 'answered' ? 'bg-green-100 text-green-700 border-green-200' : s === 'contacted' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-orange-50 text-orange-500 border-orange-200' }
 function parentBtnLabel(s: ParentStatus) { return s === 'answered' ? '✓ Answered' : s === 'contacted' ? 'Contacted' : 'Mark contacted' }
-function waLink(phone: string) { return `https://wa.me/${phone.replace(/\D/g, '')}` }
 function tgLink(phone: string) { return `https://t.me/+${phone.replace(/\D/g, '')}` }
 
 // ── Contact buttons ───────────────────────────────────────────────────────────
 
-function WaBtn({ phone, active }: { phone: string; active: boolean }) {
-  return (
-    <a href={waLink(phone)} target="_blank" rel="noopener noreferrer"
-      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${active ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
-      <WaIcon /> WhatsApp
-    </a>
-  )
-}
 function TgBtn({ phone, active }: { phone: string; active: boolean }) {
   return (
     <a href={tgLink(phone)} target="_blank" rel="noopener noreferrer"
@@ -153,14 +144,11 @@ function EmBtn({ email, active }: { email: string; active: boolean }) {
     </a>
   )
 }
-function WaBtnIcon({ phone }: { phone: string }) {
-  return <a href={waLink(phone)} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"><WaIcon /></a>
+function TgBtnIcon({ phone, active = true }: { phone: string; active?: boolean }) {
+  return <a href={tgLink(phone)} target="_blank" rel="noopener noreferrer" className={`w-7 h-7 flex items-center justify-center rounded-full border transition-colors ${active ? 'bg-sky-500 text-white border-sky-500 hover:bg-sky-600' : 'bg-white text-sky-400 border-sky-200 hover:bg-sky-50'}`}><TgIcon className="w-3.5 h-3.5" /></a>
 }
-function TgBtnIcon({ phone }: { phone: string }) {
-  return <a href={tgLink(phone)} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center rounded-full bg-sky-500 text-white hover:bg-sky-600 transition-colors"><TgIcon /></a>
-}
-function EmBtnIcon({ email }: { email: string }) {
-  return <a href={`mailto:${email}`} className="w-8 h-8 flex items-center justify-center rounded-full bg-violet-500 text-white hover:bg-violet-600 transition-colors"><EmailIcon /></a>
+function EmBtnIcon({ email, active = true }: { email: string; active?: boolean }) {
+  return <a href={`mailto:${email}`} className={`w-7 h-7 flex items-center justify-center rounded-full border transition-colors ${active ? 'bg-violet-500 text-white border-violet-500 hover:bg-violet-600' : 'bg-white text-violet-400 border-violet-200 hover:bg-violet-50'}`}><EmailIcon className="w-3.5 h-3.5" /></a>
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -179,6 +167,8 @@ export default function DemoPage() {
   const [topView, setTopView] = useState<TopView>('crm')
   const [variant, setVariant] = useState<Variant>('B1')
   const [parentStatus, setParentStatus] = useState<Record<string, ParentStatus>>({})
+  const [expandedParent, setExpandedParent] = useState<Record<string, boolean>>({})
+  function toggleParent(email: string) { setExpandedParent(prev => ({ ...prev, [email]: !prev[email] })) }
 
   // Stats state
   const NOW = new Date('2026-06-06')
@@ -395,7 +385,6 @@ export default function DemoPage() {
 
                   {/* Contact student */}
                   <div className="flex items-center px-5 py-4 gap-1.5 border-r border-gray-100">
-                    <WaBtn phone={s.phone} active={s.prefs.includes('whatsapp')} />
                     <TgBtn phone={s.phone} active={s.prefs.includes('telegram')} />
                     <EmBtn email={s.email} active={s.prefs.includes('email')} />
                   </div>
@@ -408,8 +397,7 @@ export default function DemoPage() {
                         <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
                         <p className="text-xs text-gray-400 mb-1.5">{s.parent_phone}</p>
                         <div className="flex gap-1.5 mb-1.5">
-                          <WaBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('whatsapp') ?? true} />
-                          <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? false} />
+                          <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? true} />
                         </div>
                         <button onClick={() => cycleParent(s.email)}
                           className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${parentBtnClass(pStatus)}`}>
@@ -426,17 +414,20 @@ export default function DemoPage() {
           </div>
         )}
 
-        {/* ── B2 — B1 avec contacts en icônes rondes ─────────────────────────── */}
+        {/* ── B2 — full CTAs, parent row below, status = border + parent icon ── */}
         {variant === 'B2' && (
           <div className="space-y-3">
             {STUDENTS.map(s => {
               const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
+              const cardBorder = s.is_minor
+                ? pStatus === 'answered' ? 'border-green-400' : pStatus === 'contacted' ? 'border-amber-400' : 'border-orange-400'
+                : 'border-gray-200'
+              const parentIconCls = pStatus === 'answered' ? 'bg-green-100 text-green-600' : pStatus === 'contacted' ? 'bg-amber-100 text-amber-600' : 'bg-orange-100 text-orange-500'
               return (
-                <div key={s.email} className={`bg-white rounded-xl border overflow-hidden flex items-stretch ${s.is_minor ? 'border-orange-200' : 'border-gray-200'}`}>
-                  {s.is_minor && <div className={`w-1 shrink-0 ${parentDotColor(pStatus)}`} />}
+                <div key={s.email} className={`bg-white rounded-xl border-2 overflow-hidden flex items-stretch transition-colors ${cardBorder}`}>
 
                   {/* Identity */}
-                  <div className="flex items-center gap-3 px-5 py-4 min-w-60 border-r border-gray-100">
+                  <div className="flex items-center gap-3 px-5 py-3 min-w-60 border-r border-gray-100">
                     <span className={`inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold shrink-0 ${avatarColor(s.name)}`}>{s.avatar}</span>
                     <div>
                       <div className="flex items-center gap-2">
@@ -449,7 +440,7 @@ export default function DemoPage() {
                   </div>
 
                   {/* Courses */}
-                  <div className="flex items-center px-5 py-4 flex-1 border-r border-gray-100 gap-2 flex-wrap">
+                  <div className="flex items-center px-5 py-3 flex-1 border-r border-gray-100 gap-2 flex-wrap">
                     {s.courses.map((c, i) => (
                       <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold ${c.teacherBg} ${c.teacherColor}`}>
                         <span>{c.teacherInitials}</span>
@@ -460,33 +451,49 @@ export default function DemoPage() {
                     ))}
                   </div>
 
-                  {/* Contact — round icons only */}
-                  <div className="flex items-center px-5 py-4 gap-2 border-r border-gray-100">
-                    {s.prefs.includes('whatsapp') && <WaBtnIcon phone={s.phone} />}
-                    {s.prefs.includes('telegram') && <TgBtnIcon phone={s.phone} />}
-                    {s.prefs.includes('email') && <EmBtnIcon email={s.email} />}
-                  </div>
-
-                  {/* Parent */}
+                  {/* Parent/tutor column — col 3 */}
                   {s.is_minor ? (
-                    <div className="flex items-center gap-3 px-5 py-4 min-w-64 bg-orange-50/30">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-500 shrink-0"><ParentIcon /></span>
-                      <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3 px-5 py-3 min-w-56 border-r border-gray-100">
+                      {/* Parent icon + status cycle badge */}
+                      <div className="relative shrink-0 mt-0.5">
+                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors ${parentIconCls}`}><ParentIcon /></span>
+                        <button
+                          onClick={() => cycleParent(s.email)}
+                          title={parentBtnLabel(pStatus)}
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center transition-colors ${
+                            pStatus === 'answered' ? 'bg-green-500' : pStatus === 'contacted' ? 'bg-amber-400' : 'bg-gray-400'
+                          }`}
+                        >
+                          {pStatus === 'to_contact' ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} strokeLinecap="round" className="w-2 h-2">
+                              <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                          ) : pStatus === 'contacted' ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round" className="w-2 h-2">
+                              <path d="M5 22h14M5 2h14M17 22v-4l-5-4 5-4V2M7 2v4l5 4-5 4v4" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
                         <p className="text-xs text-gray-400 mb-2">{s.parent_phone}</p>
-                        <div className="flex gap-1.5 mb-1.5">
-                          {(s.parent_prefs?.includes('whatsapp') ?? true) && <WaBtnIcon phone={s.parent_phone!} />}
-                          {(s.parent_prefs?.includes('telegram') ?? false) && <TgBtnIcon phone={s.parent_phone!} />}
-                        </div>
-                        <button onClick={() => cycleParent(s.email)}
-                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${parentBtnClass(pStatus)}`}>
-                          {parentBtnLabel(pStatus)}
-                        </button>
+                        <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? true} />
                       </div>
                     </div>
                   ) : (
-                    <div className="w-8" />
+                    <div className="min-w-56 border-r border-gray-100" />
                   )}
+
+                  {/* Student contacts — col 4, always last */}
+                  <div className="flex items-center px-5 py-3 gap-1.5">
+                    <TgBtn phone={s.phone} active={s.prefs.includes('telegram')} />
+                    <EmBtn email={s.email} active={s.prefs.includes('email')} />
+                  </div>
                 </div>
               )
             })}
@@ -536,7 +543,6 @@ export default function DemoPage() {
 
                   {/* Contact */}
                   <div className="flex gap-1.5 flex-wrap">
-                    <WaBtn phone={s.phone} active={s.prefs.includes('whatsapp')} />
                     <TgBtn phone={s.phone} active={s.prefs.includes('telegram')} />
                     <EmBtn email={s.email} active={s.prefs.includes('email')} />
                   </div>
@@ -558,8 +564,7 @@ export default function DemoPage() {
                         </button>
                       </div>
                       <div className="flex gap-1.5">
-                        <WaBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('whatsapp') ?? true} />
-                        <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? false} />
+                        <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? true} />
                       </div>
                     </div>
                   )}
@@ -569,22 +574,27 @@ export default function DemoPage() {
           </div>
         )}
 
-        {/* ── D2 — Grid 2col, original (sans label section, contacts icônes) ─── */}
+        {/* ── D2 — Grid 2col, parent panel à droite ─── */}
         {variant === 'D2' && (
           <div className="grid grid-cols-2 gap-4">
             {STUDENTS.map(s => {
               const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
+              const parentOpen = s.is_minor && !!expandedParent[s.email]
+              const borderColor = s.is_minor
+                ? pStatus === 'answered' ? 'border-green-300' : pStatus === 'contacted' ? 'border-amber-300' : 'border-orange-200'
+                : 'border-gray-200'
+              const ringColor = s.is_minor
+                ? pStatus === 'answered' ? 'ring-green-400' : pStatus === 'contacted' ? 'ring-amber-400' : 'ring-orange-400'
+                : ''
               return (
-                <div key={s.email} className="bg-white rounded-xl border border-gray-200 p-5">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <span className={`inline-flex items-center justify-center w-11 h-11 rounded-full text-sm font-bold ${avatarColor(s.name)}`}>{s.avatar}</span>
-                        {s.is_minor && (
-                          <button onClick={() => cycleParent(s.email)}
-                            className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${parentDotColor(pStatus)}`} />
-                        )}
+                <div key={s.email} className={`bg-white rounded-xl border-2 p-5 flex gap-0 overflow-hidden transition-colors ${borderColor}`}>
+
+                  {/* ── Colonne gauche : étudiant ── */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="relative shrink-0">
+                        <span className={`inline-flex items-center justify-center w-11 h-11 rounded-full text-sm font-bold ${avatarColor(s.name)} ${s.is_minor ? `ring-2 ring-offset-1 ${ringColor}` : ''}`}>{s.avatar}</span>
+                        {s.is_minor && <span className={`absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full border-2 border-white ${parentDotColor(pStatus)}`} />}
                       </div>
                       <div>
                         <p className="font-bold text-gray-900">{s.name}</p>
@@ -592,50 +602,48 @@ export default function DemoPage() {
                         <p className="text-xs text-gray-400">{s.phone}</p>
                       </div>
                     </div>
-                    {s.is_minor && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200">Minor</span>}
-                  </div>
-
-                  {/* Courses — sans label */}
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {s.courses.map((c, i) => (
-                      <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${c.teacherBg} ${c.teacherColor}`}>
-                        <span>{c.teacherInitials}</span>
-                        <span className="opacity-50">·</span>
-                        <span>{c.subject}</span>
-                        <span className="text-blue-500 font-bold ml-0.5">×{c.count}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Contact — icônes rondes */}
-                  <div className="flex gap-2 mb-3">
-                    {s.prefs.includes('whatsapp') && <WaBtnIcon phone={s.phone} />}
-                    {s.prefs.includes('telegram') && <TgBtnIcon phone={s.phone} />}
-                    {s.prefs.includes('email') && <EmBtnIcon email={s.email} />}
-                  </div>
-
-                  {/* Parent */}
-                  {s.is_minor && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-500 shrink-0"><ParentIcon /></span>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
-                            <p className="text-xs text-gray-400">{s.parent_phone}</p>
-                          </div>
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {s.courses.map((c, i) => (
+                        <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${c.teacherBg} ${c.teacherColor}`}>
+                          <span>{c.teacherInitials}</span>
+                          <span className="opacity-50">·</span>
+                          <span>{c.subject}</span>
+                          <span className="text-blue-500 font-bold ml-0.5">×{c.count}</span>
                         </div>
-                        <button onClick={() => cycleParent(s.email)}
-                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${parentBtnClass(pStatus)}`}>
-                          {parentBtnLabel(pStatus)}
-                        </button>
-                      </div>
-                      <div className="flex gap-2">
-                        {(s.parent_prefs?.includes('whatsapp') ?? true) && <WaBtnIcon phone={s.parent_phone!} />}
-                        {(s.parent_prefs?.includes('telegram') ?? false) && <TgBtnIcon phone={s.parent_phone!} />}
-                      </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <TgBtn phone={s.phone} active={s.prefs.includes('telegram')} />
+                      <EmBtn email={s.email} active={s.prefs.includes('email')} />
+                    </div>
+                  </div>
+
+                  {/* ── Colonne droite : Minor badge + parent ── */}
+                  {s.is_minor && (
+                    <div className="ml-4 flex flex-col items-end gap-2 shrink-0 min-w-[160px]">
+                      <button onClick={() => toggleParent(s.email)}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200 hover:bg-orange-100 transition-colors flex items-center gap-1 whitespace-nowrap">
+                        Minor <span>{parentOpen ? '▲' : '▼'}</span>
+                      </button>
+                      {parentOpen && (
+                        <div className="border-t border-orange-100 pt-3 flex flex-col gap-2.5 items-start w-full">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-500 shrink-0"><ParentIcon /></span>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
+                              <p className="text-xs text-gray-400">{s.parent_phone}</p>
+                            </div>
+                          </div>
+                          <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? true} />
+                          <button onClick={() => cycleParent(s.email)}
+                            className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap ${parentBtnClass(pStatus)}`}>
+                            {parentBtnLabel(pStatus)}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
+
                 </div>
               )
             })}
@@ -649,23 +657,16 @@ export default function DemoPage() {
   )
 }
 
-function WaIcon() {
+function TgIcon({ className = "w-3 h-3" }: { className?: string }) {
   return (
-    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-    </svg>
-  )
-}
-function TgIcon() {
-  return (
-    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
     </svg>
   )
 }
-function EmailIcon() {
+function EmailIcon({ className = "w-3 h-3" }: { className?: string }) {
   return (
-    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   )
