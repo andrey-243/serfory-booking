@@ -294,9 +294,8 @@
     <div class="field">
       <label><span id="lbl-contact"></span><span class="req">*</span></label>
       <div class="pills" id="contact-pills">
-        <div class="pill" data-val="whatsapp" onclick="selectPill('contact',this)">WhatsApp</div>
         <div class="pill" data-val="telegram" onclick="selectPill('contact',this)">Telegram</div>
-        <div class="pill" data-val="email" onclick="selectPill('contact',this)" id="pill-email-label">Email</div>
+        <div class="pill" data-val="email" onclick="selectPill('contact',this)">Email</div>
       </div>
       <div class="err-msg" id="err-contact"></div>
     </div>
@@ -335,7 +334,6 @@
       <div class="field">
         <label><span id="lbl-parent-contact"></span></label>
         <div class="pills" id="parent-contact-pills">
-          <div class="pill" data-val="whatsapp" onclick="selectPill('parent',this)">WhatsApp</div>
           <div class="pill" data-val="telegram" onclick="selectPill('parent',this)">Telegram</div>
           <div class="pill" data-val="email" onclick="selectPill('parent',this)">Email</div>
         </div>
@@ -597,11 +595,15 @@ async function submitForm() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = j.error ? ' (' + j.error + ')' : ''; } catch {}
+      throw new Error(res.status + detail);
+    }
     document.getElementById('form-section').style.display = 'none';
     document.getElementById('success-screen').classList.add('visible');
-  } catch {
-    globalErr.textContent = T[lang].serverErr;
+  } catch (e) {
+    globalErr.textContent = T[lang].serverErr + (e.message ? ' — ' + e.message : '');
     globalErr.classList.add('visible');
     btn.disabled = false;
   }
@@ -613,22 +615,32 @@ function sendHeight() {
   }
 }
 
+window.addEventListener('message', function (e) {
+  if (e.data && e.data.type === 'set-lang' && T[e.data.lang]) {
+    setLang(e.data.lang);
+    sendHeight();
+  }
+});
+
 // Init
-var isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
+var params = new URLSearchParams(window.location.search);
+var isEmbed = params.get('embed') === '1';
+var urlLang = params.get('lang');
+if (urlLang && T[urlLang]) lang = urlLang;
+
 if (isEmbed) {
   document.querySelector('.top-bar').style.display = 'none';
   document.body.style.padding = '0';
   document.body.style.background = 'transparent';
   document.querySelector('.card').style.boxShadow = 'none';
   document.querySelector('.card').style.borderRadius = '0';
-  // Send height on any DOM change
   new MutationObserver(sendHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
   window.addEventListener('load', sendHeight);
 }
 
 buildCountrySelect('f-country');
 buildCountrySelect('f-parent-country');
-setLang('en');
+setLang(lang);
 if (isEmbed) setTimeout(sendHeight, 100);
 </script>
 </body>
