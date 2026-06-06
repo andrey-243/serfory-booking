@@ -152,49 +152,89 @@ function EmBtnIcon({ email, active = true }: { email: string; active?: boolean }
 
 // ── Per-student stats panel ───────────────────────────────────────────────────
 
-function StudentStatsPanel({ studentName }: { studentName: string }) {
-  const bookings = BOOKINGS.filter(b => b.student === studentName && b.status !== 'cancelled')
-  const total = bookings.reduce((s, b) => s + b.amount, 0)
-  const confirmed = bookings.filter(b => b.status === 'confirmed').length
-  const pending = bookings.filter(b => b.status === 'pending').length
-  const byMonth = bookings.reduce<Record<string, typeof bookings>>((acc, b) => {
-    const mk = b.date.slice(0, 7)
-    ;(acc[mk] = acc[mk] ?? []).push(b)
-    return acc
+function StudentStatsPanel({ studentName, visibleMonths = 3 }: { studentName: string; visibleMonths?: number }) {
+  const [monthOffset, setMonthOffset] = useState(0)
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [paidIds, setPaidIds] = useState<Set<string>>(new Set())
+
+  const allBookings = BOOKINGS.filter(b => b.student === studentName && b.status !== 'cancelled')
+  const total = allBookings.reduce((s, b) => s + b.amount, 0)
+  const confirmed = allBookings.filter(b => b.status === 'confirmed').length
+  const pending = allBookings.filter(b => b.status === 'pending').length
+
+  const byMonth = allBookings.reduce<Record<string, typeof allBookings>>((acc, b) => {
+    const mk = b.date.slice(0, 7);
+    (acc[mk] = acc[mk] ?? []).push(b); return acc
   }, {})
   const months = Object.keys(byMonth).sort()
+  const canPrev = monthOffset > 0
+  const canNext = monthOffset + visibleMonths < months.length
+  const visibleSlice = months.slice(monthOffset, monthOffset + visibleMonths)
+
+  const displayedBookings = (selectedMonth
+    ? allBookings.filter(b => b.date.startsWith(selectedMonth))
+    : allBookings
+  ).sort((a, b) => a.date.localeCompare(b.date))
+
   function ml(key: string) { const [y, m] = key.split('-'); return new Date(+y, +m - 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) }
   function fd(iso: string) { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) }
+  function togglePaid(id: string) { setPaidIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
+
   return (
     <div className="border-t border-gray-100 bg-gray-50/40 p-5">
-      <div className="flex gap-3 mb-4">
-        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-28">
+      {/* Summary + month carousel */}
+      <div className="flex items-start gap-3 mb-4 flex-wrap">
+        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-24 shrink-0">
           <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Sessions</p>
-          <p className="text-2xl font-bold text-gray-900">{bookings.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{allBookings.length}</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-28">
+        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-28 shrink-0">
           <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Revenue</p>
           <p className="text-2xl font-bold text-gray-900">€{total}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">{confirmed} confirmed · {pending} pending</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-28">
+        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 min-w-24 shrink-0">
           <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Avg / session</p>
-          <p className="text-2xl font-bold text-gray-900">{bookings.length ? `€${Math.round(total / bookings.length)}` : '—'}</p>
+          <p className="text-2xl font-bold text-gray-900">{allBookings.length ? `€${Math.round(total / allBookings.length)}` : '—'}</p>
         </div>
-        <div className="flex gap-2 ml-2 flex-wrap items-start content-start">
-          {months.map(mk => {
-            const mbs = byMonth[mk]
-            const mt = mbs.reduce((s, b) => s + b.amount, 0)
-            return (
-              <div key={mk} className="bg-white rounded-lg border border-gray-200 px-3 py-2 text-xs">
-                <p className="font-semibold text-gray-700">{ml(mk)}</p>
-                <p className="text-gray-400 mt-0.5">{mbs.length} sessions · <span className="font-semibold text-gray-700">€{mt}</span></p>
-              </div>
-            )
-          })}
+
+        {/* Month carousel */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {canPrev && (
+            <button onClick={() => setMonthOffset(o => o - 1)} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+          )}
+          <div className="flex gap-1.5 flex-wrap">
+            {visibleSlice.map(mk => {
+              const mbs = byMonth[mk]
+              const mt = mbs.reduce((s, b) => s + b.amount, 0)
+              const active = selectedMonth === mk
+              return (
+                <button key={mk} onClick={() => setSelectedMonth(active ? null : mk)}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${active ? 'border-blue-400 bg-blue-50' : 'bg-white border-gray-200 hover:border-blue-200'}`}>
+                  <p className={`text-xs font-semibold whitespace-nowrap ${active ? 'text-blue-700' : 'text-gray-700'}`}>{ml(mk)}</p>
+                  <p className={`text-[10px] mt-0.5 whitespace-nowrap ${active ? 'text-blue-500' : 'text-gray-400'}`}>{mbs.length} sessions · <span className="font-semibold">€{mt}</span></p>
+                </button>
+              )
+            })}
+          </div>
+          {canNext && (
+            <button onClick={() => setMonthOffset(o => o + 1)} className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Bookings table — all by default, filtered when month selected */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {selectedMonth && (
+          <div className="px-4 py-2 border-b border-gray-100 bg-blue-50 flex items-center justify-between">
+            <p className="text-xs font-medium text-blue-700">{ml(selectedMonth)}</p>
+            <button onClick={() => setSelectedMonth(null)} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">Show all</button>
+          </div>
+        )}
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
@@ -202,21 +242,29 @@ function StudentStatsPanel({ studentName }: { studentName: string }) {
               <th className="text-left px-4 py-2.5 font-medium">Course</th>
               <th className="text-left px-4 py-2.5 font-medium">Teacher</th>
               <th className="text-left px-4 py-2.5 font-medium">Status</th>
+              <th className="text-left px-4 py-2.5 font-medium">Payment</th>
               <th className="text-right px-4 py-2.5 font-medium">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {bookings.sort((a, b) => a.date.localeCompare(b.date)).map(b => (
-              <tr key={b.id} className="border-b border-gray-50 last:border-0">
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fd(b.date)}</td>
-                <td className="px-4 py-2"><span className={`font-semibold px-1.5 py-0.5 rounded ${b.teacherBg} ${b.teacherColor}`}>{b.subject}</span></td>
-                <td className="px-4 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
-                <td className="px-4 py-2">
-                  <span className={`font-medium ${b.status === 'confirmed' ? 'text-green-600' : 'text-amber-500'}`}>{b.status}</span>
-                </td>
-                <td className="px-4 py-2 text-right font-bold text-gray-800">€{b.amount}</td>
-              </tr>
-            ))}
+            {displayedBookings.map(b => {
+              const isPaid = paidIds.has(b.id)
+              return (
+                <tr key={b.id} className="border-b border-gray-50 last:border-0">
+                  <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{fd(b.date)}</td>
+                  <td className="px-4 py-2"><span className={`font-semibold px-1.5 py-0.5 rounded ${b.teacherBg} ${b.teacherColor}`}>{b.subject}</span></td>
+                  <td className="px-4 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
+                  <td className="px-4 py-2"><span className={`font-medium ${b.status === 'confirmed' ? 'text-green-600' : 'text-amber-500'}`}>{b.status}</span></td>
+                  <td className="px-4 py-2">
+                    <button onClick={() => togglePaid(b.id)}
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors ${isPaid ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-gray-300'}`}>
+                      {isPaid ? '✓ Received' : 'Received?'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2 text-right font-bold text-gray-800">€{b.amount}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -435,7 +483,7 @@ export default function DemoPage() {
                   </div>
 
                   {/* Per-student stats panel */}
-                  {expandedStats[s.email] && <StudentStatsPanel studentName={s.name} />}
+                  {expandedStats[s.email] && <StudentStatsPanel studentName={s.name} visibleMonths={12} />}
                 </div>
               )
             })}
@@ -535,7 +583,8 @@ export default function DemoPage() {
                   {/* ── Colonne gauche : étudiant ── */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-3 mb-3">
-                      <div className="relative shrink-0">
+                      {/* Student avatar — click to open stats modal */}
+                      <div className="relative shrink-0 cursor-pointer" onClick={() => setStatsModal(s.email)}>
                         <span className={`inline-flex items-center justify-center w-11 h-11 rounded-full text-sm font-bold ${avatarColor(s.name)} ${s.is_minor ? `ring-2 ring-offset-1 ${ringColor}` : ''}`}>{s.avatar}</span>
                         {s.is_minor && <span className={`absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full border-2 border-white ${parentDotColor(pStatus)}`} />}
                       </div>
@@ -561,43 +610,34 @@ export default function DemoPage() {
                     </div>
                   </div>
 
-                  {/* ── Colonne droite : Minor badge + parent ── */}
+                  {/* ── Colonne droite : parent icon toggle (top-right) ── */}
                   {s.is_minor && (
-                    <div className="ml-4 flex flex-col items-end gap-2 shrink-0 min-w-[160px]">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => toggleParent(s.email)}
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-200 hover:bg-orange-100 transition-colors flex items-center gap-1 whitespace-nowrap">
-                          Minor <span>{parentOpen ? '▲' : '▼'}</span>
-                        </button>
-                        <button onClick={() => toggleStats(s.email)}
-                          className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className={`w-3.5 h-3.5 transition-transform ${expandedStats[s.email] ? 'rotate-90' : ''}`}>
-                            <path d="M9 18l6-6-6-6" />
-                          </svg>
-                        </button>
+                    <div className="ml-4 flex flex-col items-end gap-3 shrink-0 min-w-[140px]">
+                      {/* Parent icon — click to toggle parent panel */}
+                      <div className="relative cursor-pointer" onClick={() => toggleParent(s.email)}>
+                        <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ${parentIconCls}`}><ParentIcon /></span>
+                        <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center transition-colors ${pStatus === 'answered' ? 'bg-green-500' : pStatus === 'contacted' ? 'bg-amber-400' : 'bg-gray-400'}`}>
+                          {pStatus === 'to_contact' ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} strokeLinecap="round" className="w-2 h-2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                          ) : pStatus === 'contacted' ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round" className="w-2 h-2"><path d="M5 22h14M5 2h14M17 22v-4l-5-4 5-4V2M7 2v4l5 4-5 4v4" /></svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2"><path d="M20 6 9 17l-5-5" /></svg>
+                          )}
+                        </span>
                       </div>
+
+                      {/* Parent panel */}
                       {parentOpen && (
-                        <div className="border-t border-orange-100 pt-3 flex flex-col gap-2.5 items-start w-full">
-                          <div className="flex items-center gap-2">
-                            {/* Parent icon — clickable to cycle status */}
-                            <div className="relative shrink-0 cursor-pointer" onClick={() => cycleParent(s.email)}>
-                              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors ${parentIconCls}`}><ParentIcon /></span>
-                              <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center transition-colors ${pStatus === 'answered' ? 'bg-green-500' : pStatus === 'contacted' ? 'bg-amber-400' : 'bg-gray-400'}`}>
-                                {pStatus === 'to_contact' ? (
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} strokeLinecap="round" className="w-2 h-2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                                ) : pStatus === 'contacted' ? (
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round" className="w-2 h-2"><path d="M5 22h14M5 2h14M17 22v-4l-5-4 5-4V2M7 2v4l5 4-5 4v4" /></svg>
-                                ) : (
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2"><path d="M20 6 9 17l-5-5" /></svg>
-                                )}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
-                              <p className="text-xs text-gray-400">{s.parent_phone}</p>
-                            </div>
-                          </div>
+                        <div className="border-t border-orange-100 pt-2.5 flex flex-col gap-2 items-start w-full">
+                          <p className="text-sm font-semibold text-gray-700">{s.parent_name}</p>
+                          <p className="text-xs text-gray-400 -mt-1">{s.parent_phone}</p>
                           <TgBtn phone={s.parent_phone!} active={s.parent_prefs?.includes('telegram') ?? true} />
+                          {/* Status cycle — click badge icon */}
+                          <button onClick={() => cycleParent(s.email)}
+                            className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors w-fit ${parentBtnClass(pStatus)}`}>
+                            {parentBtnLabel(pStatus)}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -632,7 +672,7 @@ export default function DemoPage() {
                   </svg>
                 </button>
               </div>
-              <StudentStatsPanel studentName={s.name} />
+              <StudentStatsPanel studentName={s.name} visibleMonths={2} />
             </div>
           </div>
         )
