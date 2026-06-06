@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { enUS, et, ru } from 'date-fns/locale'
 import { Teacher } from '@/lib/supabase'
@@ -134,21 +134,18 @@ function ContactPills({
   selected,
   onChange,
 }: {
-  selected: string[]
-  onChange: (v: string[]) => void
+  selected: string
+  onChange: (v: string) => void
 }) {
-  function toggle(key: string) {
-    onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key])
-  }
   return (
     <div className="flex gap-2 flex-wrap">
       {CONTACT_OPTIONS.map(opt => {
-        const on = selected.includes(opt.key)
+        const on = selected === opt.key
         return (
           <button
             key={opt.key}
             type="button"
-            onClick={() => toggle(opt.key)}
+            onClick={() => onChange(opt.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${on ? opt.active : opt.inactive}`}
           >
             {opt.icon}
@@ -173,12 +170,12 @@ type FormData = {
   student_name: string
   student_email: string
   student_phone: string
-  contact_pref: string[]
+  contact_pref: string
   is_minor: boolean
   parent_name: string
   parent_contact: string
   parent_email: string
-  parent_pref: string[]
+  parent_pref: string
 }
 
 export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel }: Props) {
@@ -188,16 +185,17 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     student_name: '',
     student_email: '',
     student_phone: '',
-    contact_pref: ['whatsapp'],
+    contact_pref: 'whatsapp',
     is_minor: false,
     parent_name: '',
     parent_contact: '',
     parent_email: '',
-    parent_pref: [],
+    parent_pref: 'whatsapp',
   })
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submitting = useRef(false)
 
   const set = (key: keyof FormData, value: string | boolean | string[]) =>
     setForm(f => ({ ...f, [key]: value }))
@@ -214,7 +212,9 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (submitting.current) return
     if (!validate()) return
+    submitting.current = true
     setLoading(true)
     setError(null)
 
@@ -230,12 +230,12 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           student_name: form.student_name,
           student_email: form.student_email,
           student_phone: form.student_phone,
-          contact_pref: form.contact_pref.join(',') || 'whatsapp',
+          contact_pref: form.contact_pref || 'whatsapp',
           is_minor: form.is_minor,
           parent_name: form.is_minor ? form.parent_name : null,
           parent_contact: form.is_minor ? form.parent_contact : null,
           parent_email: form.is_minor ? (form.parent_email || null) : null,
-          parent_pref: form.is_minor ? (form.parent_pref.join(',') || null) : null,
+          parent_pref: form.is_minor ? (form.parent_pref || null) : null,
         }),
       })
 
@@ -249,6 +249,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
       setError(err instanceof Error ? err.message : 'Error')
     } finally {
       setLoading(false)
+      submitting.current = false
     }
   }
 
@@ -301,7 +302,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         <Field label={ft.preferredContact} required>
           <ContactPills
             selected={form.contact_pref}
-            onChange={v => set('contact_pref', v)}
+            onChange={v => set('contact_pref', v as string)}
           />
         </Field>
 
@@ -357,7 +358,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
             <Field label={ft.parentPref}>
               <ContactPills
                 selected={form.parent_pref}
-                onChange={v => set('parent_pref', v)}
+                onChange={v => set('parent_pref', v as string)}
               />
             </Field>
           </div>

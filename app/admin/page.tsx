@@ -19,6 +19,7 @@ type Booking = {
   parent_email: string | null
   parent_pref: string | null
   status: string
+  student_response: string | null
   teachers: { name: string } | null
 }
 
@@ -149,6 +150,15 @@ export default function AdminPage() {
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
+  }
+
+  async function handleStatusChange(id: string, status: string) {
+    await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    })
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b))
   }
 
   function handleCrmSort(col: 'name' | 'total') {
@@ -415,28 +425,39 @@ export default function AdminPage() {
                             <p className="text-xs text-gray-400 mt-0.5">{b.student_phone}</p>
                           </td>
                           <td className="px-3 py-3" style={divStyle}>
-                            <div className="flex flex-col gap-1">
-                              {b.contact_pref?.split(',').map(pref => (
-                                pref === 'whatsapp' ? (
-                                  <a key="wa" href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                    <WaIcon /> WhatsApp
-                                  </a>
-                                ) : pref === 'telegram' ? (
-                                  <a key="tg" href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                    <TgIcon /> Telegram
-                                  </a>
-                                ) : (
-                                  <a key="em" href={`mailto:${b.student_email}`}
-                                    className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
-                                    <EmailIcon /> Email
-                                  </a>
-                                )
-                              ))}
-                            </div>
+                            {b.contact_pref === 'whatsapp' ? (
+                              <a href={waLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <WaIcon /> WhatsApp
+                              </a>
+                            ) : b.contact_pref === 'telegram' ? (
+                              <a href={tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <TgIcon /> Telegram
+                              </a>
+                            ) : (
+                              <a href={`mailto:${b.student_email}`}
+                                className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap w-fit">
+                                <EmailIcon /> Email
+                              </a>
+                            )}
                           </td>
-                          <td rowSpan={span} className="px-4 pt-3 pb-0 align-top">{statusBadge}</td>
+                          <td rowSpan={span} className="px-4 py-3 align-top">
+                            {statusBadge}
+                            {b.student_response && (
+                              <span className={`mt-1 block text-xs px-2 py-0.5 rounded-full font-medium w-fit ${
+                                b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                              }`}>
+                                Student {b.student_response === 'accepted' ? '✓' : '✗'}
+                              </span>
+                            )}
+                            {b.status !== 'cancelled' && (
+                              <button onClick={() => handleStatusChange(b.id, 'cancelled')}
+                                className="mt-1.5 block text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors whitespace-nowrap">
+                                Cancel
+                              </button>
+                            )}
+                          </td>
                         </tr>
                         {hasParent && (
                           <tr className="border-b border-gray-200 group-hover:bg-gray-50 transition-colors">

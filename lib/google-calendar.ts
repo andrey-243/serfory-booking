@@ -117,6 +117,94 @@ export async function getAvailableSlots(
   return slots
 }
 
+export async function getCalendarEventStatus(
+  refreshToken: string,
+  calendarId: string,
+  eventId: string,
+  teacherEmail: string
+): Promise<'accepted' | 'declined' | 'needsAction' | null> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const res = await calendar.events.get({
+    calendarId: calendarId || 'primary',
+    eventId,
+  })
+
+  const attendee = (res.data.attendees || []).find(
+    a => a.email?.toLowerCase() === teacherEmail.toLowerCase()
+  )
+  return (attendee?.responseStatus as 'accepted' | 'declined' | 'needsAction') ?? null
+}
+
+export async function acceptCalendarEvent(
+  refreshToken: string,
+  calendarId: string,
+  eventId: string,
+  teacherEmail: string
+): Promise<void> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const existing = await calendar.events.get({ calendarId: calendarId || 'primary', eventId })
+
+  const attendees = (existing.data.attendees || []).map(a =>
+    a.email?.toLowerCase() === teacherEmail.toLowerCase()
+      ? { ...a, responseStatus: 'accepted' }
+      : a
+  )
+
+  await calendar.events.patch({
+    calendarId: calendarId || 'primary',
+    eventId,
+    sendUpdates: 'none',
+    requestBody: { attendees },
+  })
+}
+
+export async function watchCalendar(
+  refreshToken: string,
+  calendarId: string,
+  channelId: string
+): Promise<{ expiration: number }> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const res = await calendar.events.watch({
+    calendarId: calendarId || 'primary',
+    requestBody: {
+      id: channelId,
+      type: 'web_hook',
+      address: `${process.env.NEXT_PUBLIC_BASE_URL}/api/calendar-webhook`,
+    },
+  })
+
+  return { expiration: Number(res.data.expiration) }
+}
+
+export async function deleteCalendarEvent(
+  refreshToken: string,
+  calendarId: string,
+  eventId: string
+): Promise<void> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  await calendar.events.delete({
+    calendarId: calendarId || 'primary',
+    eventId,
+    sendUpdates: 'all',
+  })
+}
+
 export async function createCalendarEvent(
   refreshToken: string,
   calendarId: string,
@@ -125,20 +213,33 @@ export async function createCalendarEvent(
     start,
     end,
     description,
-  }: { summary: string; start: string; end: string; description: string }
+    teacherEmail,
+    studentEmail,
+  }: { summary: string; start: string; end: string; description: string; teacherEmail?: string; studentEmail?: string }
 ) {
   const { google } = await import('googleapis')
   const client = await makeOAuthClient()
   client.setCredentials({ refresh_token: refreshToken })
   const calendar = google.calendar({ version: 'v3', auth: client })
 
+  const attendees = [
+    teacherEmail ? { email: teacherEmail } : null,
+    studentEmail ? { email: studentEmail } : null,
+  ].filter((a): a is { email: string } => a !== null)
+
   const res = await calendar.events.insert({
     calendarId: calendarId || 'primary',
+    sendUpdates: 'all',
+    conferenceDataVersion: 1,
     requestBody: {
       summary,
       description,
       start: { dateTime: start },
       end: { dateTime: end },
+      attendees: attendees.length > 0 ? attendees : undefined,
+      conferenceData: {
+        createRequest: { requestId: crypto.randomUUID() },
+      },
     },
   })
 

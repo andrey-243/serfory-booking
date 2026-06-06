@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { createCalendarEvent } from '@/lib/google-calendar'
+import { createCalendarEvent, deleteCalendarEvent, acceptCalendarEvent } from '@/lib/google-calendar'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const { data: teacher } = await getSupabaseAdmin()
     .from('teachers')
-    .select('name, google_refresh_token, google_calendar_id')
+    .select('name, email, google_refresh_token, google_calendar_id')
     .eq('id', teacher_id)
     .single()
 
@@ -34,22 +34,18 @@ export async function POST(req: NextRequest) {
 
   if (teacher?.google_refresh_token) {
     try {
-      const description = [
-        `Étudiant : ${student_name}`,
-        `Email : ${student_email}`,
-        `Tél : ${student_phone}`,
-        `Contact : ${contact_pref}`,
-        is_minor ? `Mineur — Parent : ${parent_name} (${parent_contact})` : null,
-      ].filter(Boolean).join('\n')
+      const description = `${subject} lesson · Serfory\nhttps://serfory.eu`
 
       google_event_id = await createCalendarEvent(
         teacher.google_refresh_token,
         teacher.google_calendar_id || 'primary',
         {
-          summary: `Cours ${subject} — ${student_name}`,
+          summary: `${subject} — ${student_name}`,
           start: slot_start,
           end: slot_end,
           description,
+          teacherEmail: teacher.email,
+          studentEmail: student_email,
         }
       ) ?? null
     } catch {}
@@ -81,6 +77,59 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ booking: data }, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest) {
+  const { id, status, fromTeacher } = await req.json()
+
+  if (!id || !['pending', 'confirmed', 'cancelled'].includes(status)) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+
+  const { data: booking } = await getSupabaseAdmin()
+    .from('bookings')
+    .select('google_event_id, teacher_id')
+    .eq('id', id)
+    .single()
+
+  const { error } = await getSupabaseAdmin()
+    .from('bookings')
+    .update({ status })
+    .eq('id', id)
+
+  if (error) {
+    return NextResponse.json({ error: 'Failed to update booking' }, { status: 500 })
+  }
+
+  if (booking?.google_event_id) {
+    try {
+      const { data: teacher } = await getSupabaseAdmin()
+        .from('teachers')
+        .select('email, google_refresh_token, google_calendar_id')
+        .eq('id', booking.teacher_id)
+        .single()
+
+      if (teacher?.google_refresh_token) {
+        if (status === 'cancelled') {
+          await deleteCalendarEvent(
+            teacher.google_refresh_token,
+            teacher.google_calendar_id || 'primary',
+            booking.google_event_id
+          )
+        } else if (status === 'confirmed' && fromTeacher) {
+          // Teacher confirme depuis son dashboard → marque son attendee comme accepted
+          await acceptCalendarEvent(
+            teacher.google_refresh_token,
+            teacher.google_calendar_id || 'primary',
+            booking.google_event_id,
+            teacher.email
+          )
+        }
+      }
+    } catch {}
+  }
+
+  return NextResponse.json({ ok: true })
 }
 
 export async function GET(req: NextRequest) {

@@ -13,6 +13,7 @@ type Booking = {
   slot_end: string
   student_name: string
   status: string
+  student_response: string | null
 }
 
 type AvailabilityRow = {
@@ -32,6 +33,15 @@ export default function TeacherPage() {
   )
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
+
+  async function handleStatusChange(id: string, status: string) {
+    await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status, fromTeacher: true }),
+    })
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b))
+  }
 
   useEffect(() => {
     fetch('/api/me').then(r => r.json()).then(d => {
@@ -173,13 +183,34 @@ export default function TeacherPage() {
                       {b.subject} — {format(parseISO(b.slot_start), "d MMM 'à' HH'h'mm", { locale: fr })}
                     </p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                    b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {b.status === 'confirmed' ? 'Confirmé' : b.status === 'cancelled' ? 'Annulé' : 'En attente'}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    {b.student_response && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                      }`}>
+                        Student {b.student_response === 'accepted' ? '✓' : '✗'}
+                      </span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {b.status === 'confirmed' ? 'Confirmé' : b.status === 'cancelled' ? 'Annulé' : 'En attente'}
+                    </span>
+                    {b.status === 'pending' && (
+                      <button onClick={() => handleStatusChange(b.id, 'confirmed')}
+                        className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors">
+                        Confirmer
+                      </button>
+                    )}
+                    {b.status !== 'cancelled' && (
+                      <button onClick={() => handleStatusChange(b.id, 'cancelled')}
+                        className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors">
+                        Annuler
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

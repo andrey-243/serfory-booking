@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { exchangeCodeForTokens, getGoogleUserInfo } from '@/lib/google-calendar'
+import { exchangeCodeForTokens, getGoogleUserInfo, watchCalendar } from '@/lib/google-calendar'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { signSession } from '@/lib/session'
 
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     // Vérifie si teacher
     const { data: teacher } = await getSupabaseAdmin()
       .from('teachers')
-      .select('id, name')
+      .select('id, name, google_refresh_token, google_calendar_id, calendar_channel_id, calendar_channel_expiry')
       .eq('email', email)
       .single()
 
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
     const role = admin ? 'admin' : 'teacher'
 
-    // Stocke le refresh_token pour les teachers
+    // Stocke le refresh_token + setup webhook watch pour les teachers
     if (teacher) {
       const updates: Record<string, string> = {}
       if (tokens.refresh_token) updates.google_refresh_token = tokens.refresh_token
@@ -52,6 +52,34 @@ export async function GET(req: NextRequest) {
           .from('teachers')
           .update(updates)
           .eq('email', email)
+      }
+
+      // Setup ou renouvellement du canal webhook Google Calendar
+      const refreshToken = tokens.refresh_token || teacher.google_refresh_token
+      const channelExpiry = teacher.calendar_channel_expiry
+        ? new Date(teacher.calendar_channel_expiry).getTime()
+        : 0
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+      const needsWatch = !teacher.calendar_channel_id || channelExpiry - Date.now() < sevenDaysMs
+
+      if (refreshToken && needsWatch) {
+        try {
+          const channelId = crypto.randomUUID()
+          const { expiration } = await watchCalendar(
+            refreshToken,
+            teacher.google_calendar_id || 'primary',
+            channelId
+          )
+          await getSupabaseAdmin()
+            .from('teachers')
+            .update({
+              calendar_channel_id: channelId,
+              calendar_channel_expiry: new Date(expiration).toISOString(),
+            })
+            .eq('email', email)
+        } catch (err) {
+          console.error('[watch_calendar]', err)
+        }
       }
     }
 
