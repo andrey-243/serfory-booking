@@ -387,15 +387,6 @@ export default function AdminPage() {
                     const hasParent = b.is_minor && !!b.parent_contact
                     const span = hasParent ? 2 : 1
                     const divStyle = hasParent ? { borderBottom: '1px solid #e5e7eb' } : {}
-                    const statusBadge = (
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {t.status[b.status as keyof typeof t.status] ?? b.status}
-                      </span>
-                    )
                     return (
                       <tbody key={b.id} className="group">
                         <tr className={`group-hover:bg-gray-50 transition-colors ${!hasParent ? 'border-b border-gray-200' : ''}`}>
@@ -443,19 +434,43 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td rowSpan={span} className="px-4 py-3 align-top">
-                            {statusBadge}
-                            {b.student_response && (
-                              <span className={`mt-1 block text-xs px-2 py-0.5 rounded-full font-medium w-fit ${
-                                b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <TeacherMiniIcon />
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                                'bg-yellow-100 text-yellow-700'
                               }`}>
-                                Student {b.student_response === 'accepted' ? '✓' : '✗'}
+                                {t.status[b.status as keyof typeof t.status] ?? b.status}
                               </span>
-                            )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <StudentMiniIcon />
+                              {b.student_response ? (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                                }`}>
+                                  {b.student_response === 'accepted' ? '✓' : '✗'}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                            </div>
                             {b.status !== 'cancelled' && (
-                              <button onClick={() => handleStatusChange(b.id, 'cancelled')}
-                                className="mt-1.5 block text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors whitespace-nowrap">
-                                Cancel
-                              </button>
+                              <div className="flex gap-1">
+                                {b.status === 'pending' && (
+                                  <button onClick={() => handleStatusChange(b.id, 'confirmed')}
+                                    title="Confirm"
+                                    className="w-6 h-6 flex items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors">
+                                    <CheckIcon />
+                                  </button>
+                                )}
+                                <button onClick={() => handleStatusChange(b.id, 'cancelled')}
+                                  title="Cancel"
+                                  className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors">
+                                  <CrossIcon />
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -697,6 +712,30 @@ function CheckIcon() {
   return (
     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
+function CrossIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+
+function TeacherMiniIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/>
+    </svg>
+  )
+}
+
+function StudentMiniIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
     </svg>
   )
 }

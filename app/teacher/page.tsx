@@ -2,9 +2,69 @@
 
 import { useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { enUS, ru as ruLocale, et as etLocale } from 'date-fns/locale'
 
-const DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+type Lang = 'en' | 'ru' | 'et'
+
+const T = {
+  en: {
+    title: 'Teacher Dashboard',
+    gcalTitle: 'Google Calendar',
+    gcalDesc: 'Your calendar is connected. Existing events are taken into account for available slots. Reconnect if you change your Google account.',
+    gcalBtn: 'Reconnect Google Calendar',
+    availTitle: 'My availability',
+    availDesc: 'Set your available time slots. Outside these slots, no bookings will be proposed to students.',
+    unavailable: 'Unavailable',
+    save: 'Save',
+    saving: 'Saving…',
+    saved: '✓ Saved',
+    upcoming: (n: number) => `Upcoming lessons (${n})`,
+    empty: 'No upcoming lessons.',
+    logout: 'Sign out',
+    days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    status: { confirmed: 'Confirmed', cancelled: 'Cancelled', pending: 'Pending' },
+    dateFormat: "d MMM 'at' HH:mm",
+    locale: enUS,
+  },
+  ru: {
+    title: 'Кабинет преподавателя',
+    gcalTitle: 'Google Календарь',
+    gcalDesc: 'Ваш календарь подключён. Существующие события учитываются при формировании доступных слотов. Переподключитесь при смене аккаунта Google.',
+    gcalBtn: 'Переподключить Google Календарь',
+    availTitle: 'Моё расписание',
+    availDesc: 'Укажите доступное время. Вне этих промежутков ученики не увидят слоты.',
+    unavailable: 'Недоступно',
+    save: 'Сохранить',
+    saving: 'Сохранение…',
+    saved: '✓ Сохранено',
+    upcoming: (n: number) => `Ближайшие уроки (${n})`,
+    empty: 'Нет запланированных уроков.',
+    logout: 'Выйти',
+    days: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+    status: { confirmed: 'Подтверждён', cancelled: 'Отменён', pending: 'Ожидание' },
+    dateFormat: "d MMM 'в' HH:mm",
+    locale: ruLocale,
+  },
+  et: {
+    title: 'Õpetaja töölaud',
+    gcalTitle: 'Google Kalender',
+    gcalDesc: "Teie kalender on ühendatud. Olemasolevaid sündmusi arvestatakse vabade aegade määramisel. Ühendage uuesti, kui vahetate Google'i kontot.",
+    gcalBtn: 'Ühenda Google Kalender uuesti',
+    availTitle: 'Minu kättesaadavus',
+    availDesc: 'Määrake saadaolevad ajad. Nendest väljaspool ei pakuta õpilastele aegu.',
+    unavailable: 'Pole saadaval',
+    save: 'Salvesta',
+    saving: 'Salvestamine…',
+    saved: '✓ Salvestatud',
+    upcoming: (n: number) => `Tulevased tunnid (${n})`,
+    empty: 'Tulevasi tunde pole.',
+    logout: 'Logi välja',
+    days: ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'],
+    status: { confirmed: 'Kinnitatud', cancelled: 'Tühistatud', pending: 'Ootel' },
+    dateFormat: "d MMM 'kell' HH:mm",
+    locale: etLocale,
+  },
+}
 
 type Booking = {
   id: string
@@ -28,11 +88,14 @@ type User = { email: string; role: string; teacherId: string | null; name: strin
 export default function TeacherPage() {
   const [user, setUser] = useState<User | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [lang, setLang] = useState<Lang>('en')
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
-    DAYS.map((_, i) => ({ day_of_week: i, start_time: '08:00', end_time: '20:00', enabled: i >= 1 && i <= 5 }))
+    Array.from({ length: 7 }, (_, i) => ({ day_of_week: i, start_time: '08:00', end_time: '20:00', enabled: i >= 1 && i <= 5 }))
   )
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
+
+  const t = T[lang]
 
   async function handleStatusChange(id: string, status: string) {
     await fetch('/api/bookings', {
@@ -92,36 +155,41 @@ export default function TeacherPage() {
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Espace professeur</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
             {user && <p className="text-sm text-gray-500 mt-0.5">{user.name}</p>}
           </div>
-          <a href="/api/auth/logout" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-            Déconnexion
-          </a>
+          <div className="flex items-center gap-3">
+            <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs font-semibold shadow-sm">
+              {(['en', 'ru', 'et'] as Lang[]).map(l => (
+                <button key={l} onClick={() => setLang(l)}
+                  className={`px-3 py-1.5 uppercase transition-colors ${lang === l ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <a href="/api/auth/logout" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              {t.logout}
+            </a>
+          </div>
         </div>
 
         {/* Google Calendar */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-          <h2 className="font-semibold text-gray-800 mb-1">Google Calendar</h2>
-          <p className="text-sm text-gray-500 mb-3">
-            Votre calendrier est connecté. Vos événements existants sont pris en compte pour les créneaux disponibles.
-            Reconnectez si vous changez de compte Google.
-          </p>
+          <h2 className="font-semibold text-gray-800 mb-1">{t.gcalTitle}</h2>
+          <p className="text-sm text-gray-500 mb-3">{t.gcalDesc}</p>
           <a
             href="/api/auth/google"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <GoogleIcon />
-            Reconnecter Google Calendar
+            {t.gcalBtn}
           </a>
         </div>
 
-        {/* Disponibilités */}
+        {/* Availability */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-          <h2 className="font-semibold text-gray-800 mb-1">Mes disponibilités</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Définissez vos plages horaires disponibles. En dehors de ces plages, aucun créneau ne sera proposé aux étudiants.
-          </p>
+          <h2 className="font-semibold text-gray-800 mb-1">{t.availTitle}</h2>
+          <p className="text-sm text-gray-500 mb-4">{t.availDesc}</p>
 
           <div className="space-y-2">
             {availability.map((row, i) => (
@@ -133,7 +201,7 @@ export default function TeacherPage() {
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${row.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
-                <span className="w-24 text-sm text-gray-700">{DAYS[row.day_of_week]}</span>
+                <span className="w-28 text-sm text-gray-700">{t.days[row.day_of_week]}</span>
                 {row.enabled ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -153,7 +221,7 @@ export default function TeacherPage() {
                     />
                   </div>
                 ) : (
-                  <span className="text-sm text-gray-400">Indisponible</span>
+                  <span className="text-sm text-gray-400">{t.unavailable}</span>
                 )}
               </div>
             ))}
@@ -164,15 +232,15 @@ export default function TeacherPage() {
             disabled={savingAvail || !user?.teacherId}
             className="mt-4 px-5 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-50 transition-colors"
           >
-            {savingAvail ? 'Sauvegarde…' : savedAvail ? '✓ Sauvegardé' : 'Sauvegarder'}
+            {savingAvail ? t.saving : savedAvail ? t.saved : t.save}
           </button>
         </div>
 
-        {/* Cours à venir */}
+        {/* Upcoming lessons */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Cours à venir ({upcoming.length})</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t.upcoming(upcoming.length)}</h2>
           {upcoming.length === 0 ? (
-            <p className="text-sm text-gray-400">Aucun cours prévu.</p>
+            <p className="text-sm text-gray-400">{t.empty}</p>
           ) : (
             <ul className="space-y-3">
               {upcoming.map(b => (
@@ -180,35 +248,47 @@ export default function TeacherPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">{b.student_name}</p>
                     <p className="text-xs text-gray-500">
-                      {b.subject} — {format(parseISO(b.slot_start), "d MMM 'à' HH'h'mm", { locale: fr })}
+                      {b.subject} — {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {b.student_response && (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <TeacherMiniIcon />
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                        b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                        b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                        'bg-yellow-100 text-yellow-700'
                       }`}>
-                        Student {b.student_response === 'accepted' ? '✓' : '✗'}
+                        {t.status[b.status as keyof typeof t.status] ?? b.status}
                       </span>
-                    )}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                      b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {b.status === 'confirmed' ? 'Confirmé' : b.status === 'cancelled' ? 'Annulé' : 'En attente'}
-                    </span>
-                    {b.status === 'pending' && (
-                      <button onClick={() => handleStatusChange(b.id, 'confirmed')}
-                        className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors">
-                        Confirmer
-                      </button>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <StudentMiniIcon />
+                      {b.student_response ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          b.student_response === 'accepted' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+                        }`}>
+                          {b.student_response === 'accepted' ? '✓' : '✗'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </div>
                     {b.status !== 'cancelled' && (
-                      <button onClick={() => handleStatusChange(b.id, 'cancelled')}
-                        className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors">
-                        Annuler
-                      </button>
+                      <div className="flex gap-1">
+                        {b.status === 'pending' && (
+                          <button onClick={() => handleStatusChange(b.id, 'confirmed')}
+                            title="Confirm"
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors">
+                            <CheckIcon />
+                          </button>
+                        )}
+                        <button onClick={() => handleStatusChange(b.id, 'cancelled')}
+                          title="Cancel"
+                          className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors">
+                          <CrossIcon />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </li>
@@ -228,6 +308,38 @@ function GoogleIcon() {
       <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
       <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
       <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  )
+}
+
+function TeacherMiniIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/>
+    </svg>
+  )
+}
+
+function StudentMiniIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
+function CrossIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
 }
