@@ -530,7 +530,7 @@ export default function DemoPage() {
                 : ''
               const parentIconCls = pStatus === 'answered' ? 'bg-green-100 text-green-600' : pStatus === 'contacted' ? 'bg-amber-100 text-amber-600' : 'bg-orange-100 text-orange-500'
               return (
-                <div key={s.email} className={`bg-white rounded-xl border-2 p-5 flex gap-0 overflow-hidden transition-colors ${borderColor}`}>
+                <div key={s.email} onClick={() => setStatsModal(s.email)} className={`bg-white rounded-xl border-2 p-5 flex gap-0 overflow-hidden transition-colors cursor-pointer hover:shadow-md ${borderColor}`}>
 
                   {/* ── Colonne gauche : étudiant ── */}
                   <div className="flex-1 min-w-0">
