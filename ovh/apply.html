@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serfory — Apply</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #EEF2FF;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      color: #1e1e2e;
+    }
+    .top-bar {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e1e2e;
+      text-decoration: none;
+    }
+    .lang-switcher {
+      display: flex;
+      gap: 4px;
+    }
+    .lang-btn {
+      background: none;
+      border: 1px solid #c7d2fe;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #4f46e5;
+      transition: background 0.15s, color 0.15s;
+    }
+    .lang-btn.active {
+      background: #3B82F6;
+      border-color: #3B82F6;
+      color: #fff;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(59,130,246,0.08);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 520px;
+    }
+    .card h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .card .subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 28px;
+    }
+    .field { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+    label .req { color: #ef4444; margin-left: 2px; }
+    input[type="text"], input[type="email"], select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #1e1e2e;
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus { border-color: #3B82F6; }
+    input.error, select.error { border-color: #ef4444; }
+    .err-msg {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 4px;
+      display: none;
+    }
+    .err-msg.visible { display: block; }
+
+    /* Phone input */
+    .phone-row { display: flex; gap: 8px; }
+    .phone-row select { width: 120px; flex-shrink: 0; }
+    .phone-row input { flex: 1; }
+
+    /* Pills */
+    .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      padding: 7px 16px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #374151;
+      background: #fff;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .pill.active {
+      background: #3B82F6;
+      border-color: #3B82F6;
+      color: #fff;
+    }
+    .pills.error-pills .pill:not(.active) { border-color: #ef4444; }
+
+    /* Minor toggle */
+    .minor-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      margin-bottom: 18px;
+    }
+    .minor-toggle input[type="checkbox"] { display: none; }
+    .toggle-track {
+      width: 40px;
+      height: 22px;
+      background: #e5e7eb;
+      border-radius: 11px;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle-track::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .minor-toggle input:checked + .toggle-track { background: #3B82F6; }
+    .minor-toggle input:checked + .toggle-track::after { transform: translateX(18px); }
+    .toggle-label { font-size: 14px; font-weight: 500; color: #374151; }
+
+    .parent-fields { display: none; }
+    .parent-fields.visible { display: block; }
+    .parent-divider {
+      border: none;
+      border-top: 1px solid #f3f4f6;
+      margin: 4px 0 18px;
+    }
+    .parent-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    /* Submit button */
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #3B82F6;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .submit-btn:hover { background: #2563eb; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Success */
+    .success-screen {
+      display: none;
+      text-align: center;
+      padding: 20px 0;
+    }
+    .success-screen.visible { display: block; }
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 28px;
+    }
+    .success-screen h2 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+    .success-screen p { font-size: 14px; color: #6b7280; line-height: 1.6; }
+
+    .global-err {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #dc2626;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .global-err.visible { display: block; }
+
+    select option { color: #1e1e2e; }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a class="logo" href="https://serfory.eu">Serfory</a>
+  <div class="lang-switcher">
+    <button class="lang-btn active" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" onclick="setLang('et')">ET</button>
+    <button class="lang-btn" onclick="setLang('ru')">RU</button>
+  </div>
+</div>
+
+<div class="card">
+  <div id="form-section">
+    <h1 id="title"></h1>
+    <p class="subtitle" id="subtitle"></p>
+
+    <div class="global-err" id="global-err"></div>
+
+    <div class="field">
+      <label><span id="lbl-name"></span><span class="req">*</span></label>
+      <input type="text" id="f-name" autocomplete="given-name">
+      <div class="err-msg" id="err-name"></div>
+    </div>
+
+    <div class="field">
+      <label><span id="lbl-email"></span><span class="req">*</span></label>
+      <input type="email" id="f-email" autocomplete="email">
+      <div class="err-msg" id="err-email"></div>
+    </div>
+
+    <div class="field">
+      <label><span id="lbl-phone"></span><span class="req">*</span></label>
+      <div class="phone-row">
+        <select id="f-country"></select>
+        <input type="text" id="f-phone" autocomplete="tel-national">
+      </div>
+      <div class="err-msg" id="err-phone"></div>
+    </div>
+
+    <div class="field">
+      <label><span id="lbl-subject"></span><span class="req">*</span></label>
+      <select id="f-subject">
+        <option value="">—</option>
+        <option value="Russian">Russian</option>
+        <option value="English">English</option>
+        <option value="Estonian">Estonian</option>
+        <option value="Spanish">Spanish</option>
+        <option value="Math">Math</option>
+      </select>
+      <div class="err-msg" id="err-subject"></div>
+    </div>
+
+    <div class="field">
+      <label><span id="lbl-grade"></span><span class="req">*</span></label>
+      <select id="f-grade">
+        <option value="">—</option>
+      </select>
+      <div class="err-msg" id="err-grade"></div>
+    </div>
+
+    <div class="field">
+      <label><span id="lbl-contact"></span><span class="req">*</span></label>
+      <div class="pills" id="contact-pills">
+        <div class="pill" data-val="whatsapp" onclick="selectPill('contact',this)">WhatsApp</div>
+        <div class="pill" data-val="telegram" onclick="selectPill('contact',this)">Telegram</div>
+        <div class="pill" data-val="email" onclick="selectPill('contact',this)" id="pill-email-label">Email</div>
+      </div>
+      <div class="err-msg" id="err-contact"></div>
+    </div>
+
+    <label class="minor-toggle">
+      <input type="checkbox" id="f-minor" onchange="toggleMinor(this)">
+      <span class="toggle-track"></span>
+      <span class="toggle-label" id="lbl-minor"></span>
+    </label>
+
+    <div class="parent-fields" id="parent-fields">
+      <hr class="parent-divider">
+      <p class="parent-title" id="lbl-parent-section"></p>
+
+      <div class="field">
+        <label><span id="lbl-parent-name"></span><span class="req">*</span></label>
+        <input type="text" id="f-parent-name">
+        <div class="err-msg" id="err-parent-name"></div>
+      </div>
+
+      <div class="field">
+        <label><span id="lbl-parent-phone"></span><span class="req">*</span></label>
+        <div class="phone-row">
+          <select id="f-parent-country"></select>
+          <input type="text" id="f-parent-phone">
+        </div>
+        <div class="err-msg" id="err-parent-phone"></div>
+      </div>
+
+      <div class="field">
+        <label><span id="lbl-parent-email"></span><span class="req">*</span></label>
+        <input type="email" id="f-parent-email">
+        <div class="err-msg" id="err-parent-email"></div>
+      </div>
+
+      <div class="field">
+        <label><span id="lbl-parent-contact"></span></label>
+        <div class="pills" id="parent-contact-pills">
+          <div class="pill" data-val="whatsapp" onclick="selectPill('parent',this)">WhatsApp</div>
+          <div class="pill" data-val="telegram" onclick="selectPill('parent',this)">Telegram</div>
+          <div class="pill" data-val="email" onclick="selectPill('parent',this)">Email</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="submitForm()">
+      <span id="lbl-submit"></span>
+    </button>
+    <p id="lbl-respond-note" style="text-align:center;font-size:13px;color:#6b7280;margin-top:12px;"></p>
+  </div>
+
+  <div class="success-screen" id="success-screen">
+    <div class="success-icon">✓</div>
+    <h2 id="success-title"></h2>
+    <p id="success-msg"></p>
+  </div>
+</div>
+
+<script>
+const COUNTRIES = [
+  {c:'EE',dial:'+372'},{c:'RU',dial:'+7'},{c:'FI',dial:'+358'},{c:'LV',dial:'+371'},
+  {c:'LT',dial:'+370'},{c:'BY',dial:'+375'},{c:'UA',dial:'+380'},{c:'NO',dial:'+47'},
+  {c:'AT',dial:'+43'},{c:'BE',dial:'+32'},{c:'BG',dial:'+359'},{c:'CH',dial:'+41'},
+  {c:'CZ',dial:'+420'},{c:'DE',dial:'+49'},{c:'DK',dial:'+45'},{c:'ES',dial:'+34'},
+  {c:'FR',dial:'+33'},{c:'GB',dial:'+44'},{c:'GR',dial:'+30'},{c:'HR',dial:'+385'},
+  {c:'HU',dial:'+36'},{c:'IE',dial:'+353'},{c:'IL',dial:'+972'},{c:'IT',dial:'+39'},
+  {c:'KG',dial:'+996'},{c:'KZ',dial:'+7'},{c:'MD',dial:'+373'},{c:'MK',dial:'+389'},
+  {c:'NL',dial:'+31'},{c:'PL',dial:'+48'},{c:'PT',dial:'+351'},{c:'RO',dial:'+40'},
+  {c:'RS',dial:'+381'},{c:'SE',dial:'+46'},{c:'SI',dial:'+386'},{c:'SK',dial:'+421'},
+  {c:'TR',dial:'+90'},{c:'US',dial:'+1'},{c:'UZ',dial:'+998'},
+];
+
+const GRADES = {
+  en: ['Kindergarten','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6',
+       'Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12','Adult'],
+  et: ['1. klass','2. klass','3. klass','4. klass','5. klass','6. klass',
+       '7. klass','8. klass','9. klass','10. klass','11. klass','12. klass','Täiskasvanu'],
+  ru: ['1 класс','2 класс','3 класс','4 класс','5 класс','6 класс','7 класс',
+       '8 класс','9 класс','10 класс','11 класс','Взрослый'],
+};
+
+const T = {
+  en: {
+    title: 'Apply for a Course',
+    subtitle: 'Fill in your details and our team will get back to you shortly.',
+    name: 'Full Name', email: 'Email', phone: 'Phone Number',
+    subject: 'Subject', grade: 'Current Grade / Level',
+    contact: 'Preferred Contact', minor: 'I am a minor (under 18)',
+    parentSection: 'Parent / Guardian',
+    parentName: 'Parent Name', parentPhone: 'Parent Phone',
+    parentEmail: 'Parent Email', parentContact: 'Parent Preferred Contact',
+    submit: 'Send Application',
+    respondNote: 'We typically respond within 1–2 business days.',
+    errRequired: 'This field is required.',
+    errEmail: 'Please enter a valid email address.',
+    errPhone: 'Please enter a valid phone number.',
+    successTitle: 'Application Received!',
+    successMsg: 'Thank you! We will review your application and reach out to you via your preferred channel.',
+    serverErr: 'Something went wrong. Please try again.',
+    gradeDefault: 'Select your grade',
+    subjectDefault: 'Select a subject',
+  },
+  et: {
+    title: 'Kursusel osalemine',
+    subtitle: 'Täida oma andmed ja meie meeskond võtab sinuga peagi ühendust.',
+    name: 'Täisnimi', email: 'E-post', phone: 'Telefoninumber',
+    subject: 'Õppeaine', grade: 'Praegune klass / tase',
+    contact: 'Eelistatud kontakt', minor: 'Olen alaealine (alla 18)',
+    parentSection: 'Lapsevanem / eestkostja',
+    parentName: 'Lapsevanema nimi', parentPhone: 'Lapsevanema telefon',
+    parentEmail: 'Lapsevanema e-post', parentContact: 'Lapsevanema eelistatud kontakt',
+    submit: 'Saada avaldus',
+    respondNote: 'Vastame tavaliselt 1–2 tööpäeva jooksul.',
+    errRequired: 'See väli on kohustuslik.',
+    errEmail: 'Palun sisesta kehtiv e-posti aadress.',
+    errPhone: 'Palun sisesta kehtiv telefoninumber.',
+    successTitle: 'Avaldus vastu võetud!',
+    successMsg: 'Täname! Vaatame teie avalduse läbi ja võtame teiega ühendust eelistatud kanali kaudu.',
+    serverErr: 'Midagi läks valesti. Palun proovi uuesti.',
+    gradeDefault: 'Vali oma klass',
+    subjectDefault: 'Vali õppeaine',
+  },
+  ru: {
+    title: 'Записаться на курс',
+    subtitle: 'Заполните данные, и наша команда свяжется с вами в ближайшее время.',
+    name: 'Полное имя', email: 'Email', phone: 'Номер телефона',
+    subject: 'Предмет', grade: 'Текущий класс / уровень',
+    contact: 'Предпочтительный способ связи', minor: 'Я несовершеннолетний (до 18 лет)',
+    parentSection: 'Родитель / опекун',
+    parentName: 'Имя родителя', parentPhone: 'Телефон родителя',
+    parentEmail: 'Email родителя', parentContact: 'Способ связи с родителем',
+    submit: 'Отправить заявку',
+    respondNote: 'Мы обычно отвечаем в течение 1–2 рабочих дней.',
+    errRequired: 'Это поле обязательно.',
+    errEmail: 'Пожалуйста, введите корректный email.',
+    errPhone: 'Пожалуйста, введите корректный номер телефона.',
+    successTitle: 'Заявка получена!',
+    successMsg: 'Спасибо! Мы рассмотрим вашу заявку и свяжемся с вами через предпочтительный канал.',
+    serverErr: 'Что-то пошло не так. Пожалуйста, попробуйте снова.',
+    gradeDefault: 'Выберите класс',
+    subjectDefault: 'Выберите предмет',
+  },
+};
+
+let lang = 'en';
+let contactPref = null;
+let parentPref = null;
+
+function buildCountrySelect(selId) {
+  const sel = document.getElementById(selId);
+  sel.innerHTML = COUNTRIES.map(({c, dial}) =>
+    `<option value="${c}">${c} ${dial}</option>`
+  ).join('');
+}
+
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent === l.toUpperCase());
+  });
+  const t = T[l];
+  document.getElementById('title').textContent = t.title;
+  document.getElementById('subtitle').textContent = t.subtitle;
+  document.getElementById('lbl-name').textContent = t.name;
+  document.getElementById('lbl-email').textContent = t.email;
+  document.getElementById('lbl-phone').textContent = t.phone;
+  document.getElementById('lbl-subject').textContent = t.subject;
+  document.getElementById('lbl-grade').textContent = t.grade;
+  document.getElementById('lbl-contact').textContent = t.contact;
+  document.getElementById('lbl-minor').textContent = t.minor;
+  document.getElementById('lbl-parent-section').textContent = t.parentSection;
+  document.getElementById('lbl-parent-name').textContent = t.parentName;
+  document.getElementById('lbl-parent-phone').textContent = t.parentPhone;
+  document.getElementById('lbl-parent-email').textContent = t.parentEmail;
+  document.getElementById('lbl-parent-contact').textContent = t.parentContact;
+  document.getElementById('lbl-submit').textContent = t.submit;
+  document.getElementById('lbl-respond-note').textContent = t.respondNote;
+  document.getElementById('success-title').textContent = t.successTitle;
+  document.getElementById('success-msg').textContent = t.successMsg;
+
+  const subjectSel = document.getElementById('f-subject');
+  subjectSel.options[0].text = t.subjectDefault;
+
+  const gradeSel = document.getElementById('f-grade');
+  gradeSel.innerHTML = `<option value="">${t.gradeDefault}</option>` +
+    GRADES[l].map(g => `<option value="${g}">${g}</option>`).join('');
+}
+
+function selectPill(group, el) {
+  const container = group === 'contact' ? 'contact-pills' : 'parent-contact-pills';
+  document.getElementById(container).querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  if (group === 'contact') {
+    contactPref = el.dataset.val;
+    document.getElementById('err-contact').classList.remove('visible');
+    document.getElementById('contact-pills').classList.remove('error-pills');
+  } else {
+    parentPref = el.dataset.val;
+  }
+}
+
+function toggleMinor(cb) {
+  document.getElementById('parent-fields').classList.toggle('visible', cb.checked);
+}
+
+function getVal(id) { return document.getElementById(id).value.trim(); }
+
+function setErr(id, msg) {
+  const el = document.getElementById('err-' + id);
+  if (el) { el.textContent = msg; el.classList.toggle('visible', !!msg); }
+  const input = document.getElementById('f-' + id) || document.getElementById(id);
+  if (input) input.classList.toggle('error', !!msg);
+}
+
+function clearErr(id) { setErr(id, ''); }
+
+function validate() {
+  const t = T[lang];
+  let ok = true;
+
+  if (!getVal('name')) { setErr('name', t.errRequired); ok = false; } else clearErr('name');
+
+  const email = getVal('email');
+  if (!email) { setErr('email', t.errRequired); ok = false; }
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr('email', t.errEmail); ok = false; }
+  else clearErr('email');
+
+  const phone = getVal('phone');
+  if (!phone) { setErr('phone', t.errRequired); ok = false; }
+  else if (!/^\d{4,}$/.test(phone.replace(/[\s\-]/g, ''))) { setErr('phone', t.errPhone); ok = false; }
+  else clearErr('phone');
+
+  if (!getVal('subject')) { setErr('subject', t.errRequired); ok = false; } else clearErr('subject');
+  if (!getVal('grade')) { setErr('grade', t.errRequired); ok = false; } else clearErr('grade');
+
+  if (!contactPref) {
+    document.getElementById('err-contact').textContent = t.errRequired;
+    document.getElementById('err-contact').classList.add('visible');
+    document.getElementById('contact-pills').classList.add('error-pills');
+    ok = false;
+  }
+
+  const isMinor = document.getElementById('f-minor').checked;
+  if (isMinor) {
+    if (!getVal('parent-name')) { setErr('parent-name', t.errRequired); ok = false; } else clearErr('parent-name');
+    const pp = getVal('parent-phone');
+    if (!pp) { setErr('parent-phone', t.errRequired); ok = false; }
+    else if (!/^\d{4,}$/.test(pp.replace(/[\s\-]/g, ''))) { setErr('parent-phone', t.errPhone); ok = false; }
+    else clearErr('parent-phone');
+    const pe = getVal('parent-email');
+    if (!pe) { setErr('parent-email', t.errRequired); ok = false; }
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pe)) { setErr('parent-email', t.errEmail); ok = false; }
+    else clearErr('parent-email');
+  }
+
+  return ok;
+}
+
+async function submitForm() {
+  if (!validate()) return;
+  const btn = document.getElementById('submit-btn');
+  const globalErr = document.getElementById('global-err');
+  btn.disabled = true;
+  globalErr.classList.remove('visible');
+
+  const isMinor = document.getElementById('f-minor').checked;
+  const countryCode = document.getElementById('f-country').value;
+  const parentCountryCode = document.getElementById('f-parent-country').value;
+  const parentPhone = getVal('parent-phone');
+
+  const payload = {
+    name: getVal('name'),
+    email: getVal('email'),
+    phone: document.getElementById('f-country').options[document.getElementById('f-country').selectedIndex].dataset
+      ? (COUNTRIES.find(c => c.c === countryCode)?.dial || '') + ' ' + getVal('phone')
+      : getVal('phone'),
+    country_code: countryCode,
+    is_minor: isMinor,
+    subject: getVal('subject'),
+    grade: getVal('grade'),
+    contact_pref: contactPref,
+    lang: lang,
+    parent_name: isMinor ? getVal('parent-name') : null,
+    parent_contact: isMinor && parentPhone
+      ? (COUNTRIES.find(c => c.c === parentCountryCode)?.dial || '') + ' ' + parentPhone
+      : null,
+    parent_email: isMinor ? getVal('parent-email') : null,
+    parent_pref: isMinor ? (parentPref || null) : null,
+  };
+
+  // Build phone with dial code
+  const dialCode = COUNTRIES.find(c => c.c === countryCode)?.dial || '';
+  payload.phone = dialCode + ' ' + getVal('phone');
+
+  try {
+    const res = await fetch('https://booking.serfory.eu/api/applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error();
+    document.getElementById('form-section').style.display = 'none';
+    document.getElementById('success-screen').classList.add('visible');
+  } catch {
+    globalErr.textContent = T[lang].serverErr;
+    globalErr.classList.add('visible');
+    btn.disabled = false;
+  }
+}
+
+function sendHeight() {
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'apply-height', height: document.body.scrollHeight }, '*');
+  }
+}
+
+// Init
+var isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
+if (isEmbed) {
+  document.querySelector('.top-bar').style.display = 'none';
+  document.body.style.padding = '0';
+  document.body.style.background = 'transparent';
+  document.querySelector('.card').style.boxShadow = 'none';
+  document.querySelector('.card').style.borderRadius = '0';
+  // Send height on any DOM change
+  new MutationObserver(sendHeight).observe(document.body, { childList: true, subtree: true, attributes: true });
+  window.addEventListener('load', sendHeight);
+}
+
+buildCountrySelect('f-country');
+buildCountrySelect('f-parent-country');
+setLang('en');
+if (isEmbed) setTimeout(sendHeight, 100);
+</script>
+</body>
+</html>

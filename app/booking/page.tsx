@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { startOfDay, addDays, subDays } from 'date-fns'
 import CourseTabFilter, { Course } from '@/components/booking/CourseTabFilter'
 import TeacherCard from '@/components/booking/TeacherCard'
@@ -11,6 +12,18 @@ import { LanguageProvider, useLang } from '@/lib/language-context'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
 
+export type ApplicationPrefill = {
+  name: string
+  email: string
+  phone: string
+  contact_pref: string
+  is_minor: boolean
+  parent_name: string | null
+  parent_contact: string | null
+  parent_email: string | null
+  parent_pref: string | null
+}
+
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
 const TEACHING_LANGS = ['Russian', 'Estonian', 'English'] as const
@@ -19,13 +32,19 @@ type TeachingLang = typeof TEACHING_LANGS[number]
 export default function BookingPage() {
   return (
     <LanguageProvider>
-      <BookingPageInner />
+      <Suspense>
+        <BookingPageInner />
+      </Suspense>
     </LanguageProvider>
   )
 }
 
 function BookingPageInner() {
   const { t } = useLang()
+  const searchParams = useSearchParams()
+  const ref = searchParams.get('ref')
+
+  const [prefill, setPrefill] = useState<ApplicationPrefill | null>(null)
   const [selectedCourse, setSelectedCourse] = useState<Course>('Russian')
   const [selectedLang, setSelectedLang] = useState<TeachingLang | ''>('')
   const [langDropdownOpen, setLangDropdownOpen] = useState(false)
@@ -38,6 +57,14 @@ function BookingPageInner() {
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
 
+  useEffect(() => {
+    if (!ref) return
+    fetch(`/api/applications?ref=${ref}`)
+      .then(r => r.json())
+      .then(d => { if (d.prefill) setPrefill(d.prefill) })
+      .catch(() => {})
+  }, [ref])
+
   function selectLang(lang: TeachingLang | '') {
     setSelectedLang(lang)
     setLangDropdownOpen(false)
@@ -48,6 +75,7 @@ function BookingPageInner() {
   useEffect(() => {
     setLoadingTeachers(true)
     const params = new URLSearchParams({ subject: selectedCourse })
+    if (ref) params.set('ref', ref)
     fetch(`/api/teachers?${params}`)
       .then(r => r.json())
       .then(d => {
@@ -219,6 +247,8 @@ function BookingPageInner() {
                   subject={selectedCourse}
                   onSuccess={() => setBooked(true)}
                   onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
+                  prefill={prefill ?? undefined}
+                  adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
                 />
               </>
             ) : isLoading ? (

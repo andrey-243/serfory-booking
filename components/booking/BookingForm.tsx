@@ -58,15 +58,29 @@ function isValidLocalPhone(num: string) {
 }
 
 // ── PhoneInput ────────────────────────────────────────────────────────────────
+function parsePhone(phone: string): { dial: string; num: string } {
+  const all = [...PRIORITY_COUNTRIES, ...OTHER_COUNTRIES]
+  const sorted = [...all].sort((a, b) => b.dial.length - a.dial.length)
+  for (const c of sorted) {
+    if (phone.startsWith(c.dial)) {
+      return { dial: c.dial, num: phone.slice(c.dial.length).trim() }
+    }
+  }
+  return { dial: PRIORITY_COUNTRIES[0].dial, num: phone }
+}
+
 function PhoneInput({
   onChange,
   placeholder,
+  initialValue,
 }: {
   onChange: (v: string) => void
   placeholder?: string
+  initialValue?: string
 }) {
-  const [dial, setDial] = useState(PRIORITY_COUNTRIES[0].dial)
-  const [num, setNum] = useState('')
+  const parsed = initialValue ? parsePhone(initialValue) : null
+  const [dial, setDial] = useState(parsed?.dial ?? PRIORITY_COUNTRIES[0].dial)
+  const [num, setNum] = useState(parsed?.num ?? '')
 
   function update(d: string, n: string) {
     onChange(n ? d + n : '')
@@ -158,12 +172,16 @@ function ContactPills({
 }
 
 // ── Main form ─────────────────────────────────────────────────────────────────
+import type { ApplicationPrefill } from '@/app/booking/page'
+
 type Props = {
   teacher: Teacher
   slot: CalendarSlot
   subject: string
   onSuccess: () => void
   onCancel: () => void
+  prefill?: ApplicationPrefill
+  adjustedPrice?: number
 }
 
 type FormData = {
@@ -178,20 +196,20 @@ type FormData = {
   parent_pref: string
 }
 
-export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel }: Props) {
+export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice }: Props) {
   const { t, lang } = useLang()
   const ft = t.form
-  const [form, setForm] = useState<FormData>({
-    student_name: '',
-    student_email: '',
-    student_phone: '',
-    contact_pref: 'whatsapp',
-    is_minor: false,
-    parent_name: '',
-    parent_contact: '',
-    parent_email: '',
-    parent_pref: 'whatsapp',
-  })
+  const [form, setForm] = useState<FormData>(() => ({
+    student_name: prefill?.name ?? '',
+    student_email: prefill?.email ?? '',
+    student_phone: prefill?.phone ?? '',
+    contact_pref: prefill?.contact_pref ?? 'whatsapp',
+    is_minor: prefill?.is_minor ?? false,
+    parent_name: prefill?.parent_name ?? '',
+    parent_contact: prefill?.parent_contact ?? '',
+    parent_email: prefill?.parent_email ?? '',
+    parent_pref: prefill?.parent_pref ?? 'whatsapp',
+  }))
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -265,6 +283,14 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         <p className="text-xs text-gray-500 mt-0.5">
           {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
         </p>
+        {adjustedPrice != null && (
+          <div className="mt-2 inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {adjustedPrice}€/h
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-3">
@@ -293,6 +319,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           <PhoneInput
             onChange={v => { set('student_phone', v); setFieldErrors(f => ({ ...f, student_phone: undefined })) }}
             placeholder={ft.parentPlaceholder}
+            initialValue={prefill?.phone}
           />
           {fieldErrors.student_phone && (
             <p className="text-xs text-red-500 mt-1">{fieldErrors.student_phone}</p>
@@ -341,6 +368,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
               <PhoneInput
                 onChange={v => { set('parent_contact', v); setFieldErrors(f => ({ ...f, parent_contact: undefined })) }}
                 placeholder={ft.parentPlaceholder}
+                initialValue={prefill?.parent_contact ?? undefined}
               />
               {fieldErrors.parent_contact && (
                 <p className="text-xs text-red-500 mt-1">{fieldErrors.parent_contact}</p>

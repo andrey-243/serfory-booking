@@ -23,6 +23,27 @@ type Booking = {
   teachers: { name: string } | null
 }
 
+type Application = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  country_code: string | null
+  is_minor: boolean
+  parent_name: string | null
+  parent_contact: string | null
+  parent_email: string | null
+  parent_pref: string | null
+  subject: string
+  grade: string
+  contact_pref: string
+  lang: string
+  status: string
+  parent_approved: boolean
+  price_tier: string | null
+  created_at: string
+}
+
 type Combo = { subject: string; teacher: string; count: number }
 
 type StudentRow = {
@@ -40,6 +61,7 @@ type StudentRow = {
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
 type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
+type AppSortCol = 'date' | 'name' | 'subject' | 'status'
 type FilterMinors = 'all' | 'minors' | 'non_minors' | 'to_contact' | 'contacted' | 'answered'
 
 const T = {
@@ -49,6 +71,7 @@ const T = {
     logout: 'Déconnexion',
     viewBookings: 'Réservations',
     viewCrm: 'Élèves',
+    viewApps: 'Candidatures',
     allStatuses: 'Tous',
     allCourses: 'Toutes les matières',
     allTeachers: 'Tous les profs',
@@ -72,6 +95,10 @@ const T = {
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'à' HH'h'mm",
     locale: fr,
+    appStatus: { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé' },
+    appCols: { date: 'Date', name: 'Candidat', subject: 'Matière', grade: 'Niveau', contact: 'Contact', channel: 'Canal', status: 'Statut' },
+    accept: 'Accepter', reject: 'Refuser', parentOk: 'Parent OK',
+    emptyApps: 'Aucune candidature.',
   },
   en: {
     title: 'Administration',
@@ -79,6 +106,7 @@ const T = {
     logout: 'Sign out',
     viewBookings: 'Bookings',
     viewCrm: 'Students',
+    viewApps: 'Applications',
     allStatuses: 'All',
     allCourses: 'All courses',
     allTeachers: 'All teachers',
@@ -102,6 +130,10 @@ const T = {
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
+    appStatus: { pending: 'Pending', accepted: 'Accepted', rejected: 'Rejected' },
+    appCols: { date: 'Date', name: 'Applicant', subject: 'Subject', grade: 'Grade', contact: 'Contact', channel: 'Channel', status: 'Status' },
+    accept: 'Accept', reject: 'Reject', parentOk: 'Parent OK',
+    emptyApps: 'No applications.',
   },
 }
 
@@ -131,8 +163,13 @@ const CYCLE: Record<ParentStatus, ParentStatus> = {
 export default function AdminPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
+  const [applications, setApplications] = useState<Application[]>([])
+  const [loadingApps, setLoadingApps] = useState(true)
   const [lang, setLang] = useState<'fr' | 'en'>('fr')
-  const [view, setView] = useState<'bookings' | 'crm'>('bookings')
+  const [view, setView] = useState<'bookings' | 'crm' | 'applications'>('bookings')
+  const [appSortCol, setAppSortCol] = useState<AppSortCol>('date')
+  const [appSortDir, setAppSortDir] = useState<'asc' | 'desc'>('desc')
+  const [appFilterStatus, setAppFilterStatus] = useState<string>('all')
 
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterCourse, setFilterCourse] = useState<string>('all')
@@ -198,7 +235,33 @@ export default function AdminPage() {
     fetch('/api/bookings')
       .then(r => r.json())
       .then(d => { setBookings(d.bookings || []); setLoading(false) })
+    fetch('/api/applications')
+      .then(r => r.json())
+      .then(d => { setApplications(d.applications || []); setLoadingApps(false) })
   }, [])
+
+  function handleAppSort(col: AppSortCol) {
+    if (appSortCol === col) setAppSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setAppSortCol(col); setAppSortDir(col === 'date' ? 'desc' : 'asc') }
+  }
+
+  async function handleAppStatus(id: string, status: string) {
+    await fetch('/api/applications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    })
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+  }
+
+  async function handleParentOk(id: string) {
+    await fetch('/api/applications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, parent_approved: true }),
+    })
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, parent_approved: true } : a))
+  }
 
   const courses = useMemo(() => [...new Set(bookings.map(b => b.subject))].sort(), [bookings])
   const teachers = useMemo(() => [...new Set(bookings.map(b => b.teachers?.name).filter(Boolean) as string[])].sort(), [bookings])
@@ -287,10 +350,19 @@ export default function AdminPage() {
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-500">{t.bookings(bookings.length)}</span>
             <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm text-sm">
-              {(['bookings', 'crm'] as const).map(v => (
+              {(['bookings', 'crm', 'applications'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
                   className={`px-4 py-1.5 rounded-lg font-medium transition-all ${view === v ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
-                  {v === 'bookings' ? t.viewBookings : t.viewCrm}
+                  {v === 'bookings' ? t.viewBookings : v === 'crm' ? t.viewCrm : (
+                    <span className="flex items-center gap-1.5">
+                      {t.viewApps}
+                      {applications.filter(a => a.status === 'pending').length > 0 && (
+                        <span className="bg-orange-400 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                          {applications.filter(a => a.status === 'pending').length}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -520,6 +592,132 @@ export default function AdminPage() {
             </div>
           </>
         )}
+
+        {/* ── APPLICATIONS VIEW ── */}
+        {view === 'applications' && (() => {
+          const filtered = applications.filter(a => appFilterStatus === 'all' || a.status === appFilterStatus)
+          const sorted = [...filtered].sort((a, b) => {
+            let cmp = 0
+            if (appSortCol === 'date') cmp = a.created_at.localeCompare(b.created_at)
+            else if (appSortCol === 'name') cmp = a.name.localeCompare(b.name)
+            else if (appSortCol === 'subject') cmp = a.subject.localeCompare(b.subject)
+            else if (appSortCol === 'status') cmp = a.status.localeCompare(b.status)
+            return appSortDir === 'asc' ? cmp : -cmp
+          })
+          return (
+            <>
+              <div className="flex flex-wrap gap-2 mb-4 items-center">
+                {(['all', 'pending', 'accepted', 'rejected'] as const).map(s => (
+                  <button key={s} onClick={() => setAppFilterStatus(s)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${appFilterStatus === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                    {s === 'all' ? t.allStatuses : t.appStatus[s as keyof typeof t.appStatus]}
+                  </button>
+                ))}
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {loadingApps ? (
+                  <p className="p-6 text-sm text-gray-400">{t.loading}</p>
+                ) : sorted.length === 0 ? (
+                  <p className="p-6 text-sm text-gray-400">{t.emptyApps}</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <th className="w-6 px-3 py-3" />
+                        <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('date')}>{t.appCols.date}<SortIndicator active={appSortCol === 'date'} dir={appSortDir} /></th>
+                        <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('name')}>{t.appCols.name}<SortIndicator active={appSortCol === 'name'} dir={appSortDir} /></th>
+                        <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('subject')}>{t.appCols.subject}<SortIndicator active={appSortCol === 'subject'} dir={appSortDir} /></th>
+                        <th className="text-left px-4 py-3 font-medium">{t.appCols.grade}</th>
+                        <th className="text-left px-4 py-3 font-medium">{t.appCols.contact}</th>
+                        <th className="text-left px-4 py-3 font-medium">{t.appCols.channel}</th>
+                        <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('status')}>{t.appCols.status}<SortIndicator active={appSortCol === 'status'} dir={appSortDir} /></th>
+                        <th className="px-3 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map(a => {
+                        const needsParentOk = a.is_minor && !a.parent_approved
+                        const canAccept = !needsParentOk && a.status === 'pending'
+                        return (
+                          <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td className="px-3 py-3">
+                              {a.is_minor && (
+                                <span title="Minor" className={`inline-block w-2.5 h-2.5 rounded-full ${a.parent_approved ? 'bg-green-400' : 'bg-orange-400'}`} />
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
+                              {format(new Date(a.created_at), "d MMM", { locale: t.locale })}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-gray-900">{a.name}</p>
+                              {a.is_minor && a.parent_name && (
+                                <p className="text-xs text-gray-400 mt-0.5"><ParentIcon />{a.parent_name}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">{a.subject}</td>
+                            <td className="px-4 py-3 text-xs text-gray-500">{a.grade}</td>
+                            <td className="px-4 py-3">
+                              <p className="text-xs text-gray-400">{a.email}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{a.phone}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              {a.contact_pref === 'whatsapp' ? (
+                                <a href={waLink(a.phone)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-white bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 rounded-full font-medium w-fit">
+                                  <WaIcon /> WhatsApp
+                                </a>
+                              ) : a.contact_pref === 'telegram' ? (
+                                <a href={tgLink(a.phone)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium w-fit">
+                                  <TgIcon /> Telegram
+                                </a>
+                              ) : (
+                                <a href={`mailto:${a.email}`}
+                                  className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium w-fit">
+                                  <EmailIcon /> Email
+                                </a>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                a.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                a.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {t.appStatus[a.status as keyof typeof t.appStatus] ?? a.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              {a.status === 'pending' && (
+                                <div className="flex flex-col gap-1 items-start">
+                                  {needsParentOk && (
+                                    <button onClick={() => handleParentOk(a.id)}
+                                      className="text-[11px] px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 bg-orange-50 hover:bg-orange-100 font-medium whitespace-nowrap transition-colors">
+                                      {t.parentOk}
+                                    </button>
+                                  )}
+                                  <button onClick={() => handleAppStatus(a.id, 'accepted')}
+                                    disabled={!canAccept}
+                                    className="text-[11px] px-2.5 py-1 rounded-full border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 font-medium whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                    {t.accept}
+                                  </button>
+                                  <button onClick={() => handleAppStatus(a.id, 'rejected')}
+                                    className="text-[11px] px-2.5 py-1 rounded-full border border-red-200 text-red-500 bg-red-50 hover:bg-red-100 font-medium whitespace-nowrap transition-colors">
+                                    {t.reject}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )
+        })()}
 
         {/* ── CRM VIEW ── */}
         {view === 'crm' && (
