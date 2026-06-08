@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const { data: bookings } = await getSupabaseAdmin()
     .from('bookings')
-    .select('id, google_event_id, student_email, student_response, status')
+    .select('id, google_event_id, student_email, student_response, teacher_response, status')
     .eq('teacher_id', teacher.id)
     .not('google_event_id', 'is', null)
     .in('status', ['pending', 'confirmed'])
@@ -46,16 +46,25 @@ export async function POST(req: NextRequest) {
 
       const attendees = res.data.attendees || []
 
+      const teacherAttendee = attendees.find(
+        a => a.email?.toLowerCase() === teacher.email.toLowerCase()
+      )
+      const teacherResponse = teacherAttendee?.responseStatus === 'accepted' ? 'accepted'
+        : teacherAttendee?.responseStatus === 'declined' ? 'declined'
+        : null
+
       // Sync statut booking depuis réponse du prof
       if (booking.status === 'pending') {
-        const teacherAttendee = attendees.find(
-          a => a.email?.toLowerCase() === teacher.email.toLowerCase()
-        )
-        if (teacherAttendee?.responseStatus === 'accepted') {
-          await getSupabaseAdmin().from('bookings').update({ status: 'confirmed' }).eq('id', booking.id)
-        } else if (teacherAttendee?.responseStatus === 'declined') {
-          await getSupabaseAdmin().from('bookings').update({ status: 'cancelled' }).eq('id', booking.id)
+        if (teacherResponse === 'accepted') {
+          await getSupabaseAdmin().from('bookings').update({ status: 'confirmed', teacher_response: 'accepted' }).eq('id', booking.id)
+        } else if (teacherResponse === 'declined') {
+          await getSupabaseAdmin().from('bookings').update({ status: 'cancelled', teacher_response: 'declined' }).eq('id', booking.id)
         }
+      }
+
+      // Sync teacher_response indépendamment du statut
+      if (teacherResponse !== booking.teacher_response && booking.status !== 'pending') {
+        await getSupabaseAdmin().from('bookings').update({ teacher_response: teacherResponse }).eq('id', booking.id)
       }
 
       // Sync réponse student (informatif)

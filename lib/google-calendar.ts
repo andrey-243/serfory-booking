@@ -243,5 +243,8 @@ export async function createCalendarEvent(
     },
   })
 
-  return res.data.id
+  const meetLink = res.data.conferenceData?.entryPoints
+    ?.find(ep => ep.entryPointType === 'video')?.uri ?? null
+
+  return { id: res.data.id ?? null, meetLink }
 }
