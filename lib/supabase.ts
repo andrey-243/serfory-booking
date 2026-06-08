@@ -61,6 +61,7 @@ export type Booking = {
   parent_contact: string | null
   status: 'pending' | 'confirmed' | 'cancelled'
   google_event_id: string | null
+  amount: number | null
   created_at: string
 }
 
