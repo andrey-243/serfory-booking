@@ -24,7 +24,6 @@ type Booking = {
   status: string
   amount: number | null
   student_response: string | null
-  teacher_response: string | null
   teachers: { name: string } | null
 }
 
@@ -127,7 +126,6 @@ const T = {
     accept: 'Accepter', reject: 'Refuser', parentOk: 'Parent OK',
     emptyApps: 'Aucune candidature.',
     studentResp: { all: 'Tous', yes: 'Accepté', no: 'Sans réponse' },
-    teacherResp: { all: 'Tous', yes: 'Accepté', no: 'Sans réponse' },
     hasParent: { all: 'Tous', yes: 'Avec parent', no: 'Sans parent' },
     groupByLabel: 'Grouper',
     groupBy: { none: 'Aucun', teacher: 'Par prof', subject: 'Par matière' },
@@ -169,7 +167,6 @@ const T = {
     accept: 'Accept', reject: 'Reject', parentOk: 'Parent OK',
     emptyApps: 'No applications.',
     studentResp: { all: 'All', yes: 'Accepted', no: 'No response' },
-    teacherResp: { all: 'All', yes: 'Accepted', no: 'No response' },
     hasParent: { all: 'All', yes: 'With parent', no: 'No parent' },
     groupByLabel: 'Group',
     groupBy: { none: 'None', teacher: 'By teacher', subject: 'By subject' },
@@ -849,7 +846,6 @@ export default function AdminPage() {
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
   const [filterStudentResp, setFilterStudentResp] = useState<'all' | 'yes' | 'no'>('all')
-  const [filterTeacherResp, setFilterTeacherResp] = useState<'all' | 'yes' | 'no'>('all')
   const [filterHasParent, setFilterHasParent] = useState<'all' | 'yes' | 'no'>('all')
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
   const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming')
@@ -970,8 +966,7 @@ export default function AdminPage() {
     if (filterTeachers.size > 0 && !filterTeachers.has(b.teachers?.name ?? '')) return false
     if (filterStudentResp === 'yes' && b.student_response !== 'accepted') return false
     if (filterStudentResp === 'no' && b.student_response === 'accepted') return false
-    if (filterTeacherResp === 'yes' && b.teacher_response !== 'accepted') return false
-    if (filterTeacherResp === 'no' && b.teacher_response === 'accepted') return false
+
     if (filterHasParent === 'yes' && !b.is_minor) return false
     if (filterHasParent === 'no' && b.is_minor) return false
     if (timeFilter === 'upcoming' && new Date(b.slot_start) < now) return false
@@ -1169,7 +1164,7 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Row 2: Prof dropdown + GCal élève + GCal prof + group + period */}
+              {/* Row 2: Prof dropdown + GCal élève + group + period */}
               <div className="flex flex-wrap gap-2 items-center">
                 {teachers.length > 0 && (
                   <MultiSelectDropdown
@@ -1189,17 +1184,6 @@ export default function AdminPage() {
                     <button key={v} onClick={() => setFilterStudentResp(v)}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterStudentResp === v ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                       {t.studentResp[v]}
-                    </button>
-                  ))}
-                </div>
-
-                {/* GCal prof */}
-                <div className="flex gap-1.5 items-center">
-                  <span className="text-[10px] font-semibold text-gray-400 uppercase">Prof</span>
-                  {(['all', 'yes', 'no'] as const).map(v => (
-                    <button key={v} onClick={() => setFilterTeacherResp(v)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterTeacherResp === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'}`}>
-                      {t.teacherResp[v]}
                     </button>
                   ))}
                 </div>
@@ -1299,25 +1283,28 @@ export default function AdminPage() {
                           const pp = b.parent_pref?.split(',') ?? []
                           const parentTgActive = pp.length > 0 ? pp.includes('telegram') : true
                           const parentEmActive = pp.includes('email')
+                          const clickHandler = () => setExpandedBooking(isOpen ? null : b.id)
+                          const cancelledCls = b.status === 'cancelled' ? 'opacity-50' : ''
+                          const hoverCls = isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'
                           return (
                             <>
                               <tr key={b.id}
-                                className={`border-b border-gray-100 transition-colors cursor-pointer select-none ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
-                                onClick={() => setExpandedBooking(isOpen ? null : b.id)}
+                                className={`transition-colors cursor-pointer select-none ${cancelledCls} ${hoverCls} ${!b.is_minor ? 'border-b border-gray-100' : ''}`}
+                                onClick={clickHandler}
                               >
-                                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 text-gray-700 whitespace-nowrap align-middle">
                                   {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
                                 </td>
-                                <td className="px-4 py-3 text-gray-700">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 text-gray-700 align-middle">
                                   <div className="flex items-center gap-2">
                                     {b.teachers?.name && <TeacherAvatar name={b.teachers.name} />}
                                     <span>{b.teachers?.name?.split(' ')[0] ?? '—'}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${subjectColor.bg} ${subjectColor.text}`}>{b.subject}</span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3" style={b.is_minor ? { borderBottom: '1px solid #f3f4f6' } : {}}>
                                   <button
                                     className="font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors text-left"
                                     onClick={e => { e.stopPropagation(); setStatsModal(b.student_email) }}
@@ -1326,26 +1313,63 @@ export default function AdminPage() {
                                   </button>
                                   {b.is_minor && <span className="ml-2 text-[10px] text-orange-500 font-medium bg-orange-50 px-1.5 py-0.5 rounded-full">{t.minor}</span>}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                                   <div className="flex flex-col gap-1">
-                                    <span className={`text-[11px] font-medium ${b.teacher_response === 'accepted' ? 'text-green-600' : b.teacher_response === 'declined' ? 'text-red-500' : 'text-gray-300'}`}>
-                                      {t.cols.teacher} {b.teacher_response === 'accepted' ? '✓' : b.teacher_response === 'declined' ? '✗' : '—'}
-                                    </span>
+                                    {b.status === 'cancelled' && (
+                                      <span className="text-[11px] font-medium text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full w-fit">
+                                        {lang === 'fr' ? 'Annulé' : 'Cancelled'}
+                                      </span>
+                                    )}
+                                    {b.status === 'confirmed' && (
+                                      <span className="text-[11px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full w-fit">
+                                        {lang === 'fr' ? 'Confirmé' : 'Confirmed'}
+                                      </span>
+                                    )}
+
                                     <span className={`text-[11px] font-medium ${b.student_response === 'accepted' ? 'text-green-600' : b.student_response === 'declined' ? 'text-red-500' : 'text-gray-300'}`}>
                                       {t.cols.student} {b.student_response === 'accepted' ? '✓' : b.student_response === 'declined' ? '✗' : '—'}
                                     </span>
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-gray-300">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-3 py-3 text-gray-300 align-middle">
                                   <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                 </td>
                               </tr>
+                              {b.is_minor && (
+                                <tr key={`${b.id}-parent`}
+                                  className={`border-b border-gray-100 transition-colors cursor-pointer select-none ${cancelledCls} ${hoverCls}`}
+                                  onClick={clickHandler}
+                                >
+                                  <td className="px-4 py-2">
+                                    {b.parent_name ? (
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.parent}</span>
+                                        <span className="text-sm text-gray-600">{b.parent_name}</span>
+                                        {b.parent_contact && (
+                                          <a href={tgLink(b.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${parentTgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
+                                            <TgIcon /> Telegram
+                                          </a>
+                                        )}
+                                        {b.parent_email && (
+                                          <a href={`mailto:${b.parent_email}`}
+                                            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${parentEmActive ? 'text-white bg-violet-500 hover:bg-violet-600' : 'text-violet-600 bg-violet-50 hover:bg-violet-100'}`}>
+                                            <EmailIcon /> Email
+                                          </a>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.parent} —</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
                               {isOpen && (
                                 <tr key={`${b.id}-exp`} className="border-b border-gray-100 bg-gray-50">
                                   <td colSpan={6} className="px-6 py-4">
                                     <div className="flex gap-8">
                                       {/* Contact + Parent stacked + Actions */}
-                                      <div className="flex flex-col gap-4 flex-1 min-w-0">
+                                      <div className="flex flex-col gap-4 flex-1 min-w-0 divide-y divide-gray-100">
                                         {/* Student contact */}
                                         <div>
                                           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.cols.contact}</p>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { createCalendarEvent, deleteCalendarEvent, acceptCalendarEvent } from '@/lib/google-calendar'
+import { createCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 
 const TIER_MULTIPLIERS: Record<string, number> = { rich: 1.20, normal: 1.00, poor: 0.80 }
 
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, status, fromTeacher, telegram_username } = await req.json()
+  const { id, status, telegram_username } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
@@ -160,14 +160,6 @@ export async function PATCH(req: NextRequest) {
             teacher.google_refresh_token,
             teacher.google_calendar_id || 'primary',
             booking.google_event_id
-          )
-        } else if (status === 'confirmed' && fromTeacher) {
-          // Teacher confirme depuis son dashboard → marque son attendee comme accepted
-          await acceptCalendarEvent(
-            teacher.google_refresh_token,
-            teacher.google_calendar_id || 'primary',
-            booking.google_event_id,
-            teacher.email
           )
         }
       }

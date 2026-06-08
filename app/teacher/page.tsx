@@ -104,7 +104,7 @@ export default function TeacherPage() {
     await fetch('/api/bookings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status, fromTeacher: true }),
+      body: JSON.stringify({ id, status }),
     })
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b))
   }
