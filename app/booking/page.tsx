@@ -245,10 +245,11 @@ function BookingPageInner() {
                   teacher={selectedTeacher}
                   slot={selectedSlot.slot}
                   subject={selectedCourse}
-                  onSuccess={() => setBooked(true)}
+                  onSuccess={() => { setBooked(true); loadSlots(teachers, weekStart) }}
                   onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
                   prefill={prefill ?? undefined}
                   adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
+                  refToken={ref ?? undefined}
                 />
               </>
             ) : isLoading ? (
