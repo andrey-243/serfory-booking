@@ -14,7 +14,7 @@
   }
 
   function iframeSrc(lang) {
-    return '/apply.html?v=4&embed=1&lang=' + lang;
+    return '/apply.html?v=6&embed=1&lang=' + lang;
   }
 
   function makeIframe(lang) {

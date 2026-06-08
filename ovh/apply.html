@@ -292,6 +292,17 @@
     </div>
 
     <div class="field">
+      <label><span id="lbl-learning-lang"></span><span class="req">*</span></label>
+      <select id="f-learning-lang">
+        <option value="">—</option>
+        <option value="en">English</option>
+        <option value="ru">Russian</option>
+        <option value="et">Estonian</option>
+      </select>
+      <div class="err-msg" id="err-learning-lang"></div>
+    </div>
+
+    <div class="field">
       <label><span id="lbl-contact"></span><span class="req">*</span></label>
       <div class="pills" id="contact-pills">
         <div class="pill" data-val="telegram" onclick="selectPill('contact',this)">Telegram</div>
@@ -299,6 +310,13 @@
       </div>
       <div class="err-msg" id="err-contact"></div>
     </div>
+
+    <div class="field" id="tg-username-field" style="display:none">
+      <label><span id="lbl-tg-username"></span><span class="req">*</span></label>
+      <input type="text" id="f-tg-username" placeholder="@username" autocomplete="off">
+      <div class="err-msg" id="err-tg-username"></div>
+    </div>
+
 
     <label class="minor-toggle">
       <input type="checkbox" id="f-minor" onchange="toggleMinor(this)">
@@ -337,6 +355,12 @@
           <div class="pill" data-val="telegram" onclick="selectPill('parent',this)">Telegram</div>
           <div class="pill" data-val="email" onclick="selectPill('parent',this)">Email</div>
         </div>
+      </div>
+
+      <div class="field" id="tg-parent-username-field" style="display:none">
+        <label><span id="lbl-tg-parent-username"></span><span class="req">*</span></label>
+        <input type="text" id="f-tg-parent-username" placeholder="@username" autocomplete="off">
+        <div class="err-msg" id="err-tg-parent-username"></div>
       </div>
     </div>
 
@@ -382,7 +406,12 @@ const T = {
     subtitle: 'Fill in your details and our team will get back to you shortly.',
     name: 'Full Name', email: 'Email', phone: 'Phone Number',
     subject: 'Subject', grade: 'Current Grade / Level',
-    contact: 'Preferred Contact', minor: 'I am a minor (under 18)',
+    learningLang: 'Preferred Teaching Language', learningLangDefault: 'Select a language',
+    learningLangOptions: { en: 'English', ru: 'Russian', et: 'Estonian' },
+    contact: 'Preferred Contact',
+    tgUsername: 'Your Telegram username', errTgUsername: 'Please enter your Telegram username.',
+    tgParentUsername: 'Parent Telegram username', errTgParentUsername: 'Please enter the parent\'s Telegram username.',
+    minor: 'I am a minor (under 18)',
     parentSection: 'Parent / Guardian',
     parentName: 'Parent Name', parentPhone: 'Parent Phone',
     parentEmail: 'Parent Email', parentContact: 'Parent Preferred Contact',
@@ -402,7 +431,12 @@ const T = {
     subtitle: 'Täida oma andmed ja meie meeskond võtab sinuga peagi ühendust.',
     name: 'Täisnimi', email: 'E-post', phone: 'Telefoninumber',
     subject: 'Õppeaine', grade: 'Praegune klass / tase',
-    contact: 'Eelistatud kontakt', minor: 'Olen alaealine (alla 18)',
+    learningLang: 'Eelistatud õppekeel', learningLangDefault: 'Vali keel',
+    learningLangOptions: { en: 'Inglise keel', ru: 'Vene keel', et: 'Eesti keel' },
+    contact: 'Eelistatud kontakt',
+    tgUsername: 'Sinu Telegrami kasutajanimi', errTgUsername: 'Palun sisesta oma Telegrami kasutajanimi.',
+    tgParentUsername: 'Lapsevanema Telegrami kasutajanimi', errTgParentUsername: 'Palun sisesta lapsevanema Telegrami kasutajanimi.',
+    minor: 'Olen alaealine (alla 18)',
     parentSection: 'Lapsevanem / eestkostja',
     parentName: 'Lapsevanema nimi', parentPhone: 'Lapsevanema telefon',
     parentEmail: 'Lapsevanema e-post', parentContact: 'Lapsevanema eelistatud kontakt',
@@ -422,7 +456,12 @@ const T = {
     subtitle: 'Заполните данные, и наша команда свяжется с вами в ближайшее время.',
     name: 'Полное имя', email: 'Email', phone: 'Номер телефона',
     subject: 'Предмет', grade: 'Текущий класс / уровень',
-    contact: 'Предпочтительный способ связи', minor: 'Я несовершеннолетний (до 18 лет)',
+    learningLang: 'Предпочтительный язык обучения', learningLangDefault: 'Выберите язык',
+    learningLangOptions: { en: 'Английский', ru: 'Русский', et: 'Эстонский' },
+    contact: 'Предпочтительный способ связи',
+    tgUsername: 'Ваш Telegram username', errTgUsername: 'Пожалуйста, укажите ваш Telegram username.',
+    tgParentUsername: 'Telegram username родителя', errTgParentUsername: 'Пожалуйста, укажите Telegram username родителя.',
+    minor: 'Я несовершеннолетний (до 18 лет)',
     parentSection: 'Родитель / опекун',
     parentName: 'Имя родителя', parentPhone: 'Телефон родителя',
     parentEmail: 'Email родителя', parentContact: 'Способ связи с родителем',
@@ -463,7 +502,13 @@ function setLang(l) {
   document.getElementById('lbl-phone').textContent = t.phone;
   document.getElementById('lbl-subject').textContent = t.subject;
   document.getElementById('lbl-grade').textContent = t.grade;
+  document.getElementById('lbl-learning-lang').textContent = t.learningLang;
+  const llSel = document.getElementById('f-learning-lang');
+  llSel.innerHTML = `<option value="">${t.learningLangDefault}</option>` +
+    Object.entries(t.learningLangOptions).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
   document.getElementById('lbl-contact').textContent = t.contact;
+  document.getElementById('lbl-tg-username').textContent = t.tgUsername;
+  document.getElementById('lbl-tg-parent-username').textContent = t.tgParentUsername;
   document.getElementById('lbl-minor').textContent = t.minor;
   document.getElementById('lbl-parent-section').textContent = t.parentSection;
   document.getElementById('lbl-parent-name').textContent = t.parentName;
@@ -491,8 +536,12 @@ function selectPill(group, el) {
     contactPref = el.dataset.val;
     document.getElementById('err-contact').classList.remove('visible');
     document.getElementById('contact-pills').classList.remove('error-pills');
+    document.getElementById('tg-username-field').style.display = contactPref === 'telegram' ? 'block' : 'none';
+    if (contactPref !== 'telegram') { document.getElementById('f-tg-username').value = ''; clearErr('tg-username'); }
   } else {
     parentPref = el.dataset.val;
+    document.getElementById('tg-parent-username-field').style.display = parentPref === 'telegram' ? 'block' : 'none';
+    if (parentPref !== 'telegram') { document.getElementById('f-tg-parent-username').value = ''; clearErr('tg-parent-username'); }
   }
 }
 
@@ -500,7 +549,7 @@ function toggleMinor(cb) {
   document.getElementById('parent-fields').classList.toggle('visible', cb.checked);
 }
 
-function getVal(id) { return document.getElementById(id).value.trim(); }
+function getVal(id) { return document.getElementById('f-' + id).value.trim(); }
 
 function setErr(id, msg) {
   const el = document.getElementById('err-' + id);
@@ -529,6 +578,7 @@ function validate() {
 
   if (!getVal('subject')) { setErr('subject', t.errRequired); ok = false; } else clearErr('subject');
   if (!getVal('grade')) { setErr('grade', t.errRequired); ok = false; } else clearErr('grade');
+  if (!getVal('learning-lang')) { setErr('learning-lang', t.errRequired); ok = false; } else clearErr('learning-lang');
 
   if (!contactPref) {
     document.getElementById('err-contact').textContent = t.errRequired;
@@ -537,13 +587,20 @@ function validate() {
     ok = false;
   }
 
-  const isMinor = document.getElementById('f-minor').checked;
+  if (contactPref === 'telegram' && !getVal('tg-username').replace(/^@/, '').trim()) {
+    setErr('tg-username', t.errTgUsername); ok = false;
+  } else { clearErr('tg-username'); }
+
+const isMinor = document.getElementById('f-minor').checked;
   if (isMinor) {
     if (!getVal('parent-name')) { setErr('parent-name', t.errRequired); ok = false; } else clearErr('parent-name');
     const pp = getVal('parent-phone');
     if (!pp) { setErr('parent-phone', t.errRequired); ok = false; }
     else if (!/^\d{4,}$/.test(pp.replace(/[\s\-]/g, ''))) { setErr('parent-phone', t.errPhone); ok = false; }
     else clearErr('parent-phone');
+    if (parentPref === 'telegram' && !getVal('tg-parent-username').replace(/^@/, '').trim()) {
+      setErr('tg-parent-username', t.errTgParentUsername); ok = false;
+    } else { clearErr('tg-parent-username'); }
     const pe = getVal('parent-email');
     if (!pe) { setErr('parent-email', t.errRequired); ok = false; }
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pe)) { setErr('parent-email', t.errEmail); ok = false; }
@@ -575,7 +632,10 @@ async function submitForm() {
     is_minor: isMinor,
     subject: getVal('subject'),
     grade: getVal('grade'),
+    learning_lang: getVal('learning-lang'),
     contact_pref: contactPref,
+    telegram_username: contactPref === 'telegram' ? (getVal('tg-username').replace(/^@/, '').trim() || null) : null,
+    telegram_parent_username: (isMinor && parentPref === 'telegram') ? (getVal('tg-parent-username').replace(/^@/, '').trim() || null) : null,
     lang: lang,
     parent_name: isMinor ? getVal('parent-name') : null,
     parent_contact: isMinor && parentPhone

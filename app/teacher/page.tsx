@@ -72,6 +72,9 @@ type Booking = {
   slot_start: string
   slot_end: string
   student_name: string
+  student_phone: string
+  contact_pref: string
+  telegram_username: string | null
   status: string
   student_response: string | null
 }
@@ -104,6 +107,16 @@ export default function TeacherPage() {
       body: JSON.stringify({ id, status, fromTeacher: true }),
     })
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b))
+  }
+
+  async function handleUpdateTgUsername(id: string, username: string) {
+    const val = username.replace(/^@/, '').trim() || null
+    await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, telegram_username: val }),
+    })
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, telegram_username: val } : b))
   }
 
   useEffect(() => {
@@ -250,6 +263,24 @@ export default function TeacherPage() {
                     <p className="text-xs text-gray-500">
                       {b.subject} — {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
                     </p>
+                    {b.contact_pref === 'telegram' && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <a
+                          href={b.telegram_username ? `https://t.me/${b.telegram_username}` : `https://t.me/+${b.student_phone.replace(/\D/g, '')}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2 py-0.5 rounded-full font-medium transition-colors">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.04 9.613c-.148.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.903.608z"/></svg>
+                          TG
+                        </a>
+                        <input
+                          className="w-28 text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400"
+                          defaultValue={b.telegram_username ? `@${b.telegram_username}` : ''}
+                          placeholder="@username"
+                          onBlur={e => { if (e.target.value !== (b.telegram_username ? `@${b.telegram_username}` : '')) handleUpdateTgUsername(b.id, e.target.value) }}
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <div className="flex items-center gap-1.5">
