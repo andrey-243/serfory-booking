@@ -175,6 +175,7 @@ type Props = {
   onCancel: () => void
   prefill?: ApplicationPrefill
   adjustedPrice?: number
+  refToken?: string
 }
 
 type FormData = {
@@ -189,7 +190,7 @@ type FormData = {
   parent_pref: string
 }
 
-export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice }: Props) {
+export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice, refToken }: Props) {
   const { t, lang } = useLang()
   const ft = t.form
   const [form, setForm] = useState<FormData>(() => ({
@@ -247,6 +248,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           parent_contact: form.is_minor ? form.parent_contact : null,
           parent_email: form.is_minor ? (form.parent_email || null) : null,
           parent_pref: form.is_minor ? (form.parent_pref || null) : null,
+          ...(refToken ? { ref_token: refToken } : {}),
         }),
       })
 

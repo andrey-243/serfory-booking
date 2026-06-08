@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { createCalendarEvent, deleteCalendarEvent, acceptCalendarEvent } from '@/lib/google-calendar'
 
+const TIER_MULTIPLIERS: Record<string, number> = { rich: 1.20, normal: 1.00, poor: 0.80 }
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
@@ -18,6 +20,8 @@ export async function POST(req: NextRequest) {
     parent_contact,
     parent_email,
     parent_pref,
+    ref_token,
+    telegram_username,
   } = body
 
   if (!teacher_id || !subject || !slot_start || !slot_end || !student_name || !student_email || !student_phone || !contact_pref) {
@@ -26,17 +30,41 @@ export async function POST(req: NextRequest) {
 
   const { data: teacher } = await getSupabaseAdmin()
     .from('teachers')
-    .select('name, email, google_refresh_token, google_calendar_id')
+    .select('name, email, google_refresh_token, google_calendar_id, price_per_hour')
     .eq('id', teacher_id)
     .single()
 
+  let amount: number | null = null
+  let tgUsername: string | null = telegram_username || null
+  if (ref_token) {
+    const { data: app } = await getSupabaseAdmin()
+      .from('applications')
+      .select('price_tier, telegram_username')
+      .eq('ref_token', ref_token)
+      .eq('status', 'accepted')
+      .single()
+    if (app?.price_tier && teacher?.price_per_hour) {
+      const multiplier = TIER_MULTIPLIERS[app.price_tier] ?? 1.00
+      amount = Math.round(teacher.price_per_hour * 1.22 * multiplier * 100) / 100
+    }
+    if (app?.telegram_username && !tgUsername) tgUsername = app.telegram_username
+  }
+
   let google_event_id: string | null = null
+  let meet_link: string | null = null
 
   if (teacher?.google_refresh_token) {
     try {
-      const description = `${subject} lesson · Serfory\nhttps://serfory.eu`
+      const description = [
+        `📚 ${subject} lesson · Serfory`,
+        ``,
+        `👤 ${student_name}`,
+        `📱 ${student_phone} · ${student_email}`,
+        ``,
+        `👩‍🏫 ${teacher.name}`,
+      ].join('\n')
 
-      google_event_id = await createCalendarEvent(
+      const result = await createCalendarEvent(
         teacher.google_refresh_token,
         teacher.google_calendar_id || 'primary',
         {
@@ -47,7 +75,9 @@ export async function POST(req: NextRequest) {
           teacherEmail: teacher.email,
           studentEmail: student_email,
         }
-      ) ?? null
+      )
+      google_event_id = result?.id ?? null
+      meet_link = result?.meetLink ?? null
     } catch {}
   }
 
@@ -67,7 +97,10 @@ export async function POST(req: NextRequest) {
       parent_contact: is_minor ? parent_contact : null,
       parent_email: is_minor ? (parent_email || null) : null,
       parent_pref: is_minor ? (parent_pref || null) : null,
+      telegram_username: tgUsername,
       google_event_id,
+      meet_link,
+      amount,
     })
     .select()
     .single()
@@ -80,10 +113,22 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, status, fromTeacher } = await req.json()
+  const { id, status, fromTeacher, telegram_username } = await req.json()
 
-  if (!id || !['pending', 'confirmed', 'cancelled'].includes(status)) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  // Field-only update (no status change)
+  if (status === undefined) {
+    const updates: Record<string, unknown> = {}
+    if (telegram_username !== undefined) updates.telegram_username = telegram_username || null
+    if (Object.keys(updates).length === 0) return NextResponse.json({ ok: true })
+    const { error } = await getSupabaseAdmin().from('bookings').update(updates).eq('id', id)
+    if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (!['pending', 'confirmed', 'cancelled'].includes(status)) {
+    return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
   }
 
   const { data: booking } = await getSupabaseAdmin()
