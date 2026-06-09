@@ -73,6 +73,56 @@ export async function POST(req: NextRequest) {
 
   const price_tier = country_code ? getPriceTier(country_code) : 'normal'
 
+  // Schedule auto-accept: 5–15 min from now (instant if AUTO_ACCEPT_INSTANT=true)
+  // Windows (Europe/Paris): Mon–Fri 6h–20h, Sat–Sun 8h–14h
+  const TZ = 'Europe/Paris'
+  const instant = process.env.AUTO_ACCEPT_INSTANT === 'true'
+  const delayMs = instant ? 0 : (5 + Math.floor(Math.random() * 11)) * 60 * 1000
+  let scheduledAt = new Date(Date.now() + delayMs)
+
+  function getParisFields(d: Date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, hour: 'numeric', minute: 'numeric',
+      weekday: 'short', hour12: false,
+    }).formatToParts(d)
+    const get = (t: string) => parts.find(p => p.type === t)?.value ?? ''
+    const hour = parseInt(get('hour'))
+    const day = get('weekday') // 'Mon','Tue',...
+    const isWeekend = day === 'Sat' || day === 'Sun'
+    return { hour, isWeekend }
+  }
+
+  function nextWindowStart(d: Date): Date {
+    const { hour, isWeekend } = getParisFields(d)
+    const openHour = isWeekend ? 8 : 6
+    const closeHour = isWeekend ? 14 : 20
+    if (hour >= openHour && hour < closeHour) return d // already in window
+
+    // Advance to next open slot
+    const next = new Date(d)
+    if (hour >= closeHour) {
+      // Past closing: move to next day opening
+      next.setDate(next.getDate() + 1)
+    }
+    // Set to openHour in Paris time by iterating (DST-safe)
+    next.setMinutes(0, 0, 0)
+    // Find UTC offset at that day by trying hours until Paris hour matches
+    for (let h = 0; h < 24; h++) {
+      next.setUTCHours(h)
+      const { hour: ph, isWeekend: iwe } = getParisFields(next)
+      const target = iwe ? 8 : 6
+      if (ph === target) break
+    }
+    // Re-check: if it's a weekend and openHour is 8 but we need to re-check
+    const rechk = getParisFields(next)
+    if (rechk.hour >= (rechk.isWeekend ? 14 : 20)) {
+      return nextWindowStart(new Date(next.getTime() + 60 * 60 * 1000))
+    }
+    return next
+  }
+
+  scheduledAt = nextWindowStart(scheduledAt)
+
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
     .insert({
@@ -93,6 +143,7 @@ export async function POST(req: NextRequest) {
       telegram_parent_username: telegram_parent_username || null,
       lang,
       price_tier,
+      scheduled_accept_at: scheduledAt.toISOString(),
     })
     .select('id')
     .single()

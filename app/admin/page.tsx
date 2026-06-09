@@ -84,8 +84,30 @@ type StudentRow = {
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
 type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
-type AppSortCol = 'date' | 'name' | 'subject' | 'status'
-type InvGran = 'months' | 'weeks' | 'sessions'
+type InvoiceRow = {
+  id: string
+  invoice_number: number
+  format: 'individual' | 'pair' | 'group'
+  lessons_count: number
+  students_count: number
+  price_per_lesson: number
+  total_amount: number
+  status: 'sent' | 'paid'
+  pdf_url: string | null
+  tg_sent_at: string | null
+  created_at: string
+  applications: {
+    id: string
+    name: string
+    email: string
+    subject: string
+    ref_token: string
+    lang: string
+    learning_lang: string | null
+    telegram_chat_id: number | null
+    country_code: string | null
+  } | null
+}
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 
@@ -96,7 +118,6 @@ const T = {
     logout: 'Déconnexion',
     viewBookings: 'Réservations',
     viewCrm: 'Élèves',
-    viewApps: 'Candidatures',
     allStatuses: 'Tous',
     allCourses: 'Toutes les matières',
     allTeachers: 'Tous les profs',
@@ -113,10 +134,6 @@ const T = {
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'à' HH'h'mm",
     locale: fr,
-    appStatus: { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé' },
-    appCols: { date: 'Date', name: 'Candidat', subject: 'Matière', grade: 'Niveau', contact: 'Contact', channel: 'Canal', status: 'Statut' },
-    accept: 'Accepter', reject: 'Refuser',
-    emptyApps: 'Aucune candidature.',
     groupByLabel: 'Grouper',
     groupBy: { none: 'Aucun', teacher: 'Par prof', subject: 'Par matière' },
     period: { all: 'Tous', upcoming: 'À venir', past: 'Passés' },
@@ -128,7 +145,6 @@ const T = {
     logout: 'Sign out',
     viewBookings: 'Bookings',
     viewCrm: 'Students',
-    viewApps: 'Applications',
     allStatuses: 'All',
     allCourses: 'All courses',
     allTeachers: 'All teachers',
@@ -145,10 +161,6 @@ const T = {
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
-    appStatus: { pending: 'Pending', accepted: 'Accepted', rejected: 'Rejected' },
-    appCols: { date: 'Date', name: 'Applicant', subject: 'Subject', grade: 'Grade', contact: 'Contact', channel: 'Channel', status: 'Status' },
-    accept: 'Accept', reject: 'Reject',
-    emptyApps: 'No applications.',
     groupByLabel: 'Group',
     groupBy: { none: 'None', teacher: 'By teacher', subject: 'By subject' },
     period: { all: 'All', upcoming: 'Upcoming', past: 'Past' },
@@ -349,243 +361,19 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
   )
 }
 
-function InvoiceBuilderAdmin({ studentName, allBookings, initialMonth, paidIds }: {
-  studentName: string; allBookings: PanelBooking[]; initialMonth: string | null; paidIds: Set<string>
-}) {
-  const [gran, setGran] = useState<InvGran>('months')
-  const [invPaidIds, setInvPaidIds] = useState<Set<string>>(new Set())
-  const [invInvoiceSentIds, setInvInvoiceSentIds] = useState<Set<string>>(new Set())
-
-  const months      = [...new Set(allBookings.map(b => b.date.slice(0, 7)))].sort()
-  const weeks       = [...new Set(allBookings.map(b => crmWeekStart(b.date)))].sort()
-  const allTeachers = [...new Set(allBookings.map(b => b.teacher))].sort()
-  const allCourses  = [...new Set(allBookings.map(b => b.subject))].sort()
-
-  const [selMonths,  setSelMonths]  = useState<Set<string>>(new Set(initialMonth ? [initialMonth] : months))
-  const [selWeeks,   setSelWeeks]   = useState<Set<string>>(new Set(weeks))
-  const [selIds,     setSelIds]     = useState<Set<string>>(new Set(allBookings.map(b => b.id)))
-  const [statusSet,  setStatusSet]  = useState<Set<string>>(new Set(['confirmed', 'pending', 'cancelled']))
-  const [paySet,     setPaySet]     = useState<Set<string>>(new Set(['received', 'not_received']))
-  const [teacherSet, setTeacherSet] = useState<Set<string>>(new Set(allTeachers))
-  const [courseSet,  setCourseSet]  = useState<Set<string>>(new Set(allCourses))
-
-  function toggleM(k: string) { const n = new Set(selMonths); n.has(k) ? n.delete(k) : n.add(k); setSelMonths(n) }
-  function toggleW(k: string) { const n = new Set(selWeeks);  n.has(k) ? n.delete(k) : n.add(k); setSelWeeks(n)  }
-  function toggleS(k: string) { const n = new Set(selIds);    n.has(k) ? n.delete(k) : n.add(k); setSelIds(n)    }
-  function allMon() { setSelMonths(selMonths.size === months.length ? new Set() : new Set(months)) }
-  function allWk()  { setSelWeeks(selWeeks.size   === weeks.length  ? new Set() : new Set(weeks))  }
-  function allSes() { setSelIds(selIds.size === allBookings.length ? new Set() : new Set(allBookings.map(b => b.id))) }
-
-  function changeGran(g: InvGran) {
-    setGran(g)
-    if (g === 'months')   setSelMonths(new Set(months))
-    if (g === 'weeks')    setSelWeeks(new Set(weeks))
-    if (g === 'sessions') setSelIds(new Set(allBookings.map(b => b.id)))
-  }
-
-  const filtered = allBookings.filter(b => {
-    if (gran === 'months'   && !selMonths.has(b.date.slice(0, 7))) return false
-    if (gran === 'weeks'    && !selWeeks.has(crmWeekStart(b.date))) return false
-    if (gran === 'sessions' && !selIds.has(b.id))                   return false
-    if (!statusSet.has(b.status))                                   return false
-    const isPaid = paidIds.has(b.id)
-    if ( isPaid && !paySet.has('received'))     return false
-    if (!isPaid && !paySet.has('not_received')) return false
-    if (!teacherSet.has(b.teacher))            return false
-    if (!courseSet.has(b.subject))             return false
-    return true
-  }).sort((a, b) => a.date.localeCompare(b.date))
-
-  const dates = filtered.map(b => b.date).sort()
-  const period = dates.length === 0 ? '—'
-    : dates[0].slice(0,7) === dates[dates.length-1].slice(0,7)
-      ? crmMlShort(dates[0].slice(0,7))
-      : `${crmMlShort(dates[0].slice(0,7))} – ${crmMlShort(dates[dates.length-1].slice(0,7))}`
-
-  return (
-    <div className="flex gap-5 min-h-[420px]">
-      <div className="w-64 shrink-0 flex flex-col gap-3">
-        <MultiSelectDropdown
-          label="Status"
-          options={[{value:'confirmed',label:'Confirmed'},{value:'pending',label:'Pending'},{value:'cancelled',label:'Cancelled'}]}
-          selected={statusSet} onChange={setStatusSet}
-        />
-        <MultiSelectDropdown
-          label="Payment"
-          options={[{value:'received',label:'Received'},{value:'not_received',label:'Not received'}]}
-          selected={paySet} onChange={setPaySet}
-        />
-        <MultiSelectDropdown
-          label="Teacher"
-          options={allTeachers.map(t => ({ value: t, label: t.split(' ')[0] }))}
-          selected={teacherSet} onChange={setTeacherSet}
-        />
-        <MultiSelectDropdown
-          label="Course"
-          options={allCourses.map(c => ({ value: c, label: c }))}
-          selected={courseSet} onChange={setCourseSet}
-        />
-        <div className="flex-1 flex flex-col min-h-0">
-          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2">Include</p>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-3 text-[11px]">
-            {(['months','weeks','sessions'] as InvGran[]).map(g => (
-              <button key={g} onClick={() => changeGran(g)}
-                className={`flex-1 py-1.5 font-medium border-r last:border-r-0 border-gray-200 capitalize transition-colors ${gran === g ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                {g === 'sessions' ? 'Sessions' : g === 'weeks' ? 'Weeks' : 'Months'}
-              </button>
-            ))}
-          </div>
-          <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto pr-1 min-h-0">
-            {gran === 'months' && (<>
-              <label className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer select-none">
-                <input type="checkbox" checked={selMonths.size === months.length} onChange={allMon} className="accent-blue-500 rounded" /> All months
-              </label>
-              {months.map(mk => (
-                <label key={mk} className="flex items-center gap-2 text-[11px] text-gray-700 cursor-pointer select-none hover:text-gray-900">
-                  <input type="checkbox" checked={selMonths.has(mk)} onChange={() => toggleM(mk)} className="accent-blue-500 rounded" />
-                  {crmMlShort(mk)}
-                </label>
-              ))}
-            </>)}
-            {gran === 'weeks' && (<>
-              <label className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer select-none">
-                <input type="checkbox" checked={selWeeks.size === weeks.length} onChange={allWk} className="accent-blue-500 rounded" /> All weeks
-              </label>
-              {weeks.map(wk => (
-                <label key={wk} className="flex items-center gap-2 text-[11px] text-gray-700 cursor-pointer select-none hover:text-gray-900">
-                  <input type="checkbox" checked={selWeeks.has(wk)} onChange={() => toggleW(wk)} className="accent-blue-500 rounded" />
-                  {crmWeekRange(wk)}
-                </label>
-              ))}
-            </>)}
-            {gran === 'sessions' && (<>
-              <label className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer select-none">
-                <input type="checkbox" checked={selIds.size === allBookings.length} onChange={allSes} className="accent-blue-500 rounded" /> All sessions
-              </label>
-              {allBookings.sort((a,b) => a.date.localeCompare(b.date)).map(b => (
-                <label key={b.id} className="flex items-center gap-2 text-[11px] text-gray-700 cursor-pointer select-none hover:text-gray-900">
-                  <input type="checkbox" checked={selIds.has(b.id)} onChange={() => toggleS(b.id)} className="accent-blue-500 rounded" />
-                  {crmFd(b.date)} · <span className={`font-medium ${subjectColorCrm(b.subject).text}`}>{b.subject}</span>
-                </label>
-              ))}
-            </>)}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-3">
-          <div className="flex items-start justify-between mb-5 pb-4 border-b border-gray-100">
-            <div>
-              <p className="text-lg font-bold text-gray-900">Invoice</p>
-              <p className="text-xs text-gray-400 mt-0.5">Serfory Learning</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-400 mb-0.5">Student</p>
-              <p className="text-sm font-semibold text-gray-900">{studentName}</p>
-              <p className="text-xs text-gray-400 mt-1.5">Period: <span className="font-medium text-gray-700">{period}</span></p>
-            </div>
-          </div>
-          {filtered.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No sessions match the filters</p>
-          ) : (
-            <>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
-                    <th className="text-left pb-2 font-medium w-20">Date</th>
-                    <th className="text-left pb-2 font-medium w-12">Course</th>
-                    <th className="text-left pb-2 font-medium w-28">Teacher</th>
-                    <th className="text-left pb-2 font-medium">Status</th>
-                    <th className="text-center pb-2 font-medium w-16">Invoice</th>
-                    <th className="text-center pb-2 font-medium w-16">Payment</th>
-                    <th className="text-right pb-2 font-medium w-20">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(b => {
-                    const bStatus = crmPanelBookingStatus(b.status, b.date)
-                    return (
-                      <tr key={b.id} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2 text-gray-600 whitespace-nowrap">{crmFd(b.date)}</td>
-                        <td className="py-2">
-                          <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
-                            {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
-                          </span>
-                        </td>
-                        <td className="py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
-                        <td className="py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
-                        <td className="py-2 text-center"><CircleToggle active={invInvoiceSentIds.has(b.id)} onClick={() => { const n = new Set(invInvoiceSentIds); n.has(b.id) ? n.delete(b.id) : n.add(b.id); setInvInvoiceSentIds(n) }} /></td>
-                        <td className="py-2 text-center"><CircleToggle active={invPaidIds.has(b.id)} onClick={() => { const n = new Set(invPaidIds); n.has(b.id) ? n.delete(b.id) : n.add(b.id); setInvPaidIds(n) }} /></td>
-                        <td className="py-2 text-right font-medium text-gray-700">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              {(() => {
-                const total = filtered.reduce((s, b) => s + (b.amount ?? 0), 0)
-                return (
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-400">{filtered.length} session{filtered.length !== 1 ? 's' : ''}</p>
-                    {total > 0 && <p className="text-sm font-bold text-gray-900">Total : €{total}</p>}
-                  </div>
-                )
-              })()}
-            </>
-          )}
-        </div>
-        <button onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors float-right">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-            <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-          </svg>
-          Print invoice
-        </button>
-        <div className="clear-both" />
-      </div>
-    </div>
-  )
-}
-
-function InvoiceModalAdmin({ studentName, allBookings, initialMonth, paidIds, onClose }: {
-  studentName: string; allBookings: PanelBooking[]; initialMonth: string | null; paidIds: Set<string>; onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-      <div className="relative bg-gray-50 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white rounded-t-2xl">
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-blue-500">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-            </svg>
-            <p className="font-semibold text-gray-900 text-sm">Generate invoice — {studentName}</p>
-          </div>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <div className="p-6">
-          <InvoiceBuilderAdmin studentName={studentName} allBookings={allBookings} initialMonth={initialMonth} paidIds={paidIds} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApproach }: {
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName }: {
   bookings: PanelBooking[]
   studentName: string
-  invoiceApproach?: 'A'
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [paidIds, setPaidIds] = useState<Set<string>>(new Set())
   const [invoiceSentIds, setInvoiceSentIds] = useState<Set<string>>(new Set())
-  const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [monthOffset, setMonthOffset] = useState(0)
   const [cancelledOpen, setCancelledOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
+  const [invTeacherFilter, setInvTeacherFilter] = useState('all')
+  const [invCourseFilter, setInvCourseFilter] = useState('all')
+  const [invStatusFilter, setInvStatusFilter] = useState<Set<string>>(new Set(['confirmed', 'pending']))
 
   const nonCancelled = allBookings.filter(b => b.status !== 'cancelled')
   const cancelledBookings = allBookings.filter(b => b.status === 'cancelled').sort((a, b) => a.date.localeCompare(b.date))
@@ -608,7 +396,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
   const totalRevenue = statsSource.reduce((s, b) => s + (b.amount ?? 0), 0)
   const paidRevenue = statsSource.filter(b => paidIds.has(b.id)).reduce((s, b) => s + (b.amount ?? 0), 0)
   const hasAmounts = statsSource.some(b => (b.amount ?? 0) > 0)
-  const avgPerSession = hasAmounts && statsSource.length > 0 ? Math.round(totalRevenue / statsSource.length) : null
+
+  const panelTeachers = [...new Set(allBookings.map(b => b.teacher))].sort()
+  const panelCourses  = [...new Set(allBookings.map(b => b.subject))].sort()
 
   const isDone = (b: PanelBooking) =>
     crmPanelBookingStatus(b.status, b.date) === 'provided' && paidIds.has(b.id) && invoiceSentIds.has(b.id)
@@ -618,7 +408,13 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
   const displayedBookings = (selectedMonth
     ? nonCancelled.filter(b => b.date.startsWith(selectedMonth))
     : nonCancelled
-  ).filter(b => !isDone(b)).sort((a, b) => a.date.localeCompare(b.date))
+  ).filter(b => {
+    if (isDone(b)) return false
+    if (!invStatusFilter.has(b.status)) return false
+    if (invTeacherFilter !== 'all' && b.teacher !== invTeacherFilter) return false
+    if (invCourseFilter !== 'all' && b.subject !== invCourseFilter) return false
+    return true
+  }).sort((a, b) => a.date.localeCompare(b.date))
 
   function mlFull(key: string) {
     const [y, m] = key.split('-')
@@ -650,17 +446,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
             <p className="text-2xl font-bold text-gray-900">{statsSource.length}</p>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
-            <div className="flex items-center justify-between gap-3 mb-0.5">
-              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">Tracked</p>
-              {invoiceApproach === 'A' && (
-                <button onClick={() => setInvoiceOpen(true)} title="Generate invoice"
-                  className="w-5 h-5 flex items-center justify-center rounded text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                  </svg>
-                </button>
-              )}
-            </div>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Tracked</p>
             <p className="text-2xl font-bold text-gray-900">{received}</p>
             <p className="text-[10px] text-gray-400 mt-0.5">{received} paid · {notReceived} pending</p>
           </div>
@@ -669,12 +455,6 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
               <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Revenue</p>
               <p className="text-2xl font-bold text-gray-900">€{totalRevenue}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">€{paidRevenue} received · €{totalRevenue - paidRevenue} pending</p>
-            </div>
-          )}
-          {avgPerSession !== null && (
-            <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
-              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Avg / Session</p>
-              <p className="text-2xl font-bold text-gray-900">€{avgPerSession}</p>
             </div>
           )}
           <div className="flex-1 flex gap-2 min-w-0 items-center">
@@ -702,12 +482,40 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
       </div>
 
       <div className="bg-white border-t border-gray-100 overflow-hidden">
-        {selectedMonth && (
-          <div className="px-5 py-2 border-b border-gray-100 bg-blue-50 flex items-center justify-between">
-            <p className="text-xs font-medium text-blue-700">{mlFull(selectedMonth)}</p>
-            <button onClick={() => setSelectedMonth(null)} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">Show all</button>
-          </div>
-        )}
+        {/* Filter bar */}
+        <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          {selectedMonth && (
+            <>
+              <span className="text-xs font-medium text-blue-700">{mlFull(selectedMonth)}</span>
+              <button onClick={() => setSelectedMonth(null)} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">×</button>
+              <div className="h-4 w-px bg-gray-200" />
+            </>
+          )}
+          {(['confirmed', 'pending'] as const).map(s => {
+            const on = invStatusFilter.has(s)
+            const col = s === 'confirmed' ? 'bg-green-500 text-white border-green-500' : 'bg-amber-500 text-white border-amber-500'
+            return (
+              <button key={s} onClick={() => setInvStatusFilter(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
+                className={`px-2 py-0.5 rounded-full text-[11px] font-medium border capitalize transition-colors ${on ? col : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}>
+                {s}
+              </button>
+            )
+          })}
+          {panelTeachers.length > 1 && (
+            <select value={invTeacherFilter} onChange={e => setInvTeacherFilter(e.target.value)}
+              className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer">
+              <option value="all">All teachers</option>
+              {panelTeachers.map(t => <option key={t} value={t}>{t.split(' ')[0]}</option>)}
+            </select>
+          )}
+          {panelCourses.length > 1 && (
+            <select value={invCourseFilter} onChange={e => setInvCourseFilter(e.target.value)}
+              className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer">
+              <option value="all">All courses</option>
+              {panelCourses.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </div>
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
@@ -809,9 +617,6 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, invoiceApp
         )}
       </div>
 
-      {invoiceApproach === 'A' && invoiceOpen && (
-        <InvoiceModalAdmin studentName={studentName} allBookings={allBookings} initialMonth={selectedMonth} paidIds={paidIds} onClose={() => setInvoiceOpen(false)} />
-      )}
     </div>
   )
 }
@@ -823,14 +628,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState<Application[]>([])
   const [loadingApps, setLoadingApps] = useState(true)
-  const [lang, setLang] = useState<'fr' | 'en'>('fr')
-  const [view, setView] = useState<'bookings' | 'crm' | 'applications'>('bookings')
-  const [appSortCol, setAppSortCol] = useState<AppSortCol>('date')
-  const [appSortDir, setAppSortDir] = useState<'asc' | 'desc'>('desc')
-  const [acceptedOpen, setAcceptedOpen] = useState(false)
-  const [rejectedOpen, setRejectedOpen] = useState(false)
+  const [lang, setLang] = useState<'fr' | 'en'>('en')
+  const [view, setView] = useState<'bookings' | 'crm' | 'invoices'>('bookings')
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  const [loadingInvoices, setLoadingInvoices] = useState(true)
 
-  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set())
+  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed']))
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
@@ -896,31 +699,10 @@ export default function AdminPage() {
     fetch('/api/applications')
       .then(r => r.json())
       .then(d => { setApplications(d.applications || []); setLoadingApps(false) })
+    fetch('/api/invoices')
+      .then(r => r.json())
+      .then(d => { setInvoices(d.invoices || []); setLoadingInvoices(false) })
   }, [])
-
-  function handleAppSort(col: AppSortCol) {
-    if (appSortCol === col) setAppSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setAppSortCol(col); setAppSortDir(col === 'date' ? 'desc' : 'asc') }
-  }
-
-  async function handleAppStatus(id: string, status: string) {
-    await fetch('/api/applications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status }),
-    })
-    setApplications(prev => prev.map(a => a.id === id ? { ...a, status } : a))
-  }
-
-  async function handleUpdateTgUsername(id: string, username: string) {
-    const val = username.replace(/^@/, '').trim() || null
-    await fetch('/api/applications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, telegram_username: val }),
-    })
-    setApplications(prev => prev.map(a => a.id === id ? { ...a, telegram_username: val } : a))
-  }
 
   async function handleUpdateParentContact(appId: string, value: string) {
     const val = value.trim() || null
@@ -1104,17 +886,16 @@ export default function AdminPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">🦤 {t.title}</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{t.bookings(bookings.length)}</span>
             <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm text-sm">
-              {(['bookings', 'crm', 'applications'] as const).map(v => (
+              {(['bookings', 'crm', 'invoices'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
-                  className={`px-4 py-1.5 rounded-lg font-medium transition-all ${view === v ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+                  className={`min-w-[100px] text-center px-4 py-1.5 rounded-lg font-medium transition-all ${view === v ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
                   {v === 'bookings' ? t.viewBookings : v === 'crm' ? t.viewCrm : (
                     <span className="flex items-center gap-1.5">
-                      {t.viewApps}
-                      {applications.filter(a => a.status === 'pending').length > 0 && (
-                        <span className="bg-orange-400 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                          {applications.filter(a => a.status === 'pending').length}
+                      {lang === 'fr' ? 'Factures' : 'Invoices'}
+                      {invoices.filter(i => i.status === 'sent').length > 0 && (
+                        <span className="bg-amber-400 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                          {invoices.filter(i => i.status === 'sent').length}
                         </span>
                       )}
                     </span>
@@ -1333,50 +1114,31 @@ export default function AdminPage() {
                               </tr>
                               {isOpen && (
                                 <tr key={`${b.id}-exp`} className="border-b border-gray-100 bg-gray-50">
-                                  <td colSpan={6} className="px-6 py-4">
-                                    <div className="flex gap-8">
-                                      {/* Contact + Parent stacked + Actions */}
-                                      <div className="flex flex-col gap-4 flex-1 min-w-0 divide-y divide-gray-100">
-                                        {/* Student contact */}
-                                        <div>
-                                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.cols.contact}</p>
-                                          <p className="text-sm text-gray-700">{b.student_email}</p>
-                                          <p className="text-sm text-gray-500 mt-0.5">{b.student_phone}</p>
-                                          <div className="mt-2 flex items-center gap-2">
-                                            {b.contact_pref === 'telegram' ? (
-                                              <>
-                                                <input
-                                                  className="w-28 text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400 bg-white"
-                                                  defaultValue={b.telegram_username ? `@${b.telegram_username}` : ''}
-                                                  placeholder="@username"
-                                                  onClick={e => e.stopPropagation()}
-                                                  onBlur={e => { if (e.target.value !== (b.telegram_username ? `@${b.telegram_username}` : '')) handleUpdateBookingTgUsername(b.id, e.target.value) }}
-                                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                />
-                                                <a href={b.telegram_username ? `https://t.me/${b.telegram_username}` : tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
-                                                  className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap">
-                                                  <TgIcon /> Telegram
-                                                </a>
-                                              </>
-                                            ) : (
-                                              <a href={`mailto:${b.student_email}`}
-                                                className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap">
-                                                <EmailIcon /> Email
-                                              </a>
-                                            )}
-                                          </div>
-                                        </div>
-
-                                      </div>
-
-                                      {/* Actions */}
-                                      {b.status !== 'cancelled' && (
-                                        <div className="flex items-end gap-2">
-                                          <button onClick={e => { e.stopPropagation(); handleStatusChange(b.id, 'cancelled') }}
-                                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 font-medium transition-colors">
-                                            <CrossIcon /> {lang === 'fr' ? 'Annuler' : 'Cancel'}
-                                          </button>
-                                        </div>
+                                  <td colSpan={6} className="px-6 py-3">
+                                    <div className="flex items-center gap-3 text-sm flex-wrap">
+                                      <span className="text-gray-600">{b.student_email}</span>
+                                      <span className="text-gray-200">·</span>
+                                      <span className="text-gray-500">{b.student_phone}</span>
+                                      {b.contact_pref === 'telegram' ? (
+                                        <>
+                                          <input
+                                            className="w-28 text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400 bg-white"
+                                            defaultValue={b.telegram_username ? `@${b.telegram_username}` : ''}
+                                            placeholder="@username"
+                                            onClick={e => e.stopPropagation()}
+                                            onBlur={e => { if (e.target.value !== (b.telegram_username ? `@${b.telegram_username}` : '')) handleUpdateBookingTgUsername(b.id, e.target.value) }}
+                                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                          />
+                                          <a href={b.telegram_username ? `https://t.me/${b.telegram_username}` : tgLink(b.student_phone)} target="_blank" rel="noopener noreferrer"
+                                            className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap">
+                                            <TgIcon /> Telegram
+                                          </a>
+                                        </>
+                                      ) : (
+                                        <a href={`mailto:${b.student_email}`}
+                                          className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap">
+                                          <EmailIcon /> Email
+                                        </a>
                                       )}
                                     </div>
                                   </td>
@@ -1395,163 +1157,112 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* ── APPLICATIONS VIEW ── */}
-        {view === 'applications' && (() => {
-          const sortApps = (list: Application[]) => [...list].sort((a, b) => {
-            let cmp = 0
-            if (appSortCol === 'date') cmp = a.created_at.localeCompare(b.created_at)
-            else if (appSortCol === 'name') cmp = a.name.localeCompare(b.name)
-            else if (appSortCol === 'subject') cmp = a.subject.localeCompare(b.subject)
-            return appSortDir === 'asc' ? cmp : -cmp
-          })
-          const pendingApps  = sortApps(applications.filter(a => a.status === 'pending'))
-          const acceptedApps = sortApps(applications.filter(a => a.status === 'accepted'))
-          const rejectedApps = sortApps(applications.filter(a => a.status === 'rejected'))
-
-          const AppRow = ({ a }: { a: Application }) => {
-            const canAccept = a.status === 'pending'
-            return (
-              <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-3 py-3" />
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                  {format(new Date(a.created_at), "d MMM", { locale: t.locale })}
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-semibold text-gray-900">{a.name}</p>
-                </td>
-                <td className="px-4 py-3 text-gray-700">{a.subject}</td>
-                <td className="px-4 py-3 text-xs text-gray-500">{normalizeGrade(a.grade)}</td>
-                <td className="px-4 py-3">
-                  <p className="text-xs text-gray-400">{a.email}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{a.phone}</p>
-                  {a.contact_pref === 'telegram' && (
-                    <input
-                      id={`tg-app-${a.id}`}
-                      className="mt-1.5 w-32 text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400"
-                      defaultValue={a.telegram_username ? `@${a.telegram_username}` : ''}
-                      placeholder="@student"
-                      onBlur={e => { if (e.target.value !== (a.telegram_username ? `@${a.telegram_username}` : '')) handleUpdateTgUsername(a.id, e.target.value) }}
-                      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                    />
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    {a.contact_pref === 'telegram' ? (
-                      <button onClick={() => {
-                          const input = document.getElementById(`tg-app-${a.id}`) as HTMLInputElement | null
-                          const username = (input?.value ?? '').replace(/^@/, '').trim() || (a.telegram_username ?? '')
-                          const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforybot'
-                          const msgs: Record<string, string> = {
-                            en: `Hi ${a.name}! We received your application for ${a.subject} at Serfory.\n\nTap the link below to connect with our assistant and receive your booking link:\nt.me/${BOT}?start=s_${a.id}`,
-                            et: `Tere ${a.name}! Saime teie ${a.subject} avalduse kätte Serfory's.\n\nVajutage lingil meie assistendiga ühenduse loomiseks:\nt.me/${BOT}?start=s_${a.id}`,
-                            ru: `Привет, ${a.name}! Мы получили вашу заявку на ${a.subject} в Serfory.\n\nНажмите на ссылку для связи с ботом:\nt.me/${BOT}?start=s_${a.id}`,
-                          }
-                          const msgLang = (a.learning_lang && msgs[a.learning_lang]) ? a.learning_lang : (msgs[a.lang] ? a.lang : 'en')
-                          const url = username
-                            ? `https://t.me/${username}?text=${encodeURIComponent(msgs[msgLang])}`
-                            : `https://t.me/+${a.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msgs[msgLang])}`
-                          window.open(url, '_blank', 'noopener,noreferrer')
-                        }}
-                        className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium w-fit">
-                        <TgIcon /> Telegram
-                      </button>
-                    ) : (
-                      <a href={`mailto:${a.email}`}
-                        className="flex items-center gap-1.5 text-xs text-white bg-violet-500 hover:bg-violet-600 px-2.5 py-1 rounded-full font-medium w-fit">
-                        <EmailIcon /> Email
-                      </a>
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  {a.status === 'pending' ? (
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => handleAppStatus(a.id, 'accepted')}
-                        disabled={!canAccept}
-                        title={t.accept}
-                        className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-green-300 text-green-600 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M20 6 9 17l-5-5"/></svg>
-                      </button>
-                      <button onClick={() => handleAppStatus(a.id, 'rejected')}
-                        title={t.reject}
-                        className="flex items-center justify-center w-7 h-7 rounded-full border-2 border-red-200 text-red-500 bg-red-50 hover:bg-red-100 transition-colors shrink-0">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      a.status === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                    }`}>
-                      {t.appStatus[a.status as keyof typeof t.appStatus] ?? a.status}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            )
-          }
-
-          const AppTable = ({ rows }: { rows: Application[] }) => (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                  <th className="w-6 px-3 py-3" />
-                  <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('date')}>{t.appCols.date}<SortIndicator active={appSortCol === 'date'} dir={appSortDir} /></th>
-                  <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('name')}>{t.appCols.name}<SortIndicator active={appSortCol === 'name'} dir={appSortDir} /></th>
-                  <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap" onClick={() => handleAppSort('subject')}>{t.appCols.subject}<SortIndicator active={appSortCol === 'subject'} dir={appSortDir} /></th>
-                  <th className="text-left px-4 py-3 font-medium">{t.appCols.grade}</th>
-                  <th className="text-left px-4 py-3 font-medium">{t.appCols.contact}</th>
-                  <th className="text-left px-4 py-3 font-medium">{t.appCols.channel}</th>
-                  <th className="px-3 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(a => <AppRow key={a.id} a={a} />)}
-              </tbody>
-            </table>
-          )
-
-          return (
-            <div className="space-y-4">
-              {/* Pending — always visible */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                {loadingApps ? (
-                  <p className="p-6 text-sm text-gray-400">{t.loading}</p>
-                ) : pendingApps.length === 0 ? (
-                  <p className="p-6 text-sm text-gray-400">{t.emptyApps}</p>
-                ) : (
-                  <AppTable rows={pendingApps} />
-                )}
+        {/* ── INVOICES VIEW ── */}
+        {view === 'invoices' && (
+          <div className="space-y-2">
+            {loadingInvoices ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-400">
+                {t.loading}
               </div>
-
-              {/* Accepted — collapsible */}
-              {acceptedApps.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <button
-                    onClick={() => setAcceptedOpen(v => !v)}
-                    className="w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-green-700 hover:bg-green-50 transition-colors select-none">
-                    <span className={`text-xs transition-transform ${acceptedOpen ? 'rotate-90' : ''}`}>▶</span>
-                    {acceptedApps.length} {lang === 'fr' ? 'accepté' : 'accepted'}{acceptedApps.length > 1 ? 's' : ''}
-                  </button>
-                  {acceptedOpen && <AppTable rows={acceptedApps} />}
-                </div>
-              )}
-
-              {/* Rejected — collapsible */}
-              {rejectedApps.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <button
-                    onClick={() => setRejectedOpen(v => !v)}
-                    className="w-full flex items-center gap-2 px-5 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors select-none">
-                    <span className={`text-xs transition-transform ${rejectedOpen ? 'rotate-90' : ''}`}>▶</span>
-                    {rejectedApps.length} {lang === 'fr' ? 'refusé' : 'rejected'}{rejectedApps.length > 1 ? 's' : ''}
-                  </button>
-                  {rejectedOpen && <AppTable rows={rejectedApps} />}
-                </div>
-              )}
-            </div>
-          )
-        })()}
+            ) : invoices.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-400">
+                {lang === 'fr' ? 'Aucune facture.' : 'No invoices yet.'}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Date' : 'Date'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'N°' : 'No.'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Élève' : 'Student'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Matière' : 'Subject'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Format' : 'Format'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Pack' : 'Pack'}</th>
+                      <th className="text-right px-4 py-3 font-medium">{lang === 'fr' ? 'Montant' : 'Amount'}</th>
+                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Statut' : 'Status'}</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map(inv => {
+                      const app = inv.applications
+                      const isPaid = inv.status === 'paid'
+                      return (
+                        <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                            {new Date(inv.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-500 font-mono">
+                            #{String(inv.invoice_number).padStart(3, '0')}
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
+                            <p className="text-xs text-gray-400">{app?.email ?? ''}</p>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">{app?.subject ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              inv.format === 'individual' ? 'bg-blue-50 text-blue-700' :
+                              inv.format === 'pair' ? 'bg-purple-50 text-purple-700' :
+                              'bg-green-50 text-green-700'
+                            }`}>
+                              {inv.format === 'individual' ? (lang === 'fr' ? 'Individuel' : 'Individual') :
+                               inv.format === 'pair' ? (lang === 'fr' ? 'Duo' : 'Pair') :
+                               (lang === 'fr' ? 'Groupe' : 'Group')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-600">
+                            {inv.lessons_count} {lang === 'fr' ? 'cours' : 'lessons'}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                            {inv.total_amount}€
+                          </td>
+                          <td className="px-4 py-3">
+                            {isPaid ? (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
+                                {lang === 'fr' ? 'Payé' : 'Paid'}
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                                {lang === 'fr' ? 'En attente' : 'Pending'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {inv.pdf_url && (
+                                <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-blue-500 hover:text-blue-700 font-medium">
+                                  PDF
+                                </a>
+                              )}
+                              {!isPaid && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(lang === 'fr' ? 'Confirmer la réception du paiement ?' : 'Confirm payment received?')) return
+                                    const res = await fetch(`/api/invoices/${inv.id}`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ status: 'paid' }),
+                                    })
+                                    if (res.ok) setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'paid' } : i))
+                                  }}
+                                  className="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
+                                  {lang === 'fr' ? 'Paiement reçu' : 'Mark paid'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── CRM VIEW — D2×A ── */}
         {view === 'crm' && (
@@ -1768,7 +1479,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin bookings={studentBookings} studentName={s.name} invoiceApproach="A" />
+                <StudentStatsPanelAdmin bookings={studentBookings} studentName={s.name} />
               </div>
             </div>
           )
