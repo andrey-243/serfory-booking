@@ -70,14 +70,15 @@ type StudentRow = {
   email: string
   phone: string
   prefs: string[]
+  is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
   parent_email: string | null
-  country_code: string | null
-  appId: string | null
+  parent_pref: string | null
   total: number
   combos: Combo[]
   tgSynced: boolean
+  parentTgSynced: boolean
   gcalResponse: string | null
   learningLang: string | null
 }
@@ -85,6 +86,7 @@ type StudentRow = {
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
 type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
 type AppSortCol = 'date' | 'name' | 'subject' | 'status'
+type FilterMinors = 'all' | 'minors' | 'non_minors' | 'to_contact' | 'contacted' | 'answered'
 type InvGran = 'months' | 'weeks' | 'sessions'
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
@@ -100,23 +102,31 @@ const T = {
     allStatuses: 'Tous',
     allCourses: 'Toutes les matières',
     allTeachers: 'Tous les profs',
+    allMinors: 'Tous',
+    minorsOnly: 'Mineurs',
+    nonMinors: 'Non mineurs',
+    parentNotReached: 'Parent non contacté',
     loading: 'Chargement…',
     empty: 'Aucune réservation.',
     emptyCrm: 'Aucun élève.',
     status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé' },
     cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Élève', contact: 'Contact', status: 'Statut' },
     crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
+    minor: 'Mineur',
+    responsible: 'Responsable',
     parent: 'Parent',
     toContact: 'Marquer contacté',
     contacted: 'Contacté',
     answered: 'A répondu',
+    parentStatusFilter: { to_contact: 'À contacter', contacted: 'Contacté', answered: 'A répondu' },
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'à' HH'h'mm",
     locale: fr,
     appStatus: { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé' },
     appCols: { date: 'Date', name: 'Candidat', subject: 'Matière', grade: 'Niveau', contact: 'Contact', channel: 'Canal', status: 'Statut' },
-    accept: 'Accepter', reject: 'Refuser',
+    accept: 'Accepter', reject: 'Refuser', parentOk: 'Parent OK',
     emptyApps: 'Aucune candidature.',
+    hasParent: { all: 'Tous', yes: 'Avec parent', no: 'Sans parent' },
     groupByLabel: 'Grouper',
     groupBy: { none: 'Aucun', teacher: 'Par prof', subject: 'Par matière' },
     period: { all: 'Tous', upcoming: 'À venir', past: 'Passés' },
@@ -132,23 +142,31 @@ const T = {
     allStatuses: 'All',
     allCourses: 'All courses',
     allTeachers: 'All teachers',
+    allMinors: 'All',
+    minorsOnly: 'Minors',
+    nonMinors: 'Non-minors',
+    parentNotReached: 'Parent not reached',
     loading: 'Loading…',
     empty: 'No bookings.',
     emptyCrm: 'No students.',
     status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled' },
     cols: { date: 'Date / Time', teacher: 'Teacher', course: 'Course', student: 'Student', contact: 'Contact', status: 'Status' },
     crmCols: { student: 'Student', contact: 'Contact', courses: 'Courses', teachers: 'Teachers' },
+    minor: 'Minor',
+    responsible: 'Responsible',
     parent: 'Parent',
     toContact: 'Mark contacted',
     contacted: 'Contacted',
     answered: 'Answered',
+    parentStatusFilter: { to_contact: 'To contact', contacted: 'Contacted', answered: 'Answered' },
     total: (n: number) => `${n} total`,
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
     appStatus: { pending: 'Pending', accepted: 'Accepted', rejected: 'Rejected' },
     appCols: { date: 'Date', name: 'Applicant', subject: 'Subject', grade: 'Grade', contact: 'Contact', channel: 'Channel', status: 'Status' },
-    accept: 'Accept', reject: 'Reject',
+    accept: 'Accept', reject: 'Reject', parentOk: 'Parent OK',
     emptyApps: 'No applications.',
+    hasParent: { all: 'All', yes: 'With parent', no: 'No parent' },
     groupByLabel: 'Group',
     groupBy: { none: 'None', teacher: 'By teacher', subject: 'By subject' },
     period: { all: 'All', upcoming: 'Upcoming', past: 'Past' },
@@ -235,13 +253,6 @@ const CRM_AVATAR_COLORS = [
 function avatarColorCrm(name: string): string {
   let h = 0; for (const c of name) h = (h + c.charCodeAt(0)) % CRM_AVATAR_COLORS.length
   return CRM_AVATAR_COLORS[h]
-}
-function nameInitials(name: string): string {
-  return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
-}
-const TG_CIS_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
-function isTgEligible(country_code: string | null, learning_lang: string | null): boolean {
-  return learning_lang === 'ru' || (!!country_code && TG_CIS_COUNTRIES.has(country_code.toUpperCase()))
 }
 function subjectColorCrm(subject: string) {
   return SUBJECT_COLORS_CRM[subject] ?? { bg: 'bg-gray-100', text: 'text-gray-700' }
@@ -833,11 +844,13 @@ export default function AdminPage() {
   const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set())
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
+  const [filterHasParent, setFilterHasParent] = useState<'all' | 'yes' | 'no'>('all')
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
   const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming')
 
   const [crmFilterCourse, setCrmFilterCourse] = useState<string>('all')
   const [crmFilterTeacher, setCrmFilterTeacher] = useState<string>('all')
+  const [crmFilterMinors, setCrmFilterMinors] = useState<FilterMinors>('all')
   const [crmSortCol, setCrmSortCol] = useState<'name' | 'total'>('total')
   const [crmSortDir, setCrmSortDir] = useState<'asc' | 'desc'>('desc')
   const [sortCol, setSortCol] = useState<SortCol>('date')
@@ -912,6 +925,15 @@ export default function AdminPage() {
     setApplications(prev => prev.map(a => a.id === id ? { ...a, status } : a))
   }
 
+  async function handleParentOk(id: string) {
+    await fetch('/api/applications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, parent_approved: true }),
+    })
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, parent_approved: true } : a))
+  }
+
   async function handleUpdateTgUsername(id: string, username: string) {
     const val = username.replace(/^@/, '').trim() || null
     await fetch('/api/applications', {
@@ -920,41 +942,6 @@ export default function AdminPage() {
       body: JSON.stringify({ id, telegram_username: val }),
     })
     setApplications(prev => prev.map(a => a.id === id ? { ...a, telegram_username: val } : a))
-  }
-
-  async function handleUpdateParentContact(appId: string, value: string) {
-    const val = value.trim() || null
-    await fetch('/api/applications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: appId, parent_contact: val }),
-    })
-    setApplications(prev => prev.map(a => a.id === appId ? { ...a, parent_contact: val } : a))
-  }
-
-  async function handleUpdateParentEmail(appId: string, value: string) {
-    const val = value.trim() || null
-    await fetch('/api/applications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: appId, parent_email: val }),
-    })
-    setApplications(prev => prev.map(a => a.id === appId ? { ...a, parent_email: val } : a))
-  }
-
-  async function handleUpdateParentName(appId: string, value: string) {
-    const val = value.trim() || null
-    await fetch('/api/applications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: appId, parent_name: val }),
-    })
-    setApplications(prev => prev.map(a => a.id === appId ? { ...a, parent_name: val } : a))
-  }
-
-  const [openParents, setOpenParents] = useState<Set<string>>(new Set())
-  function toggleParent(email: string) {
-    setOpenParents(prev => { const s = new Set(prev); s.has(email) ? s.delete(email) : s.add(email); return s })
   }
 
   async function handleUpdateBookingTgUsername(id: string, username: string) {
@@ -975,6 +962,8 @@ export default function AdminPage() {
     if (filterStatuses.size > 0 && !filterStatuses.has(b.status)) return false
     if (filterCourses.size > 0 && !filterCourses.has(b.subject)) return false
     if (filterTeachers.size > 0 && !filterTeachers.has(b.teachers?.name ?? '')) return false
+    if (filterHasParent === 'yes' && !b.is_minor) return false
+    if (filterHasParent === 'no' && b.is_minor) return false
     if (timeFilter === 'upcoming' && new Date(b.slot_start) < now) return false
     if (timeFilter === 'past' && new Date(b.slot_start) >= now) return false
     return true
@@ -1006,22 +995,14 @@ export default function AdminPage() {
     applications.forEach(a => { if (a.learning_lang && !langMap[a.email]) langMap[a.email] = a.learning_lang })
 
     // Build TG sync map from applications (email → chat_id presence)
-    const syncMap: Record<string, boolean> = {}
-    applications.forEach(a => { if (a.telegram_chat_id) syncMap[a.email] = true })
-
-    // Build app id map (email → most recent accepted app id)
-    const appIdMap: Record<string, string> = {}
-    applications.forEach(a => { if (!appIdMap[a.email]) appIdMap[a.email] = a.id })
-
-    // Build parent contact map from applications (email → parent_name, parent_contact, parent_email)
-    const parentMap: Record<string, { name: string | null; contact: string | null; email: string | null }> = {}
+    const syncMap: Record<string, { studentSynced: boolean; parentSynced: boolean }> = {}
     applications.forEach(a => {
-      if (!parentMap[a.email]) parentMap[a.email] = { name: a.parent_name, contact: a.parent_contact, email: a.parent_email }
+      const prev = syncMap[a.email]
+      syncMap[a.email] = {
+        studentSynced: prev?.studentSynced || !!a.telegram_chat_id,
+        parentSynced: prev?.parentSynced || !!a.telegram_parent_chat_id,
+      }
     })
-
-    // Build country code map from applications (email → country_code)
-    const countryMap: Record<string, string | null> = {}
-    applications.forEach(a => { if (!countryMap[a.email]) countryMap[a.email] = a.country_code ?? null })
 
     // Track most recent active booking per student for GCal response
     const latestBooking = new Map<string, Booking>()
@@ -1040,14 +1021,15 @@ export default function AdminPage() {
           email: b.student_email,
           phone: b.student_phone,
           prefs: [],
-          parent_name: parentMap[b.student_email]?.name ?? null,
-          parent_contact: parentMap[b.student_email]?.contact ?? b.parent_contact,
-          parent_email: parentMap[b.student_email]?.email ?? b.parent_email,
-          country_code: countryMap[b.student_email] ?? null,
-          appId: appIdMap[b.student_email] ?? null,
+          is_minor: b.is_minor,
+          parent_name: b.parent_name,
+          parent_contact: b.parent_contact,
+          parent_email: b.parent_email,
+          parent_pref: null,
           total: 0,
           combos: [],
-          tgSynced: syncMap[b.student_email] ?? false,
+          tgSynced: syncMap[b.student_email]?.studentSynced ?? false,
+          parentTgSynced: syncMap[b.student_email]?.parentSynced ?? false,
           gcalResponse: latestBooking.get(b.student_email)?.student_response ?? null,
           learningLang: langMap[b.student_email] ?? null,
         })
@@ -1055,6 +1037,7 @@ export default function AdminPage() {
       const s = map.get(key)!
       s.total++
       b.contact_pref?.split(',').forEach(p => { if (!s.prefs.includes(p)) s.prefs.push(p) })
+      if (!s.parent_pref && b.parent_pref) s.parent_pref = b.parent_pref
       const tName = b.teachers?.name ?? '—'
       const comboKey = `${b.subject}||${tName}`
       const existing = s.combos.find(c => `${c.subject}||${c.teacher}` === comboKey)
@@ -1070,14 +1053,15 @@ export default function AdminPage() {
         email: a.email,
         phone: a.phone,
         prefs: a.contact_pref ? [a.contact_pref] : [],
+        is_minor: a.is_minor,
         parent_name: a.parent_name,
         parent_contact: a.parent_contact,
         parent_email: a.parent_email,
-        country_code: a.country_code ?? null,
-        appId: a.id,
+        parent_pref: a.parent_pref,
         total: 0,
         combos: [],
-        tgSynced: syncMap[a.email] ?? !!a.telegram_chat_id,
+        tgSynced: syncMap[a.email]?.studentSynced ?? !!a.telegram_chat_id,
+        parentTgSynced: syncMap[a.email]?.parentSynced ?? !!a.telegram_parent_chat_id,
         gcalResponse: null,
         learningLang: a.learning_lang ?? null,
       })
@@ -1088,13 +1072,17 @@ export default function AdminPage() {
 
   const visibleStudents = useMemo(() => {
     let result = students
+    if (crmFilterMinors === 'minors') result = result.filter(s => s.is_minor)
+    else if (crmFilterMinors === 'non_minors') result = result.filter(s => !s.is_minor)
+    else if (['to_contact', 'contacted', 'answered'].includes(crmFilterMinors))
+      result = result.filter(s => s.is_minor && (parentStatus[s.email] ?? 'to_contact') === crmFilterMinors)
     if (crmFilterCourse !== 'all') result = result.filter(s => s.combos.some(c => c.subject === crmFilterCourse))
     if (crmFilterTeacher !== 'all') result = result.filter(s => s.combos.some(c => c.teacher === crmFilterTeacher))
     return [...result].sort((a, b) => {
       const cmp = crmSortCol === 'name' ? a.name.localeCompare(b.name) : a.total - b.total
       return crmSortDir === 'asc' ? cmp : -cmp
     })
-  }, [students, crmFilterCourse, crmFilterTeacher, crmSortCol, crmSortDir])
+  }, [students, crmFilterMinors, crmFilterCourse, crmFilterTeacher, crmSortCol, crmSortDir, parentStatus])
 
   return (
     <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
@@ -1208,6 +1196,18 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* Row 3: Parent */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex gap-1.5 items-center">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase">{t.parent}</span>
+                  {(['all', 'yes', 'no'] as const).map(v => (
+                    <button key={v} onClick={() => setFilterHasParent(v)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterHasParent === v ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'}`}>
+                      {t.hasParent[v]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1262,36 +1262,40 @@ export default function AdminPage() {
                         {group.rows.map(b => {
                           const isOpen = expandedBooking === b.id
                           const subjectColor = SUBJECT_COLORS_CRM[b.subject] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+                          const pp = b.parent_pref?.split(',') ?? []
+                          const parentTgActive = pp.length > 0 ? pp.includes('telegram') : true
+                          const parentEmActive = pp.includes('email')
                           const clickHandler = () => setExpandedBooking(isOpen ? null : b.id)
                           const cancelledCls = b.status === 'cancelled' ? 'opacity-50' : ''
                           const hoverCls = isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'
                           return (
                             <>
                               <tr key={b.id}
-                                className={`border-b border-gray-100 transition-colors cursor-pointer select-none ${cancelledCls} ${hoverCls}`}
+                                className={`transition-colors cursor-pointer select-none ${cancelledCls} ${hoverCls} ${!b.is_minor ? 'border-b border-gray-100' : ''}`}
                                 onClick={clickHandler}
                               >
-                                <td className="px-4 py-3 text-gray-700 whitespace-nowrap align-middle">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 text-gray-700 whitespace-nowrap align-middle">
                                   {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
                                 </td>
-                                <td className="px-4 py-3 text-gray-700 align-middle">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 text-gray-700 align-middle">
                                   <div className="flex items-center gap-2">
                                     {b.teachers?.name && <TeacherAvatar name={b.teachers.name} />}
                                     <span>{b.teachers?.name?.split(' ')[0] ?? '—'}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 align-middle">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${subjectColor.bg} ${subjectColor.text}`}>{b.subject}</span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3" style={b.is_minor ? { borderBottom: '1px solid #f3f4f6' } : {}}>
                                   <button
                                     className="font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors text-left"
                                     onClick={e => { e.stopPropagation(); setStatsModal(b.student_email) }}
                                   >
                                     {b.student_name}
                                   </button>
+                                  {b.is_minor && <span className="ml-2 text-[10px] text-orange-500 font-medium bg-orange-50 px-1.5 py-0.5 rounded-full">{t.minor}</span>}
                                 </td>
-                                <td className="px-4 py-3 align-middle">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-4 py-3 align-middle">
                                   <div className="flex flex-col gap-1.5">
                                     {b.status === 'pending' && (
                                       <span className="text-[11px] font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full w-fit">
@@ -1327,10 +1331,39 @@ export default function AdminPage() {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-gray-300 align-middle">
+                                <td rowSpan={b.is_minor ? 2 : 1} className="px-3 py-3 text-gray-300 align-middle">
                                   <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                 </td>
                               </tr>
+                              {b.is_minor && (
+                                <tr key={`${b.id}-parent`}
+                                  className={`border-b border-gray-100 transition-colors cursor-pointer select-none ${cancelledCls} ${hoverCls}`}
+                                  onClick={clickHandler}
+                                >
+                                  <td className="px-4 py-2">
+                                    {b.parent_name ? (
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.parent}</span>
+                                        <span className="text-sm text-gray-600">{b.parent_name}</span>
+                                        {b.parent_contact && (
+                                          <a href={tgLink(b.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${parentTgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
+                                            <TgIcon /> Telegram
+                                          </a>
+                                        )}
+                                        {b.parent_email && (
+                                          <a href={`mailto:${b.parent_email}`}
+                                            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${parentEmActive ? 'text-white bg-violet-500 hover:bg-violet-600' : 'text-violet-600 bg-violet-50 hover:bg-violet-100'}`}>
+                                            <EmailIcon /> Email
+                                          </a>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.parent} —</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
                               {isOpen && (
                                 <tr key={`${b.id}-exp`} className="border-b border-gray-100 bg-gray-50">
                                   <td colSpan={6} className="px-6 py-4">
@@ -1367,6 +1400,34 @@ export default function AdminPage() {
                                           </div>
                                         </div>
 
+                                        {/* Parent contact */}
+                                        {b.is_minor && (
+                                          <div>
+                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.parent}</p>
+                                            {b.parent_name
+                                              ? <>
+                                                  <p className="text-sm font-medium text-gray-700">{b.parent_name}</p>
+                                                  <p className="text-sm text-gray-500 mt-0.5">{b.parent_contact ?? '—'}</p>
+                                                  {b.parent_email && <p className="text-xs text-gray-400 mt-0.5">{b.parent_email}</p>}
+                                                  <div className="mt-2 flex gap-2">
+                                                    {b.parent_contact && (
+                                                      <a href={tgLink(b.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                                        className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${parentTgActive ? 'text-white bg-sky-500 hover:bg-sky-600' : 'text-sky-600 bg-sky-50 hover:bg-sky-100'}`}>
+                                                        <TgIcon /> Telegram
+                                                      </a>
+                                                    )}
+                                                    {b.parent_email && (
+                                                      <a href={`mailto:${b.parent_email}`}
+                                                        className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${parentEmActive ? 'text-white bg-violet-500 hover:bg-violet-600' : 'text-violet-600 bg-violet-50 hover:bg-violet-100'}`}>
+                                                        <EmailIcon /> Email
+                                                      </a>
+                                                    )}
+                                                  </div>
+                                                </>
+                                              : <p className="text-sm text-gray-400">—</p>
+                                            }
+                                          </div>
+                                        )}
                                       </div>
 
                                       {/* Actions */}
@@ -1409,15 +1470,23 @@ export default function AdminPage() {
           const rejectedApps = sortApps(applications.filter(a => a.status === 'rejected'))
 
           const AppRow = ({ a }: { a: Application }) => {
-            const canAccept = a.status === 'pending'
+            const needsParentOk = a.is_minor && !a.parent_approved
+            const canAccept = !needsParentOk && a.status === 'pending'
             return (
               <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-3 py-3" />
+                <td className="px-3 py-3">
+                  {a.is_minor && (
+                    <span title="Minor" className={`inline-block w-2.5 h-2.5 rounded-full ${a.parent_approved ? 'bg-green-400' : 'bg-orange-400'}`} />
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
                   {format(new Date(a.created_at), "d MMM", { locale: t.locale })}
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-semibold text-gray-900">{a.name}</p>
+                  {a.is_minor && a.parent_name && (
+                    <p className="text-xs text-gray-400 mt-0.5"><ParentIcon />{a.parent_name}</p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-700">{a.subject}</td>
                 <td className="px-4 py-3 text-xs text-gray-500">{normalizeGrade(a.grade)}</td>
@@ -1432,6 +1501,14 @@ export default function AdminPage() {
                       placeholder="@student"
                       onBlur={e => { if (e.target.value !== (a.telegram_username ? `@${a.telegram_username}` : '')) handleUpdateTgUsername(a.id, e.target.value) }}
                       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    />
+                  )}
+                  {a.is_minor && a.parent_pref === 'telegram' && (
+                    <input
+                      id={`tg-app-parent-${a.id}`}
+                      className="mt-1.5 w-32 text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400"
+                      defaultValue={a.telegram_parent_username ? `@${a.telegram_parent_username}` : ''}
+                      placeholder="@parent"
                     />
                   )}
                 </td>
@@ -1454,7 +1531,7 @@ export default function AdminPage() {
                           window.open(url, '_blank', 'noopener,noreferrer')
                         }}
                         className="flex items-center gap-1.5 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-1 rounded-full font-medium w-fit">
-                        <TgIcon /> Telegram
+                        <TgIcon /> {a.is_minor && a.parent_pref === 'telegram' ? 'Student' : 'Telegram'}
                       </button>
                     ) : (
                       <a href={`mailto:${a.email}`}
@@ -1462,11 +1539,37 @@ export default function AdminPage() {
                         <EmailIcon /> Email
                       </a>
                     )}
+                    {a.is_minor && a.parent_pref === 'telegram' && (
+                      <button onClick={() => {
+                          const input = document.getElementById(`tg-app-parent-${a.id}`) as HTMLInputElement | null
+                          const username = (input?.value ?? '').replace(/^@/, '').trim() || (a.telegram_parent_username ?? '')
+                          const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforybot'
+                          const msgs: Record<string, string> = {
+                            en: `Hi! Your child ${a.name} applied for ${a.subject} at Serfory.\n\nTap the link below to connect with our assistant and stay updated:\nt.me/${BOT}?start=p_${a.id}`,
+                            et: `Tere! Teie laps ${a.name} on taotlenud ${a.subject} Serfory's.\n\nVajutage lingil meie assistendiga ühenduse loomiseks:\nt.me/${BOT}?start=p_${a.id}`,
+                            ru: `Здравствуйте! Ваш ребёнок ${a.name} подал заявку на ${a.subject} в Serfory.\n\nНажмите на ссылку для связи с ботом:\nt.me/${BOT}?start=p_${a.id}`,
+                          }
+                          const msgLang = (a.learning_lang && msgs[a.learning_lang]) ? a.learning_lang : (msgs[a.lang] ? a.lang : 'en')
+                          const url = username
+                            ? `https://t.me/${username}?text=${encodeURIComponent(msgs[msgLang])}`
+                            : (a.parent_contact ? `https://t.me/+${a.parent_contact.replace(/\D/g, '')}?text=${encodeURIComponent(msgs[msgLang])}` : '#')
+                          if (url !== '#') window.open(url, '_blank', 'noopener,noreferrer')
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-white bg-indigo-500 hover:bg-indigo-600 px-2.5 py-1 rounded-full font-medium w-fit">
+                        <TgIcon /> Parent
+                      </button>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-3">
                   {a.status === 'pending' ? (
                     <div className="flex items-center gap-1.5">
+                      {needsParentOk && (
+                        <button onClick={() => handleParentOk(a.id)}
+                          className="text-[11px] px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 bg-orange-50 hover:bg-orange-100 font-medium whitespace-nowrap transition-colors">
+                          {t.parentOk}
+                        </button>
+                      )}
                       <button onClick={() => handleAppStatus(a.id, 'accepted')}
                         disabled={!canAccept}
                         title={t.accept}
@@ -1577,6 +1680,23 @@ export default function AdminPage() {
               )}
               <div className="h-5 w-px bg-gray-200" />
               <select
+                value={crmFilterMinors}
+                onChange={e => setCrmFilterMinors(e.target.value as FilterMinors)}
+                className={`text-xs border rounded-full px-3 py-1 bg-white focus:outline-none cursor-pointer transition-colors ${
+                  crmFilterMinors !== 'all'
+                    ? 'text-orange-500 border-orange-400 font-medium'
+                    : 'text-gray-500 border-gray-200 hover:border-orange-300'
+                }`}
+              >
+                <option value="all">{t.allMinors}</option>
+                <option value="minors">{t.minorsOnly}</option>
+                <option value="non_minors">{t.nonMinors}</option>
+                <option value="to_contact">{t.parentStatusFilter.to_contact}</option>
+                <option value="contacted">{t.parentStatusFilter.contacted}</option>
+                <option value="answered">{t.parentStatusFilter.answered}</option>
+              </select>
+              <div className="h-5 w-px bg-gray-200" />
+              <select
                 value={`${crmSortCol}:${crmSortDir}`}
                 onChange={e => {
                   const [col, dir] = e.target.value.split(':')
@@ -1598,21 +1718,28 @@ export default function AdminPage() {
               <p className="text-sm text-gray-400">{t.emptyCrm}</p>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {visibleStudents.map(s => {
-                    const parentOpen = openParents.has(s.email)
-                    const tgOk = isTgEligible(s.country_code, s.learningLang)
+                    const pStatus = s.is_minor ? (parentStatus[s.email] ?? 'to_contact') : 'to_contact'
+                    const parentOpen = s.is_minor && !!expandedParent[s.email]
+                    const borderColor = s.is_minor
+                      ? pStatus === 'answered' ? 'border-green-300' : pStatus === 'contacted' ? 'border-amber-300' : 'border-orange-200'
+                      : 'border-gray-200'
+                    const ringColor = s.is_minor
+                      ? pStatus === 'answered' ? 'ring-green-400' : pStatus === 'contacted' ? 'ring-amber-400' : 'ring-orange-400'
+                      : ''
+                    const parentIconCls = pStatus === 'answered' ? 'bg-green-100 text-green-600' : pStatus === 'contacted' ? 'bg-amber-100 text-amber-600' : 'bg-orange-100 text-orange-500'
 
                     return (
                       <div key={s.email} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                        <div className="flex">
-                          {/* Student section */}
-                          <div className={`p-5 ${parentOpen ? 'w-[70%]' : 'flex-1'} border-r border-gray-100`}>
+                        <div className={`flex ${s.is_minor ? 'divide-x divide-gray-100' : ''}`}>
+                          {/* Student section — 70% for minors, full width otherwise */}
+                          <div className={`p-5 ${s.is_minor ? 'w-[70%]' : 'w-full'}`}>
                             <div className="flex items-start gap-3 mb-3">
                               <button type="button" className="relative shrink-0 cursor-pointer focus:outline-none"
                                 onClick={e => { e.stopPropagation(); setStatsModal(s.email) }}>
-                                <span className={`inline-flex items-center justify-center w-11 h-11 rounded-full text-sm font-bold ${avatarColorCrm(s.name)}`}>
-                                  {nameInitials(s.name)}
+                                <span className={`inline-flex items-center justify-center w-11 h-11 rounded-full text-xl ${avatarColorCrm(s.name)}`}>
+                                  {s.is_minor ? '👶' : '🎓'}
                                 </span>
                               </button>
                               <div className="min-w-0">
@@ -1639,20 +1766,16 @@ export default function AdminPage() {
                               ))}
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {tgOk && (
-                                <>
-                                  <a href={tgLink(s.phone)} target="_blank" rel="noopener noreferrer"
-                                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${s.prefs.includes('telegram') ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
-                                    <TgIcon /> Telegram
-                                  </a>
-                                  {s.tgSynced
-                                    ? <span title="Bot connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100 text-green-600 shrink-0">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                                      </span>
-                                    : <span title="Bot not connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-dashed border-gray-300 text-gray-400 text-[9px] font-bold shrink-0">?</span>
-                                  }
-                                </>
-                              )}
+                              <a href={tgLink(s.phone)} target="_blank" rel="noopener noreferrer"
+                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${s.prefs.includes('telegram') ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
+                                <TgIcon /> Telegram
+                              </a>
+                              {s.tgSynced
+                                ? <span title="Bot connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100 text-green-600 shrink-0">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                                  </span>
+                                : <span title="Bot not connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-dashed border-gray-300 text-gray-400 text-[9px] font-bold shrink-0">?</span>
+                              }
                               <a href={`mailto:${s.email}`}
                                 className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${s.prefs.includes('email') ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}>
                                 <EmailIcon /> Email
@@ -1660,71 +1783,45 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Chevron toggle — always visible on right edge */}
-                          {!parentOpen && (
-                            <button onClick={e => { e.stopPropagation(); toggleParent(s.email) }}
-                              className="flex items-center px-2.5 text-gray-400 hover:text-gray-600 transition-colors">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m15 18-6-6 6-6"/></svg>
-                            </button>
-                          )}
-
-                          {/* Parent panel — collapsible */}
-                          {parentOpen && (
-                            <div className="w-[30%] p-4 flex flex-col gap-2 border-l border-gray-100">
-                              <div className="flex items-center justify-between mb-0.5">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm">👪</span>
-                                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.parent}</p>
+                          {/* Parent section — 30%, always visible for minors */}
+                          {s.is_minor && (
+                            <div className="w-[30%] p-4 flex flex-col gap-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0 text-base ${parentIconCls}`}>
+                                  👪
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-gray-700 truncate">{s.parent_name ?? '—'}</p>
+                                  {s.parent_contact && <p className="text-[10px] text-gray-400 truncate">{s.parent_contact}</p>}
                                 </div>
-                                <button onClick={e => { e.stopPropagation(); toggleParent(s.email) }}
-                                  className="text-gray-400 hover:text-gray-600 transition-colors">
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m9 18 6-6-6-6"/></svg>
-                                </button>
                               </div>
-                              <input
-                                key={`pname-${s.email}-${s.parent_name ?? ''}`}
-                                type="text"
-                                defaultValue={s.parent_name ?? ''}
-                                placeholder="Full name"
-                                onClick={e => e.stopPropagation()}
-                                className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 placeholder-gray-300 focus:outline-none focus:border-blue-400 bg-white"
-                                onBlur={e => { if (s.appId && e.target.value !== (s.parent_name ?? '')) handleUpdateParentName(s.appId, e.target.value) }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                              />
-                              <input
-                                key={`contact-${s.email}-${s.parent_contact ?? ''}`}
-                                type="text"
-                                defaultValue={s.parent_contact ?? ''}
-                                placeholder="Phone"
-                                onClick={e => e.stopPropagation()}
-                                className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 placeholder-gray-300 focus:outline-none focus:border-blue-400 bg-white"
-                                onBlur={e => { if (s.appId && e.target.value !== (s.parent_contact ?? '')) handleUpdateParentContact(s.appId, e.target.value) }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                              />
-                              <input
-                                key={`email-${s.email}-${s.parent_email ?? ''}`}
-                                type="email"
-                                defaultValue={s.parent_email ?? ''}
-                                placeholder="Email"
-                                onClick={e => e.stopPropagation()}
-                                className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 placeholder-gray-300 focus:outline-none focus:border-blue-400 bg-white"
-                                onBlur={e => { if (s.appId && e.target.value !== (s.parent_email ?? '')) handleUpdateParentEmail(s.appId, e.target.value) }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                              />
-                              <div className="flex flex-col gap-1 mt-0.5">
-                                {tgOk && s.parent_contact && (
-                                  <a href={tgLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
-                                    className="w-fit flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium bg-sky-500 text-white hover:bg-sky-600 transition-colors whitespace-nowrap">
-                                    <TgIcon /> Telegram
-                                  </a>
+                              <div className="flex flex-col gap-1">
+                                {s.parent_contact && (
+                                  <div className="flex items-center gap-1.5">
+                                    <a href={tgLink(s.parent_contact)} target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap ${s.parent_pref === 'telegram' || !s.parent_pref ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
+                                      <TgIcon /> Telegram
+                                    </a>
+                                    {s.parentTgSynced
+                                      ? <span title="Bot connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100 text-green-600 shrink-0">
+                                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                                        </span>
+                                      : <span title="Bot not connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-dashed border-gray-300 text-gray-400 text-[9px] font-bold shrink-0">?</span>
+                                    }
+                                  </div>
                                 )}
                                 {s.parent_email && (
                                   <a href={`mailto:${s.parent_email}`}
-                                    className="w-fit flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium bg-violet-500 text-white hover:bg-violet-600 transition-colors whitespace-nowrap">
+                                    className={`w-fit flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap ${s.parent_pref === 'email' ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}>
                                     <EmailIcon /> Email
                                   </a>
                                 )}
                               </div>
+                              <button onClick={e => { e.stopPropagation(); cycleParentStatus(s.email) }}
+                                title={pStatus === 'answered' ? 'Answered' : pStatus === 'contacted' ? 'Contacted' : 'Mark contacted'}
+                                className={`mt-auto self-end flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors shrink-0 ${pStatus === 'answered' ? 'bg-green-100 text-green-600 border-green-300' : pStatus === 'contacted' ? 'bg-amber-100 text-amber-600 border-amber-300' : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-gray-300'}`}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M20 6 9 17l-5-5"/></svg>
+                              </button>
                             </div>
                           )}
                         </div>

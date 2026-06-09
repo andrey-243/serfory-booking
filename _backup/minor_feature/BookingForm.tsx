@@ -183,6 +183,11 @@ type FormData = {
   student_email: string
   student_phone: string
   contact_pref: string
+  is_minor: boolean
+  parent_name: string
+  parent_contact: string
+  parent_email: string
+  parent_pref: string
 }
 
 export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice, refToken }: Props) {
@@ -193,6 +198,11 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     student_email: prefill?.email ?? '',
     student_phone: prefill?.phone ?? '',
     contact_pref: prefill?.contact_pref ?? 'telegram',
+    is_minor: prefill?.is_minor ?? false,
+    parent_name: prefill?.parent_name ?? '',
+    parent_contact: prefill?.parent_contact ?? '',
+    parent_email: prefill?.parent_email ?? '',
+    parent_pref: prefill?.parent_pref ?? 'telegram',
   }))
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
@@ -206,6 +216,8 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
     const errs: Partial<Record<keyof FormData, string>> = {}
     if (!isValidEmail(form.student_email)) errs.student_email = ft.invalidEmail
     if (!isValidLocalPhone(form.student_phone)) errs.student_phone = ft.invalidPhone
+    if (form.is_minor && !isValidLocalPhone(form.parent_contact)) errs.parent_contact = ft.invalidPhone
+    if (form.is_minor && form.parent_email && !isValidEmail(form.parent_email)) errs.parent_email = ft.invalidEmail
     setFieldErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -231,6 +243,11 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           student_email: form.student_email,
           student_phone: form.student_phone,
           contact_pref: form.contact_pref || 'telegram',
+          is_minor: form.is_minor,
+          parent_name: form.is_minor ? form.parent_name : null,
+          parent_contact: form.is_minor ? form.parent_contact : null,
+          parent_email: form.is_minor ? (form.parent_email || null) : null,
+          parent_pref: form.is_minor ? (form.parent_pref || null) : null,
           ...(refToken ? { ref_token: refToken } : {}),
         }),
       })
@@ -310,6 +327,65 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
             onChange={v => set('contact_pref', v as string)}
           />
         </Field>
+
+        <div className="flex items-center gap-2.5 pt-1">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.is_minor}
+            onClick={() => set('is_minor', !form.is_minor)}
+            className={`relative inline-flex h-5 w-9 rounded-full transition-colors flex-shrink-0 ${
+              form.is_minor ? 'bg-blue-500' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${
+                form.is_minor ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+          <span className="text-sm text-gray-700">{ft.minor}</span>
+        </div>
+
+        {form.is_minor && (
+          <div className="space-y-3 pt-1">
+            <Field label={ft.parentName} required>
+              <input
+                type="text"
+                value={form.parent_name}
+                onChange={e => set('parent_name', e.target.value)}
+                required
+                className={inputClass}
+                placeholder={ft.namePlaceholder}
+              />
+            </Field>
+            <Field label={ft.parentContact} required error={fieldErrors.parent_contact}>
+              <PhoneInput
+                onChange={v => { set('parent_contact', v); setFieldErrors(f => ({ ...f, parent_contact: undefined })) }}
+                placeholder={ft.parentPlaceholder}
+                initialValue={prefill?.parent_contact ?? undefined}
+              />
+              {fieldErrors.parent_contact && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors.parent_contact}</p>
+              )}
+            </Field>
+            <Field label={ft.parentEmail} error={fieldErrors.parent_email}>
+              <input
+                type="email"
+                value={form.parent_email}
+                onChange={e => { set('parent_email', e.target.value); setFieldErrors(f => ({ ...f, parent_email: undefined })) }}
+                className={`${inputClass} ${fieldErrors.parent_email ? 'border-red-300 focus:ring-red-300' : ''}`}
+                placeholder="parent@email.com"
+              />
+            </Field>
+            <Field label={ft.parentPref}>
+              <ContactPills
+                selected={form.parent_pref}
+                onChange={v => set('parent_pref', v as string)}
+              />
+            </Field>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

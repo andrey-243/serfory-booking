@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { isTelegramEligible } from '@/lib/email'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 
@@ -32,11 +33,11 @@ export async function GET(req: NextRequest) {
 
   if (!upcoming?.length) return NextResponse.json({ sent: 0 })
 
-  // Fetch matching applications to get telegram_chat_id + learning_lang
+  // Fetch matching applications to get telegram_chat_id + learning_lang + country_code
   const emails = [...new Set(upcoming.map(b => b.student_email))]
   const { data: apps } = await getSupabaseAdmin()
     .from('applications')
-    .select('email, telegram_chat_id, learning_lang, lang')
+    .select('email, telegram_chat_id, learning_lang, lang, country_code')
     .in('email', emails)
     .not('telegram_chat_id', 'is', null)
 
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
   for (const booking of upcoming) {
     const app = appMap.get(booking.student_email)
     if (!app?.telegram_chat_id) continue
+    if (!isTelegramEligible(app.country_code, app.learning_lang)) continue
 
     const preferred = (app.learning_lang || app.lang || 'en') as string
     const lang = preferred in MSGS ? preferred : 'en'

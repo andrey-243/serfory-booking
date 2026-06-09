@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { sendAcceptanceEmail } from '@/lib/email'
+import { sendAcceptanceEmail, isTelegramEligible } from '@/lib/email'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -127,15 +127,12 @@ export async function POST(req: NextRequest) {
     const gradeNorm = GRADE_NORMALIZE[grade] ?? grade
     const prefIcon = contact_pref === 'telegram' ? '📱' : '✉️'
     const tgSuffix = contact_pref === 'telegram' && telegram_username ? ` @${telegram_username}` : ''
-    const minorLine = is_minor
-      ? `\n👶 Minor — ${parent_name ?? ''}${parent_contact ? ` · ${parent_contact}` : ''}${parent_pref === 'telegram' && telegram_parent_username ? ` @${telegram_parent_username}` : ''}`
-      : ''
     const msg = [
       `🦅 <b>New application</b>`,
       ``,
       `👤 <b>${name}</b>`,
       `📚 ${subject} · ${gradeNorm}${learning_lang ? ` · ${langLabel[learning_lang] ?? learning_lang}` : ''}`,
-      `${prefIcon} ${phone}${tgSuffix} · ${email}${minorLine}`,
+      `${prefIcon} ${phone}${tgSuffix} · ${email}`,
       ``,
       `<a href="https://booking.serfory.eu/admin">Open admin →</a>`,
     ].join('\n')
@@ -150,7 +147,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, status, parent_approved, telegram_username } = await req.json()
+  const { id, status, telegram_username, parent_name, parent_contact, parent_email } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
@@ -160,8 +157,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     updates.status = status
   }
-  if (parent_approved !== undefined) updates.parent_approved = parent_approved
   if (telegram_username !== undefined) updates.telegram_username = telegram_username
+  if (parent_name !== undefined) updates.parent_name = parent_name
+  if (parent_contact !== undefined) updates.parent_contact = parent_contact
+  if (parent_email !== undefined) updates.parent_email = parent_email
 
   // Generate ref_token on accept
   let ref_token: string | null = null
@@ -173,7 +172,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: app, error: fetchErr } = await getSupabaseAdmin()
     .from('applications')
-    .select('name, email, lang, learning_lang, is_minor, parent_name, parent_email, parent_pref, subject, contact_pref, telegram_chat_id, telegram_parent_chat_id')
+    .select('name, email, lang, learning_lang, country_code, subject, contact_pref, telegram_chat_id')
     .eq('id', id)
     .single()
 
@@ -191,18 +190,12 @@ export async function PATCH(req: NextRequest) {
     const preferred = (app.learning_lang || app.lang) as string
     const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
     const link = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?ref=${ref_token}`
+    const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
 
     const TG_STUDENT: Record<string, string> = {
       en: `Hi ${app.name}! Your application has been accepted. Here's your booking link for ${app.subject}:\n\n${link}\n\nChoose your teacher and a time that works for you.`,
       et: `Tere ${app.name}! Teie avaldus on vastu võetud. Siin on teie broneeringulink ${app.subject} jaoks:\n\n${link}\n\nValige õpetaja ja teile sobiv aeg.`,
       ru: `Привет, ${app.name}! Ваша заявка принята. Вот ваша ссылка для бронирования ${app.subject}:\n\n${link}\n\nВыберите учителя и удобное время.`,
-    }
-
-    const parentName = app.parent_name || app.name
-    const TG_PARENT: Record<string, string> = {
-      en: `Hi! ${app.name}'s application for ${app.subject} has been accepted. Here's the booking link:\n\n${link}`,
-      et: `Tere! ${app.name} avaldus ${app.subject} jaoks on vastu võetud. Siin on broneeringulink:\n\n${link}`,
-      ru: `Здравствуйте, ${parentName}! Заявка ${app.name} на ${app.subject} принята. Вот ссылка для бронирования:\n\n${link}`,
     }
 
     const tgSend = async (chatId: number, text: string) => {
@@ -215,26 +208,13 @@ export async function PATCH(req: NextRequest) {
 
     // Student dispatch
     try {
-      if (app.contact_pref === 'telegram' && app.telegram_chat_id) {
+      if (tgEligible && app.contact_pref === 'telegram' && app.telegram_chat_id) {
         await tgSend(app.telegram_chat_id, TG_STUDENT[lang] ?? TG_STUDENT.en)
       } else {
-        // email (also fallback when TG pref but no chat_id yet)
-        await sendAcceptanceEmail({ to: app.email, name: app.name, token: ref_token, lang, appId: id })
+        await sendAcceptanceEmail({ to: app.email, name: app.name, token: ref_token, lang, appId: id, showTelegram: tgEligible })
       }
     } catch (e) { console.error('Student notification failed:', e) }
 
-    // Parent dispatch (only if minor)
-    if (app.is_minor) {
-      const parentPref = app.parent_pref as string | null
-      try {
-        if (parentPref === 'telegram' && app.telegram_parent_chat_id) {
-          await tgSend(app.telegram_parent_chat_id, TG_PARENT[lang] ?? TG_PARENT.en)
-        } else if (app.parent_email) {
-          // email parent (also fallback when TG pref but no parent chat_id yet)
-          await sendAcceptanceEmail({ to: app.parent_email, name: app.name, token: ref_token, lang, appId: id, isParent: true })
-        }
-      } catch (e) { console.error('Parent notification failed:', e) }
-    }
   }
 
   return NextResponse.json({ ok: true })
@@ -248,7 +228,7 @@ export async function GET(req: NextRequest) {
   if (ref) {
     const { data, error } = await getSupabaseAdmin()
       .from('applications')
-      .select('name, email, phone, contact_pref, is_minor, parent_name, parent_contact, parent_email, parent_pref, price_tier, status')
+      .select('name, email, phone, contact_pref, price_tier, status')
       .eq('ref_token', ref)
       .single()
 

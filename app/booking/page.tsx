@@ -17,11 +17,6 @@ export type ApplicationPrefill = {
   email: string
   phone: string
   contact_pref: string
-  is_minor: boolean
-  parent_name: string | null
-  parent_contact: string | null
-  parent_email: string | null
-  parent_pref: string | null
 }
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }

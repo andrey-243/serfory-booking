@@ -1,5 +1,20 @@
 import nodemailer from 'nodemailer'
 
+const TG_ELIGIBLE_COUNTRIES = new Set([
+  // CIS
+  'RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD',
+  // Baltic
+  'EE','LV','LT',
+  // Eastern Europe
+  'PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL',
+])
+
+export function isTelegramEligible(countryCode: string | null | undefined, learningLang: string | null | undefined): boolean {
+  if (learningLang === 'ru') return true
+  if (countryCode && TG_ELIGIBLE_COUNTRIES.has(countryCode.toUpperCase())) return true
+  return false
+}
+
 const transporter = nodemailer.createTransport({
   host: process.env.OVH_SMTP_HOST,
   port: Number(process.env.OVH_SMTP_PORT),
@@ -97,6 +112,7 @@ export async function sendAcceptanceEmail({
   lang,
   appId,
   isParent = false,
+  showTelegram = false,
 }: {
   to: string
   name: string
@@ -104,13 +120,14 @@ export async function sendAcceptanceEmail({
   lang: 'en' | 'et' | 'ru'
   appId?: string
   isParent?: boolean
+  showTelegram?: boolean
 }) {
   const l = MESSAGES[lang] ?? MESSAGES.en
   const link = `${BOOKING_URL}/booking?ref=${token}`
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforybot'
   const startPrefix = isParent ? 'p_' : 's_'
-  const botBlock = appId
+  const botBlock = showTelegram && appId
     ? (isParent ? l.botCtaParent : l.botCtaStudent)(`https://t.me/${BOT}?start=${startPrefix}${appId}`)
     : ''
 

@@ -318,52 +318,6 @@
     </div>
 
 
-    <label class="minor-toggle">
-      <input type="checkbox" id="f-minor" onchange="toggleMinor(this)">
-      <span class="toggle-track"></span>
-      <span class="toggle-label" id="lbl-minor"></span>
-    </label>
-
-    <div class="parent-fields" id="parent-fields">
-      <hr class="parent-divider">
-      <p class="parent-title" id="lbl-parent-section"></p>
-
-      <div class="field">
-        <label><span id="lbl-parent-name"></span><span class="req">*</span></label>
-        <input type="text" id="f-parent-name">
-        <div class="err-msg" id="err-parent-name"></div>
-      </div>
-
-      <div class="field">
-        <label><span id="lbl-parent-phone"></span><span class="req">*</span></label>
-        <div class="phone-row">
-          <select id="f-parent-country"></select>
-          <input type="text" id="f-parent-phone">
-        </div>
-        <div class="err-msg" id="err-parent-phone"></div>
-      </div>
-
-      <div class="field">
-        <label><span id="lbl-parent-email"></span><span class="req">*</span></label>
-        <input type="email" id="f-parent-email">
-        <div class="err-msg" id="err-parent-email"></div>
-      </div>
-
-      <div class="field">
-        <label><span id="lbl-parent-contact"></span></label>
-        <div class="pills" id="parent-contact-pills">
-          <div class="pill" data-val="telegram" onclick="selectPill('parent',this)">Telegram</div>
-          <div class="pill" data-val="email" onclick="selectPill('parent',this)">Email</div>
-        </div>
-      </div>
-
-      <div class="field" id="tg-parent-username-field" style="display:none">
-        <label><span id="lbl-tg-parent-username"></span><span class="req">*</span></label>
-        <input type="text" id="f-tg-parent-username" placeholder="@username" autocomplete="off">
-        <div class="err-msg" id="err-tg-parent-username"></div>
-      </div>
-    </div>
-
     <button class="submit-btn" id="submit-btn" onclick="submitForm()">
       <span id="lbl-submit"></span>
     </button>
@@ -394,10 +348,10 @@ const COUNTRIES = [
 const GRADES = {
   en: ['Kindergarten','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6',
        'Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12','Adult'],
-  et: ['1. klass','2. klass','3. klass','4. klass','5. klass','6. klass',
+  et: ['Lasteaed','1. klass','2. klass','3. klass','4. klass','5. klass','6. klass',
        '7. klass','8. klass','9. klass','10. klass','11. klass','12. klass','Täiskasvanu'],
-  ru: ['1 класс','2 класс','3 класс','4 класс','5 класс','6 класс','7 класс',
-       '8 класс','9 класс','10 класс','11 класс','Взрослый'],
+  ru: ['Детский сад','1 класс','2 класс','3 класс','4 класс','5 класс','6 класс','7 класс',
+       '8 класс','9 класс','10 класс','11 класс','12 класс','Взрослый'],
 };
 
 const T = {
@@ -425,6 +379,7 @@ const T = {
     serverErr: 'Something went wrong. Please try again.',
     gradeDefault: 'Select your grade',
     subjectDefault: 'Select a subject',
+    subjectOptions: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math' },
   },
   et: {
     title: 'Kursusel osalemine',
@@ -450,6 +405,7 @@ const T = {
     serverErr: 'Midagi läks valesti. Palun proovi uuesti.',
     gradeDefault: 'Vali oma klass',
     subjectDefault: 'Vali õppeaine',
+    subjectOptions: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika' },
   },
   ru: {
     title: 'Записаться на курс',
@@ -475,12 +431,12 @@ const T = {
     serverErr: 'Что-то пошло не так. Пожалуйста, попробуйте снова.',
     gradeDefault: 'Выберите класс',
     subjectDefault: 'Выберите предмет',
+    subjectOptions: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика' },
   },
 };
 
 let lang = 'en';
 let contactPref = null;
-let parentPref = null;
 
 function buildCountrySelect(selId) {
   const sel = document.getElementById(selId);
@@ -508,13 +464,6 @@ function setLang(l) {
     Object.entries(t.learningLangOptions).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
   document.getElementById('lbl-contact').textContent = t.contact;
   document.getElementById('lbl-tg-username').textContent = t.tgUsername;
-  document.getElementById('lbl-tg-parent-username').textContent = t.tgParentUsername;
-  document.getElementById('lbl-minor').textContent = t.minor;
-  document.getElementById('lbl-parent-section').textContent = t.parentSection;
-  document.getElementById('lbl-parent-name').textContent = t.parentName;
-  document.getElementById('lbl-parent-phone').textContent = t.parentPhone;
-  document.getElementById('lbl-parent-email').textContent = t.parentEmail;
-  document.getElementById('lbl-parent-contact').textContent = t.parentContact;
   document.getElementById('lbl-submit').textContent = t.submit;
   document.getElementById('lbl-respond-note').textContent = t.respondNote;
   document.getElementById('success-title').textContent = t.successTitle;
@@ -522,6 +471,9 @@ function setLang(l) {
 
   const subjectSel = document.getElementById('f-subject');
   subjectSel.options[0].text = t.subjectDefault;
+  Array.from(subjectSel.options).slice(1).forEach(opt => {
+    if (t.subjectOptions[opt.value]) opt.text = t.subjectOptions[opt.value];
+  });
 
   const gradeSel = document.getElementById('f-grade');
   gradeSel.innerHTML = `<option value="">${t.gradeDefault}</option>` +
@@ -529,24 +481,13 @@ function setLang(l) {
 }
 
 function selectPill(group, el) {
-  const container = group === 'contact' ? 'contact-pills' : 'parent-contact-pills';
-  document.getElementById(container).querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  document.getElementById('contact-pills').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
-  if (group === 'contact') {
-    contactPref = el.dataset.val;
-    document.getElementById('err-contact').classList.remove('visible');
-    document.getElementById('contact-pills').classList.remove('error-pills');
-    document.getElementById('tg-username-field').style.display = contactPref === 'telegram' ? 'block' : 'none';
-    if (contactPref !== 'telegram') { document.getElementById('f-tg-username').value = ''; clearErr('tg-username'); }
-  } else {
-    parentPref = el.dataset.val;
-    document.getElementById('tg-parent-username-field').style.display = parentPref === 'telegram' ? 'block' : 'none';
-    if (parentPref !== 'telegram') { document.getElementById('f-tg-parent-username').value = ''; clearErr('tg-parent-username'); }
-  }
-}
-
-function toggleMinor(cb) {
-  document.getElementById('parent-fields').classList.toggle('visible', cb.checked);
+  contactPref = el.dataset.val;
+  document.getElementById('err-contact').classList.remove('visible');
+  document.getElementById('contact-pills').classList.remove('error-pills');
+  document.getElementById('tg-username-field').style.display = contactPref === 'telegram' ? 'block' : 'none';
+  if (contactPref !== 'telegram') { document.getElementById('f-tg-username').value = ''; clearErr('tg-username'); }
 }
 
 function getVal(id) { return document.getElementById('f-' + id).value.trim(); }
@@ -591,22 +532,6 @@ function validate() {
     setErr('tg-username', t.errTgUsername); ok = false;
   } else { clearErr('tg-username'); }
 
-const isMinor = document.getElementById('f-minor').checked;
-  if (isMinor) {
-    if (!getVal('parent-name')) { setErr('parent-name', t.errRequired); ok = false; } else clearErr('parent-name');
-    const pp = getVal('parent-phone');
-    if (!pp) { setErr('parent-phone', t.errRequired); ok = false; }
-    else if (!/^\d{4,}$/.test(pp.replace(/[\s\-]/g, ''))) { setErr('parent-phone', t.errPhone); ok = false; }
-    else clearErr('parent-phone');
-    if (parentPref === 'telegram' && !getVal('tg-parent-username').replace(/^@/, '').trim()) {
-      setErr('tg-parent-username', t.errTgParentUsername); ok = false;
-    } else { clearErr('tg-parent-username'); }
-    const pe = getVal('parent-email');
-    if (!pe) { setErr('parent-email', t.errRequired); ok = false; }
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pe)) { setErr('parent-email', t.errEmail); ok = false; }
-    else clearErr('parent-email');
-  }
-
   return ok;
 }
 
@@ -617,32 +542,19 @@ async function submitForm() {
   btn.disabled = true;
   globalErr.classList.remove('visible');
 
-  const isMinor = document.getElementById('f-minor').checked;
   const countryCode = document.getElementById('f-country').value;
-  const parentCountryCode = document.getElementById('f-parent-country').value;
-  const parentPhone = getVal('parent-phone');
 
   const payload = {
     name: getVal('name'),
     email: getVal('email'),
-    phone: document.getElementById('f-country').options[document.getElementById('f-country').selectedIndex].dataset
-      ? (COUNTRIES.find(c => c.c === countryCode)?.dial || '') + ' ' + getVal('phone')
-      : getVal('phone'),
+    phone: getVal('phone'),
     country_code: countryCode,
-    is_minor: isMinor,
     subject: getVal('subject'),
     grade: getVal('grade'),
     learning_lang: getVal('learning-lang'),
     contact_pref: contactPref,
     telegram_username: contactPref === 'telegram' ? (getVal('tg-username').replace(/^@/, '').trim() || null) : null,
-    telegram_parent_username: (isMinor && parentPref === 'telegram') ? (getVal('tg-parent-username').replace(/^@/, '').trim() || null) : null,
     lang: lang,
-    parent_name: isMinor ? getVal('parent-name') : null,
-    parent_contact: isMinor && parentPhone
-      ? (COUNTRIES.find(c => c.c === parentCountryCode)?.dial || '') + ' ' + parentPhone
-      : null,
-    parent_email: isMinor ? getVal('parent-email') : null,
-    parent_pref: isMinor ? (parentPref || null) : null,
   };
 
   // Build phone with dial code

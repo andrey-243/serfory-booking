@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession } from '@/lib/session'
+import { verifySession } from './lib/session'
 
 const PROTECTED_ROUTES: Record<string, 'admin' | 'teacher'> = {
   '/admin': 'admin',
