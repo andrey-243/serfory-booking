@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { sendAcceptanceEmail, isTelegramEligible } from '@/lib/email'
+import { sendPackageEmail, isTelegramEligible } from '@/lib/email'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -262,7 +262,7 @@ export async function PATCH(req: NextRequest) {
       if (tgEligible && app.contact_pref === 'telegram' && app.telegram_chat_id) {
         await tgSend(app.telegram_chat_id, TG_STUDENT[lang] ?? TG_STUDENT.en)
       } else {
-        await sendAcceptanceEmail({ to: app.email, name: app.name, token: ref_token, lang, appId: id, showTelegram: tgEligible })
+        await sendPackageEmail({ to: app.email, name: app.name, token: ref_token, lang, subject: app.subject, appId: id, showTelegram: tgEligible })
       }
     } catch (e) { console.error('Student notification failed:', e) }
 

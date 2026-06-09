@@ -80,6 +80,7 @@ type StudentRow = {
   tgSynced: boolean
   gcalResponse: string | null
   learningLang: string | null
+  createdAt: string | null
 }
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
@@ -641,7 +642,7 @@ export default function AdminPage() {
 
   const [crmFilterCourse, setCrmFilterCourse] = useState<string>('all')
   const [crmFilterTeacher, setCrmFilterTeacher] = useState<string>('all')
-  const [crmSortCol, setCrmSortCol] = useState<'name' | 'total'>('total')
+  const [crmSortCol, setCrmSortCol] = useState<'name' | 'total' | 'createdAt'>('total')
   const [crmSortDir, setCrmSortDir] = useState<'asc' | 'desc'>('desc')
   const [sortCol, setSortCol] = useState<SortCol>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -805,6 +806,12 @@ export default function AdminPage() {
     const countryMap: Record<string, string | null> = {}
     applications.forEach(a => { if (!countryMap[a.email]) countryMap[a.email] = a.country_code ?? null })
 
+    // Build created_at map from applications (email → earliest created_at)
+    const createdAtMap: Record<string, string> = {}
+    applications.forEach(a => {
+      if (!createdAtMap[a.email] || a.created_at < createdAtMap[a.email]) createdAtMap[a.email] = a.created_at
+    })
+
     // Track most recent active booking per student for GCal response
     const latestBooking = new Map<string, Booking>()
     bookings.forEach(b => {
@@ -832,6 +839,7 @@ export default function AdminPage() {
           tgSynced: syncMap[b.student_email] ?? false,
           gcalResponse: latestBooking.get(b.student_email)?.student_response ?? null,
           learningLang: langMap[b.student_email] ?? null,
+          createdAt: createdAtMap[b.student_email] ?? null,
         })
       }
       const s = map.get(key)!
@@ -862,6 +870,7 @@ export default function AdminPage() {
         tgSynced: syncMap[a.email] ?? !!a.telegram_chat_id,
         gcalResponse: null,
         learningLang: a.learning_lang ?? null,
+        createdAt: a.created_at,
       })
     })
 
@@ -873,7 +882,10 @@ export default function AdminPage() {
     if (crmFilterCourse !== 'all') result = result.filter(s => s.combos.some(c => c.subject === crmFilterCourse))
     if (crmFilterTeacher !== 'all') result = result.filter(s => s.combos.some(c => c.teacher === crmFilterTeacher))
     return [...result].sort((a, b) => {
-      const cmp = crmSortCol === 'name' ? a.name.localeCompare(b.name) : a.total - b.total
+      let cmp = 0
+      if (crmSortCol === 'name') cmp = a.name.localeCompare(b.name)
+      else if (crmSortCol === 'createdAt') cmp = (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
+      else cmp = a.total - b.total
       return crmSortDir === 'asc' ? cmp : -cmp
     })
   }, [students, crmFilterCourse, crmFilterTeacher, crmSortCol, crmSortDir])
@@ -1291,7 +1303,7 @@ export default function AdminPage() {
                 value={`${crmSortCol}:${crmSortDir}`}
                 onChange={e => {
                   const [col, dir] = e.target.value.split(':')
-                  setCrmSortCol(col as 'name' | 'total')
+                  setCrmSortCol(col as 'name' | 'total' | 'createdAt')
                   setCrmSortDir(dir as 'asc' | 'desc')
                 }}
                 className="text-xs border border-gray-200 rounded-full px-3 py-1 bg-white text-gray-600 focus:outline-none cursor-pointer"
@@ -1300,6 +1312,8 @@ export default function AdminPage() {
                 <option value="total:asc">Fewest sessions</option>
                 <option value="name:asc">Name A to Z</option>
                 <option value="name:desc">Name Z to A</option>
+                <option value="createdAt:desc">Latest created</option>
+                <option value="createdAt:asc">First created</option>
               </select>
             </div>
 

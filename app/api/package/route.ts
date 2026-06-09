@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, subject, lang, learning_lang, status')
+    .select('id, name, subject, lang, learning_lang, country_code, status')
     .eq('ref_token', token)
     .single()
 
@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
     name: data.name,
     subject: data.subject,
     lang: (data.learning_lang || data.lang || 'en') as string,
+    learning_lang: data.learning_lang ?? null,
+    country_code: (data as { country_code?: string | null }).country_code ?? null,
     invoiceAlreadySent: !!existing,
     invoicePaid: existing?.status === 'paid',
   })

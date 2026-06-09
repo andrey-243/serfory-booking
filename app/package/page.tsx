@@ -2,14 +2,28 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 
 type Format = 'individual' | 'pair' | 'group'
 type LessonsCount = 1 | 4 | 8 | 12
+type Lang = 'en' | 'et' | 'ru'
 
-const FORMAT_INFO: Record<Format, { label: string; students: string; desc: string }> = {
-  individual: { label: 'Individual', students: '1 student', desc: 'One-on-one lesson, fully personalised' },
-  pair:       { label: 'Pair',       students: '2 students', desc: 'Learn together with a partner' },
-  group:      { label: 'Group',      students: '4–6 students', desc: 'Small group, collaborative learning' },
+const FORMAT_INFO: Record<Format, Record<Lang, { label: string; students: string }>> = {
+  individual: {
+    en: { label: 'Individual', students: '1 student' },
+    et: { label: 'Individuaalne', students: '1 õpilane' },
+    ru: { label: 'Индивидуально', students: '1 ученик' },
+  },
+  pair: {
+    en: { label: 'Pair', students: '2 students' },
+    et: { label: 'Paaristund', students: '2 õpilast' },
+    ru: { label: 'Парный', students: '2 ученика' },
+  },
+  group: {
+    en: { label: 'Group', students: '4–6 students' },
+    et: { label: 'Grupp', students: '4–6 õpilast' },
+    ru: { label: 'Группа', students: '4–6 учеников' },
+  },
 }
 
 const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
@@ -20,6 +34,12 @@ const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
 
 const DISCOUNTS: Record<LessonsCount, string> = { 1: '', 4: '-5%', 8: '-10%', 12: '-15%' }
 const LESSONS_OPTIONS: LessonsCount[] = [1, 4, 8, 12]
+
+const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
+
+function isTgEligible(country_code: string | null, learning_lang: string | null): boolean {
+  return learning_lang === 'ru' || (!!country_code && TG_COUNTRIES.has(country_code.toUpperCase()))
+}
 
 const T = {
   en: {
@@ -40,6 +60,9 @@ const T = {
     sending: 'Sending...',
     success: 'Invoice sent! Check your email.',
     personalLink: 'This link is personal — do not share it.',
+    tgTitle: 'Get updates on Telegram',
+    tgDesc: 'Receive lesson reminders and messages from your teacher directly on Telegram.',
+    tgCta: 'Connect to bot',
   },
   et: {
     loading: 'Laadimine...',
@@ -59,6 +82,9 @@ const T = {
     sending: 'Saatmine...',
     success: 'Arve saadetud! Kontrolli oma e-posti.',
     personalLink: 'See link on isiklik — ära jaga seda.',
+    tgTitle: 'Saa uuendusi Telegrami kaudu',
+    tgDesc: 'Tunnimuistutused ja õpetaja sõnumid otse Telegrami.',
+    tgCta: 'Ühenda botiga',
   },
   ru: {
     loading: 'Загрузка...',
@@ -78,12 +104,20 @@ const T = {
     sending: 'Отправка...',
     success: 'Счёт отправлен! Проверьте почту.',
     personalLink: 'Эта ссылка персональная — не передавайте её.',
+    tgTitle: 'Получайте уведомления в Telegram',
+    tgDesc: 'Напоминания об уроках и сообщения от учителя прямо в Telegram.',
+    tgCta: 'Подключить бота',
   },
+}
+
+function LoadingShell() {
+  const [uiLang, setUiLang] = useState<Lang>('en')
+  return <PageShell uiLang={uiLang} setUiLang={setUiLang}><p className="text-gray-500">Loading...</p></PageShell>
 }
 
 export default function PackagePage() {
   return (
-    <Suspense fallback={<PageShell><p className="text-gray-500">Loading...</p></PageShell>}>
+    <Suspense fallback={<LoadingShell />}>
       <PackagePageInner />
     </Suspense>
   )
@@ -93,8 +127,12 @@ function PackagePageInner() {
   const params = useSearchParams()
   const token = params.get('token') ?? ''
 
-  const [appData, setAppData] = useState<{ name: string; subject: string; lang: string } | null>(null)
+  const [appData, setAppData] = useState<{
+    name: string; subject: string; lang: Lang
+    learning_lang: string | null; country_code: string | null
+  } | null>(null)
   const [status, setStatus] = useState<'loading' | 'invalid' | 'alreadySent' | 'paid' | 'ready' | 'sending' | 'done'>('loading')
+  const [uiLang, setUiLang] = useState<Lang>('en')
 
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
@@ -107,18 +145,22 @@ function PackagePageInner() {
         if (d.error) { setStatus('invalid'); return }
         if (d.invoicePaid) { setStatus('paid'); return }
         if (d.invoiceAlreadySent) { setStatus('alreadySent'); return }
-        setAppData({ name: d.name, subject: d.subject, lang: d.lang })
+        const lang = (['en', 'et', 'ru'].includes(d.lang) ? d.lang : 'en') as Lang
+        setAppData({ name: d.name, subject: d.subject, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null })
+        setUiLang(lang)
         setStatus('ready')
       })
       .catch(() => setStatus('invalid'))
   }, [token])
 
-  const lang = (['en', 'et', 'ru'].includes(appData?.lang ?? '') ? appData!.lang : 'en') as keyof typeof T
-  const t = T[lang] ?? T.en
+  const t = T[uiLang]
 
   const pricePerLesson = BASE_PRICES[format][lessons]
   const studentsCount = format === 'individual' ? 1 : format === 'pair' ? 2 : 5
   const total = pricePerLesson * lessons * studentsCount
+
+  const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
+  const tgEligible = appData ? isTgEligible(appData.country_code, appData.learning_lang) : false
 
   async function handleConfirm() {
     setStatus('sending')
@@ -135,14 +177,19 @@ function PackagePageInner() {
     }
   }
 
-  if (status === 'loading') return <PageShell><p className="text-gray-500">{T.en.loading}</p></PageShell>
-  if (status === 'invalid') return <PageShell><ErrorCard msg={T.en.invalidToken} /></PageShell>
-  if (status === 'paid') return <PageShell><SuccessCard msg={t.paid} /></PageShell>
-  if (status === 'alreadySent') return <PageShell><InfoCard msg={t.alreadySent} /></PageShell>
-  if (status === 'done') return <PageShell><SuccessCard msg={t.success} /></PageShell>
+  if (status === 'loading') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><p className="text-gray-500">{T.en.loading}</p></PageShell>
+  if (status === 'invalid') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><ErrorCard msg={T.en.invalidToken} /></PageShell>
+  if (status === 'paid') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><SuccessCard msg={t.paid} /></PageShell>
+  if (status === 'alreadySent') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><InfoCard msg={t.alreadySent} /></PageShell>
+  if (status === 'done') return (
+    <PageShell uiLang={uiLang} setUiLang={setUiLang}>
+      <SuccessCard msg={t.success} />
+      {tgEligible && <TgBlock t={t} botUsername={BOT} />}
+    </PageShell>
+  )
 
   return (
-    <PageShell>
+    <PageShell uiLang={uiLang} setUiLang={setUiLang}>
       <div className="w-full max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           {t.title(appData!.name, appData!.subject)}
@@ -158,13 +205,11 @@ function PackagePageInner() {
                 key={f}
                 onClick={() => setFormat(f)}
                 className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  format === f
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                  format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
                 }`}
               >
-                <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f].label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f].students}</p>
+                <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
               </button>
             ))}
           </div>
@@ -183,9 +228,7 @@ function PackagePageInner() {
                   key={n}
                   onClick={() => setLessons(n)}
                   className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
+                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                 >
                   {isPopular && (
@@ -208,7 +251,7 @@ function PackagePageInner() {
         </div>
 
         {/* Total + CTA */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between mb-4">
           <div>
             <p className="text-sm text-gray-500">{t.total}</p>
             <p className="text-2xl font-bold text-gray-900">{total}€</p>
@@ -225,18 +268,70 @@ function PackagePageInner() {
           </button>
         </div>
 
+        {tgEligible && <TgBlock t={t} botUsername={BOT} />}
+
         <p className="text-xs text-gray-400 text-center mt-4">{t.personalLink}</p>
       </div>
     </PageShell>
   )
 }
 
-function PageShell({ children }: { children: React.ReactNode }) {
+function TgBlock({ t, botUsername }: { t: typeof T['en']; botUsername: string }) {
+  return (
+    <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-start gap-3 mb-4">
+      <div className="shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center mt-0.5">
+        <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-sky-800 mb-1">{t.tgTitle}</p>
+        <p className="text-xs text-sky-700 mb-3">{t.tgDesc}</p>
+        <a
+          href={`https://t.me/${botUsername}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          {t.tgCta}
+        </a>
+      </div>
+    </div>
+  )
+}
+
+function LangSwitcher({ current, onChange }: { current: Lang; onChange: (l: Lang) => void }) {
+  return (
+    <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
+      {(['en', 'et', 'ru'] as Lang[]).map(l => (
+        <button
+          key={l}
+          onClick={() => onChange(l)}
+          className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase transition-all ${
+            current === l ? 'bg-blue-500 text-white' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function PageShell({ children, uiLang, setUiLang }: {
+  children: React.ReactNode
+  uiLang: Lang
+  setUiLang: (l: Lang) => void
+}) {
   return (
     <div className="min-h-screen bg-[#EEF2FF] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-2xl">
-        <div className="flex items-center gap-2 mb-8">
-          <span className="text-xl font-bold text-blue-600">Serfory</span>
+        <div className="flex items-center justify-between mb-8">
+          <a href="https://serfory.eu" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Serfory" width={32} height={32} className="rounded-lg" />
+            <span className="text-lg font-bold text-blue-600">Serfory</span>
+          </a>
+          <LangSwitcher current={uiLang} onChange={setUiLang} />
         </div>
         {children}
       </div>
@@ -254,7 +349,7 @@ function ErrorCard({ msg }: { msg: string }) {
 
 function SuccessCard({ msg }: { msg: string }) {
   return (
-    <div className="bg-white rounded-xl border border-green-200 p-6 text-center">
+    <div className="bg-white rounded-xl border border-green-200 p-6 text-center mb-4">
       <p className="text-green-600 font-medium">{msg}</p>
     </div>
   )

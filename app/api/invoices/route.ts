@@ -116,20 +116,26 @@ export async function POST(req: NextRequest) {
   const invoiceNumber = (lastInvoice?.invoice_number ?? 0) + 1
 
   // Generate PDF
-  const pdfBuffer = await generateInvoicePDF({
-    invoiceNumber,
-    studentName: app.name,
-    studentEmail: app.email,
-    subject: app.subject,
-    format,
-    lessonsCount: lessons_count,
-    studentsCount,
-    pricePerLesson,
-    totalAmount,
-    lang,
-    issuedAt,
-    dueAt,
-  })
+  let pdfBuffer: Buffer
+  try {
+    pdfBuffer = await generateInvoicePDF({
+      invoiceNumber,
+      studentName: app.name,
+      studentEmail: app.email,
+      subject: app.subject,
+      format,
+      lessonsCount: lessons_count,
+      studentsCount,
+      pricePerLesson,
+      totalAmount,
+      lang,
+      issuedAt,
+      dueAt,
+    })
+  } catch (e) {
+    console.error('PDF generation failed:', e)
+    return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 })
+  }
 
   // Upload PDF to Supabase Storage
   const fileName = `invoice-${invoiceNumber}-${app.id}.pdf`
@@ -175,6 +181,25 @@ export async function POST(req: NextRequest) {
     html,
     attachments: [{ filename: `serfory-invoice-${invoiceNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }],
   }).catch(e => console.error('Invoice email failed:', e))
+
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+  if (adminChatId) {
+    const formatLabel: Record<string, string> = { individual: 'Individual', pair: 'Pair', group: 'Group' }
+    const msg = [
+      `🧾 <b>Invoice #${invoiceNumber} sent</b>`,
+      ``,
+      `👤 <b>${app.name}</b>`,
+      `📚 ${app.subject} · ${formatLabel[format] ?? format} · ${lessons_count} lessons`,
+      `💶 ${totalAmount}€`,
+      ``,
+      `<a href="https://booking.serfory.eu/admin">Open admin →</a>`,
+    ].join('\n')
+    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: Number(adminChatId), text: msg, parse_mode: 'HTML', disable_web_page_preview: true }),
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ ok: true, invoiceId: invoice.id })
 }

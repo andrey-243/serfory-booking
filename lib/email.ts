@@ -114,6 +114,7 @@ const PACKAGE_MESSAGES = {
         <p style="color:#6b7280;margin-bottom:8px">Your application for <strong>${subject}</strong> has been reviewed and accepted.</p>
         <p style="color:#6b7280;margin-bottom:24px">Choose your lesson package to get started — you'll receive an invoice by email.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Choose my package →</a>
+        <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">This link is personal. Do not share it.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
         <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
@@ -128,6 +129,7 @@ const PACKAGE_MESSAGES = {
         <p style="color:#6b7280;margin-bottom:8px">Sinu avaldus <strong>${subject}</strong> jaoks on läbi vaadatud ja vastu võetud.</p>
         <p style="color:#6b7280;margin-bottom:24px">Vali tunnipakett alustamiseks — saad arve e-posti teel.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Vali pakett →</a>
+        <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">See link on isiklik. Ära jaga seda.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
         <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
@@ -142,6 +144,7 @@ const PACKAGE_MESSAGES = {
         <p style="color:#6b7280;margin-bottom:8px">Ваша заявка на <strong>${subject}</strong> рассмотрена и принята.</p>
         <p style="color:#6b7280;margin-bottom:24px">Выберите пакет уроков — вы получите счёт на оплату по электронной почте.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Выбрать пакет →</a>
+        <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">Эта ссылка персональная. Не передавайте её другим.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
         <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
@@ -167,10 +170,7 @@ export async function sendPackageEmail({
   const botBlock = showTelegram && appId
     ? MESSAGES[lang].botCtaStudent(`https://t.me/${BOT}?start=s_${appId}`)
     : ''
-  const htmlBody = l.body(name, link, courseSubject).replace(
-    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
-    `${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
-  )
+  const htmlBody = l.body(name, link, courseSubject).replace('<!--BOT-->', botBlock)
   await transporter.sendMail({
     from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,
     to,
