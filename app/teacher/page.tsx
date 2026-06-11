@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { enUS, ru as ruLocale, et as etLocale } from 'date-fns/locale'
+import GroupSlotsTeacher from '@/components/teacher/GroupSlotsTeacher'
 
 type Lang = 'en' | 'ru' | 'et'
 
@@ -90,6 +91,7 @@ type User = { email: string; role: string; teacherId: string | null; name: strin
 
 export default function TeacherPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [teacherSubjects, setTeacherSubjects] = useState<string[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [lang, setLang] = useState<Lang>('en')
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
@@ -127,6 +129,9 @@ export default function TeacherPage() {
           fetch(`/api/bookings?teacherId=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => setBookings(d.bookings || []))
+          fetch(`/api/teachers?id=${d.user.teacherId}`)
+            .then(r => r.json())
+            .then(d => { if (d.teacher?.subjects) setTeacherSubjects(d.teacher.subjects) })
           fetch(`/api/availability?teacherId=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => {
@@ -248,6 +253,17 @@ export default function TeacherPage() {
             {savingAvail ? t.saving : savedAvail ? t.saved : t.save}
           </button>
         </div>
+
+        {/* Group sessions */}
+        {user?.teacherId && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <GroupSlotsTeacher
+              teacherId={user.teacherId}
+              subjects={teacherSubjects}
+              lang={lang}
+            />
+          </div>
+        )}
 
         {/* Upcoming lessons */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">

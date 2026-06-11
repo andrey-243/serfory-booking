@@ -218,6 +218,65 @@ export async function watchCalendar(
   return { expiration: Number(res.data.expiration) }
 }
 
+export async function addAttendeeToEvent(
+  refreshToken: string,
+  calendarId: string,
+  eventId: string,
+  attendeeEmail: string
+): Promise<void> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const existing = await calendar.events.get({ calendarId: calendarId || 'primary', eventId })
+  const attendees = existing.data.attendees || []
+  if (attendees.some(a => a.email?.toLowerCase() === attendeeEmail.toLowerCase())) return
+
+  await calendar.events.patch({
+    calendarId: calendarId || 'primary',
+    eventId,
+    sendUpdates: 'all',
+    requestBody: { attendees: [...attendees, { email: attendeeEmail }] },
+  })
+}
+
+export async function createGroupSessionEvent(
+  refreshToken: string,
+  calendarId: string,
+  { subject, teacherName, sessionDate, startTime, durationMinutes, sessionId }: {
+    subject: string
+    teacherName: string
+    sessionDate: string   // YYYY-MM-DD
+    startTime: string     // HH:MM
+    durationMinutes: number
+    sessionId: string     // used as idempotency key
+  }
+): Promise<string | null> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const startDt = new Date(`${sessionDate}T${startTime}:00`)
+  const endDt = new Date(startDt.getTime() + durationMinutes * 60 * 1000)
+
+  const res = await calendar.events.insert({
+    calendarId: calendarId || 'primary',
+    sendUpdates: 'none',
+    conferenceDataVersion: 1,
+    requestBody: {
+      summary: `${subject} group · Serfory`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Group lesson`,
+      start: { dateTime: startDt.toISOString() },
+      end: { dateTime: endDt.toISOString() },
+      conferenceData: { createRequest: { requestId: `group-${sessionId}` } },
+    },
+  })
+
+  return res.data.id ?? null
+}
+
 export async function deleteCalendarEvent(
   refreshToken: string,
   calendarId: string,

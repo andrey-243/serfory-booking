@@ -289,16 +289,25 @@ export async function GET(req: NextRequest) {
   if (ref) {
     const { data, error } = await getSupabaseAdmin()
       .from('applications')
-      .select('name, email, phone, contact_pref, subject, learning_lang, price_tier, status')
+      .select('id, name, email, phone, contact_pref, subject, learning_lang, price_tier, status')
       .eq('ref_token', ref)
       .single()
 
     if (error || !data) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 404 })
     if (data.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
-    // Return prefill data — price_tier stays internal (used by /api/teachers?ref=)
-    const { price_tier: _, status: __, ...prefill } = data
-    return NextResponse.json({ prefill })
+    // Fetch format from latest paid invoice
+    const { data: invoice } = await getSupabaseAdmin()
+      .from('invoices')
+      .select('format')
+      .eq('application_id', data.id)
+      .eq('status', 'paid')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    const { price_tier: _, status: __, id: _id, ...prefill } = data
+    return NextResponse.json({ prefill, bookingFormat: invoice?.format ?? null })
   }
 
   // Admin only: list all applications

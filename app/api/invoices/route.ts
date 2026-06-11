@@ -102,12 +102,14 @@ export async function POST(req: NextRequest) {
       .eq('id', app.id)
   }
 
-  // Check no duplicate invoice
+  // Block only if there's an unpaid invoice pending
   const { data: existing } = await getSupabaseAdmin()
     .from('invoices')
     .select('id')
     .eq('application_id', app.id)
-    .single()
+    .eq('status', 'sent')
+    .limit(1)
+    .maybeSingle()
   if (existing) return NextResponse.json({ error: 'Invoice already sent' }, { status: 409 })
 
   const tier = (app.price_tier || 'normal') as 'rich' | 'normal' | 'poor'

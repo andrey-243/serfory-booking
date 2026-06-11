@@ -24,9 +24,21 @@ function getPriceTier(code: string): string {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
+  const id = searchParams.get('id')
   const subject = searchParams.get('subject')
   const teachingLang = searchParams.get('teachingLang')
   const ref = searchParams.get('ref')
+
+  // Single teacher lookup (used by teacher dashboard to get subjects)
+  if (id) {
+    const { data, error } = await getSupabaseAdmin()
+      .from('teachers')
+      .select('id, name, subjects, teaching_languages')
+      .eq('id', id)
+      .single()
+    if (error || !data) return NextResponse.json({ teacher: null }, { status: 404 })
+    return NextResponse.json({ teacher: data })
+  }
 
   // Resolve price tier from ref token (server-side only)
   let priceTier: string | null = null

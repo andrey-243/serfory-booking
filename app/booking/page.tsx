@@ -7,6 +7,7 @@ import CourseTabFilter, { Course } from '@/components/booking/CourseTabFilter'
 import TeacherCard from '@/components/booking/TeacherCard'
 import WeekView from '@/components/booking/WeekView'
 import BookingForm from '@/components/booking/BookingForm'
+import GroupBatchView from '@/components/booking/GroupBatchView'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { LanguageProvider, useLang } from '@/lib/language-context'
 import { Teacher } from '@/lib/supabase'
@@ -20,6 +21,8 @@ export type ApplicationPrefill = {
   subject?: string
   learning_lang?: string | null
 }
+
+type BookingFormat = 'individual' | 'pair' | 'group' | null
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
@@ -42,6 +45,7 @@ function BookingPageInner() {
   const ref = searchParams.get('ref')
 
   const [prefill, setPrefill] = useState<ApplicationPrefill | null>(null)
+  const [bookingFormat, setBookingFormat] = useState<BookingFormat>(null)
   const [selectedCourse, setSelectedCourse] = useState<Course>('Russian')
   const [selectedLang, setSelectedLang] = useState<TeachingLang | ''>('')
   const [langDropdownOpen, setLangDropdownOpen] = useState(false)
@@ -61,6 +65,7 @@ function BookingPageInner() {
       .then(d => {
         if (!d.prefill) return
         setPrefill(d.prefill)
+        if (d.bookingFormat) setBookingFormat(d.bookingFormat)
         const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
         if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
           setSelectedCourse(d.prefill.subject as Course)
@@ -245,71 +250,79 @@ function BookingPageInner() {
         </div>
 
         {/* Main layout */}
-        <div className="flex gap-5 items-stretch h-[600px]">
-          {/* Left panel */}
-          <div className={`flex-shrink-0 flex flex-col gap-3 overflow-y-auto transition-all duration-200 ${
-            selectedSlot ? 'w-[440px]' : 'w-72'
-          }`}>
-            {selectedTeacher && selectedSlot ? (
-              <>
-                <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
-                <BookingForm
-                  teacher={selectedTeacher}
-                  slot={selectedSlot.slot}
-                  subject={selectedCourse}
-                  onSuccess={() => { setBooked(true); loadSlots(teachers, weekStart) }}
-                  onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
-                  prefill={prefill ?? undefined}
-                  adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
-                  refToken={ref ?? undefined}
-                />
-              </>
-            ) : isLoading ? (
-              // Skeleton while loading — prevents flash of unfiltered teachers
-              <>
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-[104px] rounded-2xl bg-gray-200/70 animate-pulse" />
-                ))}
-              </>
-            ) : visibleTeachers.length === 0 ? (
-              <p className="text-sm text-gray-400">{t.booking.noProfessors}</p>
-            ) : (
-              visibleTeachers.map(teacher => (
-                <TeacherCard
-                  key={teacher.id}
-                  teacher={teacher}
-                  selected={selectedTeacher?.id === teacher.id}
-                  onClick={() => {
-                    setSelectedTeacher(prev => prev?.id === teacher.id ? null : teacher)
-                    setSelectedSlot(null)
-                  }}
-                />
-              ))
-            )}
-          </div>
+        {bookingFormat === 'group' ? (
+          <GroupBatchView
+            subject={selectedCourse}
+            refToken={ref!}
+            prefill={prefill ?? undefined}
+            onSuccess={() => setBooked(true)}
+          />
+        ) : (
+          <div className="flex gap-5 items-stretch h-[600px]">
+            {/* Left panel */}
+            <div className={`flex-shrink-0 flex flex-col gap-3 overflow-y-auto transition-all duration-200 ${
+              selectedSlot ? 'w-[440px]' : 'w-72'
+            }`}>
+              {selectedTeacher && selectedSlot ? (
+                <>
+                  <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
+                  <BookingForm
+                    teacher={selectedTeacher}
+                    slot={selectedSlot.slot}
+                    subject={selectedCourse}
+                    onSuccess={() => { setBooked(true); loadSlots(teachers, weekStart) }}
+                    onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
+                    prefill={prefill ?? undefined}
+                    adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
+                    refToken={ref ?? undefined}
+                  />
+                </>
+              ) : isLoading ? (
+                <>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-[104px] rounded-2xl bg-gray-200/70 animate-pulse" />
+                  ))}
+                </>
+              ) : visibleTeachers.length === 0 ? (
+                <p className="text-sm text-gray-400">{t.booking.noProfessors}</p>
+              ) : (
+                visibleTeachers.map(teacher => (
+                  <TeacherCard
+                    key={teacher.id}
+                    teacher={teacher}
+                    selected={selectedTeacher?.id === teacher.id}
+                    onClick={() => {
+                      setSelectedTeacher(prev => prev?.id === teacher.id ? null : teacher)
+                      setSelectedSlot(null)
+                    }}
+                  />
+                ))
+              )}
+            </div>
 
-          {/* Right panel — calendar */}
-          <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 overflow-auto">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                {t.booking.loading}
-              </div>
-            ) : teachers.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                {t.booking.selectCourse}
-              </div>
-            ) : (
-              <WeekView
-                teacherSlots={visibleTeacherSlots}
-                selectedSlot={selectedSlot}
-                onSelectSlot={handleSelectSlot}
-                weekStart={weekStart}
-                onPrevWeek={() => setWeekStart(w => subDays(w, 7))}
-                onNextWeek={() => setWeekStart(w => addDays(w, 7))}
-              />
-            )}
+            {/* Right panel — calendar */}
+            <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 overflow-auto">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                  {t.booking.loading}
+                </div>
+              ) : teachers.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                  {t.booking.selectCourse}
+                </div>
+              ) : (
+                <WeekView
+                  teacherSlots={visibleTeacherSlots}
+                  selectedSlot={selectedSlot}
+                  onSelectSlot={handleSelectSlot}
+                  weekStart={weekStart}
+                  onPrevWeek={() => setWeekStart(w => subDays(w, 7))}
+                  onNextWeek={() => setWeekStart(w => addDays(w, 7))}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   )
