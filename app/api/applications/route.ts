@@ -24,6 +24,21 @@ const POOR_COUNTRIES = new Set([
   'KG','TJ','TM','UZ','MN','AF','YE','SY',
 ])
 
+const CIS_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD'])
+
+export function computeCommunicationLang(lang: string, learning_lang: string | null, country_code: string | null): 'en' | 'et' | 'ru' {
+  if (['en','et','ru'].includes(lang)) return lang as 'en' | 'et' | 'ru'
+  if (learning_lang === 'ky' || learning_lang === 'ru') return 'ru'
+  if (learning_lang === 'et') return 'et'
+  if (learning_lang === 'en') return 'en'
+  if (country_code) {
+    const cc = country_code.toUpperCase()
+    if (cc === 'EE') return 'et'
+    if (CIS_COUNTRIES.has(cc)) return 'ru'
+  }
+  return 'en'
+}
+
 function getPriceTier(countryCode: string): 'rich' | 'normal' | 'poor' {
   const code = countryCode.toUpperCase()
   if (RICH_COUNTRIES.has(code)) return 'rich'
@@ -63,7 +78,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const validSubjects = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
+  const validSubjects = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
   if (!validSubjects.includes(subject)) {
     return NextResponse.json(
       { error: 'Invalid subject' },
@@ -145,6 +160,7 @@ export async function POST(req: NextRequest) {
       telegram_parent_username: telegram_parent_username || null,
       lang,
       price_tier,
+      communication_lang: computeCommunicationLang(lang, learning_lang, country_code || null),
       status: 'accepted',
       ref_token,
       scheduled_accept_at: scheduledAt.toISOString(),
@@ -165,7 +181,7 @@ export async function POST(req: NextRequest) {
   const isTestEmail = testPatterns.some(p => emailLocal.includes(p.replace(/[^a-z0-9]/g, '').slice(0, 6)))
   if (isTestEmail) {
     const preferred = (learning_lang || lang) as string
-    const emailLang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
+    const emailLang = computeCommunicationLang(lang, learning_lang, country_code || null)
     const tgEligible = isTelegramEligible(country_code, learning_lang)
     try {
       await sendPackageEmail({ to: email, name, token: ref_token, lang: emailLang, subject, appId: data.id, showTelegram: tgEligible })
@@ -241,7 +257,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: app, error: fetchErr } = await getSupabaseAdmin()
     .from('applications')
-    .select('name, email, lang, learning_lang, country_code, subject')
+    .select('name, email, lang, learning_lang, country_code, subject, communication_lang')
     .eq('id', id)
     .single()
 
@@ -255,8 +271,7 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
 
   if (status === 'accepted' && ref_token) {
-    const preferred = (app.learning_lang || app.lang) as string
-    const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
+    const lang = (app.communication_lang ?? 'en') as 'en' | 'et' | 'ru'
     const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
     try {
       await sendPackageEmail({ to: app.email, name: app.name, token: ref_token, lang, subject: app.subject, appId: id, showTelegram: tgEligible })

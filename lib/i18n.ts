@@ -22,6 +22,7 @@ export const translations = {
         Estonian: 'Estonian',
         Spanish: 'Spanish',
         Math: 'Math',
+        Kyrgyz: 'Kyrgyz',
       },
     },
     form: {
@@ -75,6 +76,7 @@ export const translations = {
         Estonian: 'Eesti keel',
         Spanish: 'Hispaania keel',
         Math: 'Matemaatika',
+        Kyrgyz: 'Kirgiisi',
       },
     },
     form: {
@@ -128,6 +130,7 @@ export const translations = {
         Estonian: 'Эстонский',
         Spanish: 'Испанский',
         Math: 'Математика',
+        Kyrgyz: 'Кыргызский',
       },
     },
     form: {

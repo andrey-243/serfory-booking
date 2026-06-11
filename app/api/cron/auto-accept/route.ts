@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { data: pending, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, email, subject, lang, learning_lang, country_code, contact_pref, telegram_chat_id, ref_token')
+    .select('id, name, email, subject, lang, learning_lang, country_code, contact_pref, telegram_chat_id, ref_token, communication_lang')
     .eq('status', 'accepted')
     .lte('scheduled_accept_at', now)
     .is('package_email_sent_at', null)
@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
 
     if (updateErr) continue
 
-    const preferred = (app.learning_lang || app.lang || 'en') as string
-    const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
+    const lang = ((app as { communication_lang?: string }).communication_lang ?? 'en') as 'en' | 'et' | 'ru'
     const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
     const packageLink = `${process.env.NEXT_PUBLIC_BASE_URL}/package?token=${app.ref_token}`
 

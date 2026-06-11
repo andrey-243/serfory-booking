@@ -10,7 +10,7 @@ const TG_ELIGIBLE_COUNTRIES = new Set([
 ])
 
 export function isTelegramEligible(countryCode: string | null | undefined, learningLang: string | null | undefined): boolean {
-  if (learningLang === 'ru') return true
+  if (learningLang === 'ru' || learningLang === 'ky') return true
   if (countryCode && TG_ELIGIBLE_COUNTRIES.has(countryCode.toUpperCase())) return true
   return false
 }

@@ -7,6 +7,7 @@ import Image from 'next/image'
 type Format = 'individual' | 'pair' | 'group'
 type LessonsCount = 1 | 4 | 8 | 12
 type Lang = 'en' | 'et' | 'ru'
+type TeachingLang = 'en' | 'et' | 'ru' | 'ky'
 
 const FORMAT_INFO: Record<Format, Record<Lang, { label: string; students: string }>> = {
   individual: {
@@ -39,8 +40,14 @@ const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
   group: [4],
 }
 
-const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math'] as const
+const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz'] as const
 type Subject = typeof VALID_SUBJECTS[number]
+
+// Math and Kyrgyz are individual-only (no group/pair formats)
+const SOLO_ONLY_SUBJECTS = new Set<Subject>(['Math', 'Kyrgyz'])
+function getAvailableFormats(subject: Subject): Format[] {
+  return SOLO_ONLY_SUBJECTS.has(subject) ? ['individual'] : ['individual', 'pair', 'group']
+}
 
 const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
 
@@ -58,7 +65,7 @@ const T = {
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
     course: 'Course',
     teachingLang: 'Teaching language',
-    langLabels: { en: 'English', et: 'Estonian', ru: 'Russian' } as Record<string, string>,
+    langLabels: { en: 'English', et: 'Estonian', ru: 'Russian', ky: 'Kyrgyz' } as Record<string, string>,
     format: 'Format',
     package: 'Package',
     lessons: (n: number) => n === 1 ? '1 lesson' : `${n} lessons`,
@@ -89,7 +96,7 @@ const T = {
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
     course: 'Kursus',
     teachingLang: 'Õppekeel',
-    langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene' } as Record<string, string>,
+    langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene', ky: 'Kirgiisi' } as Record<string, string>,
     format: 'Formaat',
     package: 'Pakett',
     lessons: (n: number) => n === 1 ? '1 tund' : `${n} tundi`,
@@ -120,7 +127,7 @@ const T = {
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
     teachingLang: 'Язык обучения',
-    langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский' } as Record<string, string>,
+    langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский', ky: 'Кыргызский' } as Record<string, string>,
     format: 'Формат',
     package: 'Пакет',
     lessons: (n: number) => n === 1 ? '1 урок' : `${n} уроков`,
@@ -146,7 +153,7 @@ const T = {
 
 function LoadingShell() {
   const [uiLang, setUiLang] = useState<Lang>('en')
-  return <PageShell uiLang={uiLang} setUiLang={setUiLang}><p className="text-gray-500">Loading...</p></PageShell>
+  return <PageShell uiLang={uiLang} onLangChange={setUiLang}><p className="text-gray-500">Loading...</p></PageShell>
 }
 
 export default function PackagePage() {
@@ -170,7 +177,7 @@ function PackagePageInner() {
   const [uiLang, setUiLang] = useState<Lang>('en')
 
   const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
-  const [selectedLearningLang, setSelectedLearningLang] = useState<Lang>('en')
+  const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
@@ -187,7 +194,7 @@ function PackagePageInner() {
         setAppData({ name: d.name, subject: d.subject, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null })
         setUiLang(lang)
         if (VALID_SUBJECTS.includes(d.subject)) setSelectedSubject(d.subject as Subject)
-        if (['en', 'et', 'ru'].includes(d.learning_lang)) setSelectedLearningLang(d.learning_lang as Lang)
+        if (['en', 'et', 'ru', 'ky'].includes(d.learning_lang)) setSelectedLearningLang(d.learning_lang as TeachingLang)
         if (d.telegram_username) setTgUsernameInput(d.telegram_username)
         if (d.invoiceAlreadySent && !d.invoicePaid) setHasPendingInvoice(true)
         setStatus('ready')
@@ -203,6 +210,13 @@ function PackagePageInner() {
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
   const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
+
+  // Reset format to individual when switching to solo-only subject
+  useEffect(() => {
+    if (!getAvailableFormats(selectedSubject).includes(format)) {
+      setFormat('individual')
+    }
+  }, [selectedSubject])
 
   async function handleConfirm() {
     setStatus('sending')
@@ -236,17 +250,22 @@ function PackagePageInner() {
     setInterest8w('done')
   }
 
-  if (status === 'loading') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><p className="text-gray-500">{T.en.loading}</p></PageShell>
-  if (status === 'invalid') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><ErrorCard msg={T.en.invalidToken} /></PageShell>
+  const handleLangChange = (l: Lang) => {
+    setUiLang(l)
+    if (token) fetch('/api/package', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, communication_lang: l }) }).catch(() => {})
+  }
+
+  if (status === 'loading') return <PageShell uiLang={uiLang} onLangChange={setUiLang}><p className="text-gray-500">{T.en.loading}</p></PageShell>
+  if (status === 'invalid') return <PageShell uiLang={uiLang} onLangChange={setUiLang}><ErrorCard msg={T.en.invalidToken} /></PageShell>
   if (status === 'done') return (
-    <PageShell uiLang={uiLang} setUiLang={setUiLang}>
+    <PageShell uiLang={uiLang} onLangChange={handleLangChange}>
       <SuccessCard msg={t.success} />
       {tgEligible && <TgBlock t={t} botUsername={BOT} />}
     </PageShell>
   )
 
   return (
-    <PageShell uiLang={uiLang} setUiLang={setUiLang}>
+    <PageShell uiLang={uiLang} onLangChange={handleLangChange}>
       <div className="w-full max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           {t.title(appData!.name)}
@@ -284,7 +303,7 @@ function PackagePageInner() {
         <div className="mb-8">
           <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
           <div className="flex gap-2">
-            {(['en', 'et', 'ru'] as Lang[]).map(l => (
+            {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
               <button
                 key={l}
                 onClick={() => setSelectedLearningLang(l)}
@@ -303,8 +322,8 @@ function PackagePageInner() {
         {/* Format selector */}
         <div className="mb-8">
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
-          <div className="grid grid-cols-3 gap-3">
-            {(Object.keys(FORMAT_INFO) as Format[]).map(f => (
+          <div className={`grid gap-3 grid-cols-${getAvailableFormats(selectedSubject).length}`}>
+            {(Object.keys(FORMAT_INFO) as Format[]).filter(f => getAvailableFormats(selectedSubject).includes(f)).map(f => (
               <button
                 key={f}
                 onClick={() => setFormat(f)}
@@ -475,10 +494,10 @@ function LangSwitcher({ current, onChange }: { current: Lang; onChange: (l: Lang
   )
 }
 
-function PageShell({ children, uiLang, setUiLang }: {
+function PageShell({ children, uiLang, onLangChange }: {
   children: React.ReactNode
   uiLang: Lang
-  setUiLang: (l: Lang) => void
+  onLangChange: (l: Lang) => void
 }) {
   return (
     <div className="min-h-screen bg-[#EEF2FF] flex flex-col items-center justify-center p-6">
@@ -488,7 +507,7 @@ function PageShell({ children, uiLang, setUiLang }: {
             <Image src="/logo.png" alt="Serfory" width={32} height={32} className="rounded-lg" />
             <span className="text-lg font-bold text-blue-600">Serfory</span>
           </a>
-          <LangSwitcher current={uiLang} onChange={setUiLang} />
+          <LangSwitcher current={uiLang} onChange={onLangChange} />
         </div>
         {children}
       </div>

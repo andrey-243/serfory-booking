@@ -54,13 +54,29 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+export async function PATCH(req: NextRequest) {
+  const { token, communication_lang } = await req.json()
+  if (!token || !['en', 'et', 'ru'].includes(communication_lang)) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+
+  const { error } = await getSupabaseAdmin()
+    .from('applications')
+    .update({ communication_lang })
+    .eq('ref_token', token)
+    .eq('status', 'accepted')
+
+  if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
   if (!token) return NextResponse.json({ error: 'Missing token' }, { status: 400 })
 
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, subject, lang, learning_lang, country_code, status, telegram_chat_id, telegram_username')
+    .select('id, name, subject, lang, learning_lang, country_code, status, telegram_chat_id, telegram_username, communication_lang')
     .eq('ref_token', token)
     .single()
 
@@ -76,7 +92,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     name: data.name,
     subject: data.subject,
-    lang: (data.learning_lang || data.lang || 'en') as string,
+    lang: ((data as { communication_lang?: string }).communication_lang || data.lang || 'en') as string,
     learning_lang: data.learning_lang ?? null,
     country_code: (data as { country_code?: string | null }).country_code ?? null,
     hasTgChatId: !!(data as { telegram_chat_id?: number | null }).telegram_chat_id,

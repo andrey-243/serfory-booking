@@ -2,7 +2,7 @@
 
 import { useLang } from '@/lib/language-context'
 
-const COURSES = ['Russian', 'English', 'Estonian', 'Spanish', 'Math'] as const
+const COURSES = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz'] as const
 export type Course = (typeof COURSES)[number]
 
 type Props = {

@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   // Resolve application from token
   const { data: app, error: appErr } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, email, subject, lang, learning_lang, price_tier, status')
+    .select('id, name, email, subject, lang, learning_lang, country_code, price_tier, status, communication_lang')
     .eq('ref_token', token)
     .single()
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   const dueDays = Number(process.env.INVOICE_DUE_DAYS ?? 7)
   const dueAt = new Date(issuedAt.getTime() + dueDays * 24 * 60 * 60 * 1000)
 
-  const lang = (['en', 'et', 'ru'].includes(effectiveLearningLang) ? effectiveLearningLang : 'en') as 'en' | 'et' | 'ru'
+  const lang = ((app as { communication_lang?: string }).communication_lang ?? 'en') as 'en' | 'et' | 'ru'
 
   // Get next invoice number
   const { data: lastInvoice } = await getSupabaseAdmin()

@@ -23,7 +23,7 @@ export type ApplicationPrefill = {
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
-const TEACHING_LANGS = ['Russian', 'Estonian', 'English'] as const
+const TEACHING_LANGS = ['Russian', 'Estonian', 'English', 'Kyrgyz'] as const
 type TeachingLang = typeof TEACHING_LANGS[number]
 
 export default function BookingPage() {
