@@ -30,16 +30,19 @@ type Props = {
   onNextWeek: () => void
 }
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 8)
+const HOURS = Array.from({ length: 14 }, (_, i) => i + 8)
 
-function slotToGridRow(start: string, end: string) {
+function stableColorIndex(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return Math.abs(h) % TEACHER_COLORS.length
+}
+
+function slotToGridRow(start: string) {
   const s = parseISO(start)
-  const e = parseISO(end)
   const startMin = s.getHours() * 60 + s.getMinutes()
-  const endMin = e.getHours() * 60 + e.getMinutes()
   const rowStart = Math.round((startMin - 8 * 60) / 30) + 2
-  const rowSpan = Math.round((endMin - startMin) / 30)
-  return { rowStart, rowSpan: Math.max(rowSpan, 1) }
+  return { rowStart, rowSpan: 2 } // always 1h = 2 grid rows of 30min
 }
 
 type SlotEntry = { teacher: Teacher; slot: CalendarSlot }
@@ -53,10 +56,10 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
   const now = new Date()
   const canGoPrev = isAfter(weekStart, todayStart)
 
-  // Assign a stable color index per teacher
+  // Assign a stable color per teacher based on their ID hash
   const teacherColorMap: Record<string, number> = {}
-  teacherSlots.forEach((ts, i) => {
-    teacherColorMap[ts.teacher.id] = i % TEACHER_COLORS.length
+  teacherSlots.forEach(ts => {
+    teacherColorMap[ts.teacher.id] = stableColorIndex(ts.teacher.id)
   })
 
   // Group slots by (dayIndex, slotStart) → list of {teacher, slot}
@@ -148,7 +151,7 @@ export default function WeekView({ teacherSlots, selectedSlot, onSelectSlot, wee
           {/* Slot cells */}
           {Array.from(grouped.entries()).map(([key, entries]) => {
             const dayIdx = parseInt(key.split('|')[0])
-            const { rowStart, rowSpan } = slotToGridRow(entries[0].slot.start, entries[0].slot.end)
+            const { rowStart, rowSpan } = slotToGridRow(entries[0].slot.start)
 
             return (
               <div

@@ -221,21 +221,35 @@ const BOOKING_LINK_MESSAGES = {
   },
 }
 
+export function botCtaStudentBlock(lang: 'en' | 'et' | 'ru', botLink: string): string {
+  return (MESSAGES[lang] ?? MESSAGES.en).botCtaStudent(botLink)
+}
+
 export async function sendBookingLinkEmail({
-  to, name, link, lang, subject: courseSubject,
+  to, name, link, lang, subject: courseSubject, appId, showTelegram = false,
 }: {
   to: string
   name: string
   link: string
   lang: 'en' | 'et' | 'ru'
   subject: string
+  appId?: string
+  showTelegram?: boolean
 }) {
   const l = BOOKING_LINK_MESSAGES[lang] ?? BOOKING_LINK_MESSAGES.en
+  const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforybot'
+  const botBlock = showTelegram && appId
+    ? botCtaStudentBlock(lang, `https://t.me/${BOT}?start=s_${appId}`)
+    : ''
+  const html = l.body(name, link, courseSubject).replace(
+    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
+    `${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
+  )
   await transporter.sendMail({
     from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,
     to,
     subject: l.subject,
-    html: l.body(name, link, courseSubject),
+    html,
   })
 }
 

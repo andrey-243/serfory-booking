@@ -72,6 +72,8 @@ export async function PATCH(
       link: bookingLink,
       lang,
       subject: effectiveSubject,
+      appId: app.id,
+      showTelegram: tgEligible && !app.telegram_chat_id,
     })
   } catch (e) {
     console.error('Booking link email failed:', e)

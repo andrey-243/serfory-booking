@@ -221,8 +221,15 @@ function BookingPageInner() {
     )
   }
 
+  function handleOutsideClick() {
+    if (selectedTeacher || selectedSlot) {
+      setSelectedTeacher(null)
+      setSelectedSlot(null)
+    }
+  }
+
   return (
-    <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
+    <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10" onClick={handleOutsideClick}>
       <div className="max-w-screen-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -302,7 +309,8 @@ function BookingPageInner() {
           </div>}
         </div>
 
-        {/* Main layout */}
+        {/* Main layout — stopPropagation so click-outside-to-deselect only triggers on bg */}
+        <div onClick={e => e.stopPropagation()}>
         {bookingFormat === 'group' ? (
           <GroupBatchView
             subject={selectedCourse}
@@ -311,7 +319,7 @@ function BookingPageInner() {
             onSuccess={() => setBooked(true)}
           />
         ) : (
-          <div className="flex gap-5 items-stretch h-[600px]">
+          <div className="flex gap-5 items-stretch" style={{ height: 'calc(100vh - 220px)', minHeight: '560px' }}>
             {/* Left panel */}
             <div className={`flex-shrink-0 flex flex-col gap-3 overflow-y-auto transition-all duration-200 ${
               selectedSlot ? 'w-[440px]' : 'w-72'
@@ -320,8 +328,12 @@ function BookingPageInner() {
                 <>
                   <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
                   {lessonsRemaining !== null && (
-                    <div className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-600 font-medium text-center">
-                      {lessonsRemaining} / {lessonsTotal} lessons remaining
+                    <div className={`px-3 py-1.5 rounded-xl text-xs font-medium text-center border ${
+                      lessonsRemaining === 0
+                        ? 'bg-red-50 border-red-200 text-red-600'
+                        : 'bg-blue-50 border-blue-100 text-blue-600'
+                    }`}>
+                      {t.booking.lessonsRemainingBadge(lessonsRemaining, lessonsTotal ?? 0)}
                     </div>
                   )}
                   <BookingForm
@@ -386,6 +398,7 @@ function BookingPageInner() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </main>
   )

@@ -23,6 +23,7 @@ type Booking = {
   telegram_username: string | null
   status: string
   amount: number | null
+  invoice_id: string | null
   student_response: string | null
   teacher_response: string | null
   teachers: { name: string } | null
@@ -62,6 +63,8 @@ type PanelBooking = {
   teacher: string
   status: 'confirmed' | 'pending' | 'cancelled'
   amount: number
+  invoice_id: string | null
+  invoice_status: 'sent' | 'paid' | null
 }
 
 type Combo = { subject: string; teacher: string; count: number }
@@ -364,13 +367,15 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
   )
 }
 
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName }: {
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName, initialPaidIds, initialInvoiceSentIds }: {
   bookings: PanelBooking[]
   studentName: string
+  initialPaidIds?: Set<string>
+  initialInvoiceSentIds?: Set<string>
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const [paidIds, setPaidIds] = useState<Set<string>>(new Set())
-  const [invoiceSentIds, setInvoiceSentIds] = useState<Set<string>>(new Set())
+  const [paidIds, setPaidIds] = useState<Set<string>>(initialPaidIds ?? new Set())
+  const [invoiceSentIds, setInvoiceSentIds] = useState<Set<string>>(initialInvoiceSentIds ?? new Set())
   const [monthOffset, setMonthOffset] = useState(0)
   const [cancelledOpen, setCancelledOpen] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
@@ -1492,16 +1497,24 @@ export default function AdminPage() {
         {statsModal && (() => {
           const s = students.find(st => st.email === statsModal)
           if (!s) return null
+          const invoiceStatusMap = new Map(invoices.map(inv => [inv.id, inv.status]))
           const studentBookings: PanelBooking[] = bookings
             .filter(b => b.student_email === s.email)
-            .map(b => ({
-              id: b.id,
-              date: b.slot_start,
-              subject: b.subject,
-              teacher: b.teachers?.name ?? '—',
-              status: b.status as 'confirmed' | 'pending' | 'cancelled',
-              amount: b.amount ?? 0,
-            }))
+            .map(b => {
+              const invStatus = b.invoice_id ? (invoiceStatusMap.get(b.invoice_id) ?? null) : null
+              return {
+                id: b.id,
+                date: b.slot_start,
+                subject: b.subject,
+                teacher: b.teachers?.name ?? '—',
+                status: b.status as 'confirmed' | 'pending' | 'cancelled',
+                amount: b.amount ?? 0,
+                invoice_id: b.invoice_id ?? null,
+                invoice_status: invStatus,
+              }
+            })
+          const initialPaidIds = new Set(studentBookings.filter(b => b.invoice_status === 'paid').map(b => b.id))
+          const initialInvoiceSentIds = new Set(studentBookings.filter(b => b.invoice_status === 'sent' || b.invoice_status === 'paid').map(b => b.id))
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-6" onClick={() => setStatsModal(null)}>
               <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
@@ -1510,7 +1523,14 @@ export default function AdminPage() {
                   <div className="flex items-center gap-3">
                     <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold ${avatarColorCrm(s.name)}`}>{crmInitials(s.name)}</span>
                     <div>
-                      <p className="font-semibold text-gray-900">{s.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900">{s.name}</p>
+                        {(s.communicationLang ?? s.learningLang) && (() => {
+                          const cl = (s.communicationLang ?? s.learningLang)!
+                          const badge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
+                          return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${badge[cl] ?? 'bg-gray-100 text-gray-500'}`}>{cl}</span>
+                        })()}
+                      </div>
                       <p className="text-xs text-gray-400">{s.email}</p>
                     </div>
                   </div>
@@ -1518,7 +1538,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin bookings={studentBookings} studentName={s.name} />
+                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} />
               </div>
             </div>
           )

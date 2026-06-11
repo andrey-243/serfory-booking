@@ -16,6 +16,7 @@ export const translations = {
       pendingPaymentDesc: 'Your booking link will be sent once your payment is confirmed.',
       noLessonsRemaining: 'No lessons remaining',
       noLessonsRemainingDesc: 'This link has expired. Purchase a new package to book more lessons.',
+      lessonsRemainingBadge: (r: number, t: number) => `${r} / ${t} lessons remaining`,
       teachesIn: 'Teaches in',
       taughtIn: 'Taught in',
       allLanguages: 'All languages',
@@ -43,6 +44,7 @@ export const translations = {
       parentPlaceholder: '55 123 456',
       invalidEmail: 'Please enter a valid email address.',
       invalidPhone: 'Please enter a valid phone number (min. 6 digits).',
+      noLessonsError: 'No lessons remaining on this package.',
     },
     week: {
       prev: '← Prev',
@@ -74,6 +76,7 @@ export const translations = {
       pendingPaymentDesc: 'Broneeringulink saadetakse, kui makse on kinnitatud.',
       noLessonsRemaining: 'Tunnid lõppenud',
       noLessonsRemainingDesc: 'See link on aegunud. Osta uus pakett, et rohkem tunde broneerida.',
+      lessonsRemainingBadge: (r: number, t: number) => `${r} / ${t} tundi järel`,
       teachesIn: 'Õpetab keeles',
       taughtIn: 'Õpetatakse keeles',
       allLanguages: 'Kõik keeled',
@@ -101,6 +104,7 @@ export const translations = {
       parentPlaceholder: '55 123 456',
       invalidEmail: 'Palun sisestage kehtiv e-posti aadress.',
       invalidPhone: 'Palun sisestage kehtiv telefoninumber (min. 6 numbrit).',
+      noLessonsError: 'Selles paketis pole enam tunde.',
     },
     week: {
       prev: '← Eelmine',
@@ -132,6 +136,7 @@ export const translations = {
       pendingPaymentDesc: 'Ссылка для бронирования будет отправлена после подтверждения оплаты.',
       noLessonsRemaining: 'Уроки закончились',
       noLessonsRemainingDesc: 'Эта ссылка больше недействительна. Купите новый пакет, чтобы записаться.',
+      lessonsRemainingBadge: (r: number, t: number) => `Осталось ${r} / ${t} уроков`,
       teachesIn: 'Язык обучения',
       taughtIn: 'Язык обучения',
       allLanguages: 'Все языки',
@@ -159,6 +164,7 @@ export const translations = {
       parentPlaceholder: '55 123 456',
       invalidEmail: 'Пожалуйста, введите корректный адрес электронной почты.',
       invalidPhone: 'Пожалуйста, введите корректный номер телефона (мин. 6 цифр).',
+      noLessonsError: 'В этом пакете больше нет уроков.',
     },
     week: {
       prev: '← Пред.',

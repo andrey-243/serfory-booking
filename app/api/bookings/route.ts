@@ -46,6 +46,31 @@ export async function POST(req: NextRequest) {
     if (app?.telegram_username && !tgUsername) tgUsername = app.telegram_username
   }
 
+  // Guard: check remaining lessons BEFORE creating the booking
+  if (invoice_id) {
+    const { data: inv } = await getSupabaseAdmin()
+      .from('invoices')
+      .select('lessons_count')
+      .eq('id', invoice_id)
+      .single()
+
+    if (inv) {
+      const { count } = await getSupabaseAdmin()
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('invoice_id', invoice_id)
+        .neq('status', 'cancelled')
+
+      if ((count ?? 0) >= inv.lessons_count) {
+        await getSupabaseAdmin()
+          .from('invoices')
+          .update({ booking_token: null })
+          .eq('id', invoice_id)
+        return NextResponse.json({ error: 'No lessons remaining on this package' }, { status: 403 })
+      }
+    }
+  }
+
   let google_event_id: string | null = null
   let meet_link: string | null = null
 

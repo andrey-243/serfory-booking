@@ -239,7 +239,10 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Error')
+        const msg = data.error === 'No lessons remaining on this package'
+          ? ft.noLessonsError
+          : (data.error || 'Error')
+        throw new Error(msg)
       }
 
       onSuccess()

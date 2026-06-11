@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getPricePerLesson, getTotalAmount, getStudentsCount, Format, LessonsCount } from '@/lib/pricing'
 import { generateInvoicePDF } from '@/lib/invoice-pdf'
+import { isTelegramEligible, botCtaStudentBlock } from '@/lib/email'
 import nodemailer from 'nodemailer'
 
 const transporter = nodemailer.createTransport({
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
   // Resolve application from token
   const { data: app, error: appErr } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, email, subject, lang, learning_lang, country_code, price_tier, status, communication_lang')
+    .select('id, name, email, subject, lang, learning_lang, country_code, price_tier, status, communication_lang, telegram_chat_id')
     .eq('ref_token', token)
     .single()
 
@@ -182,7 +183,17 @@ export async function POST(req: NextRequest) {
   // Send email with PDF attachment
   const dueDateStr = dueAt.toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const subject = INVOICE_SUBJECTS[lang] ?? INVOICE_SUBJECTS.en
-  const html = (INVOICE_BODY[lang] ?? INVOICE_BODY.en)(app.name, totalAmount, dueDateStr)
+  const rawHtml = (INVOICE_BODY[lang] ?? INVOICE_BODY.en)(app.name, totalAmount, dueDateStr)
+  const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
+  const hasChatId = !!(app as { telegram_chat_id?: number | null }).telegram_chat_id
+  const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforybot'
+  const botBlock = tgEligible && !hasChatId
+    ? botCtaStudentBlock(lang, `https://t.me/${BOT}?start=s_${app.id}`)
+    : ''
+  const html = rawHtml.replace(
+    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
+    `${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
+  )
 
   await transporter.sendMail({
     from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,
