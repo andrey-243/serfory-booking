@@ -222,16 +222,15 @@ const BOOKING_LINK_MESSAGES = {
 }
 
 export async function sendBookingLinkEmail({
-  to, name, token, lang, subject: courseSubject,
+  to, name, link, lang, subject: courseSubject,
 }: {
   to: string
   name: string
-  token: string
+  link: string
   lang: 'en' | 'et' | 'ru'
   subject: string
 }) {
   const l = BOOKING_LINK_MESSAGES[lang] ?? BOOKING_LINK_MESSAGES.en
-  const link = `${BOOKING_URL}/booking?ref=${token}`
   await transporter.sendMail({
     from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,
     to,

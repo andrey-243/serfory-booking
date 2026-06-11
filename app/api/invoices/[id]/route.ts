@@ -26,7 +26,7 @@ export async function PATCH(
     .from('invoices')
     .select(`
       id, status, subject, learning_lang,
-      applications(id, name, email, subject, ref_token, lang, learning_lang, country_code, telegram_chat_id)
+      applications(id, name, email, subject, ref_token, lang, learning_lang, country_code, telegram_chat_id, communication_lang)
     `)
     .eq('id', id)
     .single()
@@ -41,13 +41,16 @@ export async function PATCH(
   const effectiveSubject = (invoice as { subject?: string | null }).subject || app.subject
   const effectiveLearningLang = (invoice as { learning_lang?: string | null }).learning_lang || app.learning_lang
 
-  // Mark as paid + apply subject/lang overrides to application
+  // Generate unique booking token for this invoice
+  const bookingToken = crypto.randomUUID()
+
+  // Apply subject/lang overrides to application + mark invoice paid + store booking_token
   const appUpdates: Record<string, string> = {}
   if (effectiveSubject && effectiveSubject !== app.subject) appUpdates.subject = effectiveSubject
   if (effectiveLearningLang && effectiveLearningLang !== app.learning_lang) appUpdates.learning_lang = effectiveLearningLang
 
   const [{ error: updateErr }] = await Promise.all([
-    getSupabaseAdmin().from('invoices').update({ status: 'paid' }).eq('id', id),
+    getSupabaseAdmin().from('invoices').update({ status: 'paid', booking_token: bookingToken }).eq('id', id),
     Object.keys(appUpdates).length > 0
       ? getSupabaseAdmin().from('applications').update(appUpdates).eq('id', app.id)
       : Promise.resolve({ error: null }),
@@ -55,9 +58,10 @@ export async function PATCH(
 
   if (updateErr) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
 
-  const preferred = (effectiveLearningLang || app.lang || 'en') as string
+  const commLang = (app as { communication_lang?: string | null }).communication_lang
+  const preferred = (commLang || effectiveLearningLang || app.lang || 'en') as string
   const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
-  const bookingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?ref=${app.ref_token}`
+  const bookingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?session=${bookingToken}`
   const tgEligible = isTelegramEligible(app.country_code, effectiveLearningLang)
 
   // Send booking link via email
@@ -65,7 +69,7 @@ export async function PATCH(
     await sendBookingLinkEmail({
       to: app.email,
       name: app.name,
-      token: app.ref_token,
+      link: bookingLink,
       lang,
       subject: effectiveSubject,
     })

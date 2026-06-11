@@ -43,6 +43,7 @@ function BookingPageInner() {
   const { t, setLang } = useLang()
   const searchParams = useSearchParams()
   const ref = searchParams.get('ref')
+  const session = searchParams.get('session')
 
   const [prefill, setPrefill] = useState<ApplicationPrefill | null>(null)
   const [bookingFormat, setBookingFormat] = useState<BookingFormat>(null)
@@ -58,7 +59,41 @@ function BookingPageInner() {
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
+  const [invoiceId, setInvoiceId] = useState<string | null>(null)
+  const [lessonsRemaining, setLessonsRemaining] = useState<number | null>(null)
+  const [lessonsTotal, setLessonsTotal] = useState<number | null>(null)
+  const [sessionInvalid, setSessionInvalid] = useState(false)
 
+  // Session flow: ?session=<booking_token>
+  useEffect(() => {
+    if (!session) return
+    fetch(`/api/booking-session?session=${session}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setSessionInvalid(true); return }
+        setInvoiceId(d.invoiceId)
+        setLessonsRemaining(d.lessonsRemaining)
+        setLessonsTotal(d.lessonsTotal)
+        if (d.format) setBookingFormat(d.format)
+        if (!d.prefill) return
+        setPrefill(d.prefill)
+        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
+        if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
+          setSelectedCourse(d.prefill.subject as Course)
+        }
+        const VALID_LANGS = ['en', 'et', 'ru']
+        if (d.prefill.learning_lang && VALID_LANGS.includes(d.prefill.learning_lang)) {
+          setLang(d.prefill.learning_lang)
+        }
+        const LANG_TO_TEACHING: Record<string, TeachingLang> = { en: 'English', et: 'Estonian', ru: 'Russian' }
+        if (d.prefill.learning_lang && LANG_TO_TEACHING[d.prefill.learning_lang]) {
+          setSelectedLang(LANG_TO_TEACHING[d.prefill.learning_lang])
+        }
+      })
+      .catch(() => setSessionInvalid(true))
+  }, [session, setLang])
+
+  // Ref flow (legacy): ?ref=<ref_token>
   useEffect(() => {
     if (!ref) return
     fetch(`/api/applications?ref=${ref}`)
@@ -151,6 +186,18 @@ function BookingPageInner() {
         ts.slots.length > 0 &&
         (selectedLang === '' || ts.teacher.teaching_languages.includes(selectedLang))
       )
+
+  if (sessionInvalid) {
+    return (
+      <main className="min-h-screen bg-[#EEF2FF] flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow">
+          <div className="text-4xl mb-4">🔒</div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.booking.noLessonsRemaining}</h2>
+          <p className="text-gray-500 text-sm">{t.booking.noLessonsRemainingDesc}</p>
+        </div>
+      </main>
+    )
+  }
 
   if (hasPendingInvoice) {
     return (
@@ -280,15 +327,25 @@ function BookingPageInner() {
               {selectedTeacher && selectedSlot ? (
                 <>
                   <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
+                  {lessonsRemaining !== null && (
+                    <div className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-600 font-medium text-center">
+                      {lessonsRemaining} / {lessonsTotal} lessons remaining
+                    </div>
+                  )}
                   <BookingForm
                     teacher={selectedTeacher}
                     slot={selectedSlot.slot}
                     subject={selectedCourse}
-                    onSuccess={() => { setBooked(true); loadSlots(teachers, weekStart) }}
+                    onSuccess={() => {
+                      setBooked(true)
+                      loadSlots(teachers, weekStart)
+                      if (lessonsRemaining !== null) setLessonsRemaining(r => r !== null ? Math.max(0, r - 1) : null)
+                    }}
                     onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
                     prefill={prefill ?? undefined}
                     adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
                     refToken={ref ?? undefined}
+                    invoiceId={invoiceId ?? undefined}
                   />
                 </>
               ) : isLoading ? (
