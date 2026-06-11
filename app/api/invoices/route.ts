@@ -61,10 +61,12 @@ const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { token, format, lessons_count } = body as {
+  const { token, format, lessons_count, subject: subjectOverride, learning_lang: learningLangOverride } = body as {
     token: string
     format: Format
     lessons_count: LessonsCount
+    subject?: string
+    learning_lang?: string
   }
 
   if (!token || !format || !lessons_count) {
@@ -87,6 +89,19 @@ export async function POST(req: NextRequest) {
   if (appErr || !app) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
   if (app.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
+  // Apply overrides if student changed subject/lang on the package page
+  const effectiveSubject = subjectOverride || app.subject
+  const effectiveLearningLang = learningLangOverride || app.learning_lang || app.lang
+  if (subjectOverride && subjectOverride !== app.subject || learningLangOverride && learningLangOverride !== app.learning_lang) {
+    await getSupabaseAdmin()
+      .from('applications')
+      .update({
+        ...(subjectOverride && subjectOverride !== app.subject ? { subject: subjectOverride } : {}),
+        ...(learningLangOverride && learningLangOverride !== app.learning_lang ? { learning_lang: learningLangOverride } : {}),
+      })
+      .eq('id', app.id)
+  }
+
   // Check no duplicate invoice
   const { data: existing } = await getSupabaseAdmin()
     .from('invoices')
@@ -104,7 +119,7 @@ export async function POST(req: NextRequest) {
   const dueDays = Number(process.env.INVOICE_DUE_DAYS ?? 7)
   const dueAt = new Date(issuedAt.getTime() + dueDays * 24 * 60 * 60 * 1000)
 
-  const lang = (['en', 'et', 'ru'].includes(app.learning_lang || app.lang) ? (app.learning_lang || app.lang) : 'en') as 'en' | 'et' | 'ru'
+  const lang = (['en', 'et', 'ru'].includes(effectiveLearningLang) ? effectiveLearningLang : 'en') as 'en' | 'et' | 'ru'
 
   // Get next invoice number
   const { data: lastInvoice } = await getSupabaseAdmin()
@@ -122,7 +137,7 @@ export async function POST(req: NextRequest) {
       invoiceNumber,
       studentName: app.name,
       studentEmail: app.email,
-      subject: app.subject,
+      subject: effectiveSubject,
       format,
       lessonsCount: lessons_count,
       studentsCount,

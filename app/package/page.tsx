@@ -33,7 +33,14 @@ const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
 }
 
 const DISCOUNTS: Record<LessonsCount, string> = { 1: '', 4: '-5%', 8: '-10%', 12: '-15%' }
-const LESSONS_OPTIONS: LessonsCount[] = [1, 4, 8, 12]
+const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
+  individual: [1, 4, 8, 12],
+  pair: [1, 4, 8],
+  group: [4],
+}
+
+const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math'] as const
+type Subject = typeof VALID_SUBJECTS[number]
 
 const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
 
@@ -47,8 +54,11 @@ const T = {
     invalidToken: 'This link is invalid or has already been used.',
     alreadySent: 'An invoice has already been sent for this application.',
     paid: 'Payment received. Check your email for your booking link.',
-    title: (name: string, subject: string) => `Hi ${name}, choose your ${subject} package`,
+    title: (name: string) => `Hi ${name}, choose your package`,
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
+    course: 'Course',
+    teachingLang: 'Teaching language',
+    langLabels: { en: 'English', et: 'Estonian', ru: 'Russian' } as Record<string, string>,
     format: 'Format',
     package: 'Package',
     lessons: (n: number) => n === 1 ? '1 lesson' : `${n} lessons`,
@@ -63,14 +73,23 @@ const T = {
     tgTitle: 'Get updates on Telegram',
     tgDesc: 'Receive lesson reminders and messages from your teacher directly on Telegram.',
     tgCta: 'Connect to bot',
+    invoicePending: 'You have a pending invoice. You can still select a new package.',
+    comingSoon: 'Coming soon',
+    interested: "I'm interested",
+    interestedSent: 'Noted! We\'ll let you know.',
+    notifyByEmail: 'Notify me by email',
+    weeks: (n: number) => `${n} weeks`,
   },
   et: {
     loading: 'Laadimine...',
     invalidToken: 'See link on vale või juba kasutatud.',
     alreadySent: 'Arve on juba saadetud selle avalduse jaoks.',
     paid: 'Makse saadud. Kontrolli oma e-posti broneeringulingi saamiseks.',
-    title: (name: string, subject: string) => `Tere ${name}, vali oma ${subject} pakett`,
+    title: (name: string) => `Tere ${name}, vali oma pakett`,
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
+    course: 'Kursus',
+    teachingLang: 'Õppekeel',
+    langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene' } as Record<string, string>,
     format: 'Formaat',
     package: 'Pakett',
     lessons: (n: number) => n === 1 ? '1 tund' : `${n} tundi`,
@@ -85,14 +104,23 @@ const T = {
     tgTitle: 'Saa uuendusi Telegrami kaudu',
     tgDesc: 'Tunnimuistutused ja õpetaja sõnumid otse Telegrami.',
     tgCta: 'Ühenda botiga',
+    invoicePending: 'Sul on ootel arve. Saad siiski uue paketi valida.',
+    comingSoon: 'Tulemas',
+    interested: 'Olen huvitatud',
+    interestedSent: 'Märgitud! Anname teada.',
+    notifyByEmail: 'Teavita mind e-postiga',
+    weeks: (n: number) => `${n} nädalat`,
   },
   ru: {
     loading: 'Загрузка...',
     invalidToken: 'Эта ссылка недействительна или уже использована.',
     alreadySent: 'Счёт для этой заявки уже был отправлен.',
     paid: 'Оплата получена. Проверьте почту — там ссылка для бронирования.',
-    title: (name: string, subject: string) => `Привет ${name}, выберите пакет для ${subject}`,
+    title: (name: string) => `Привет ${name}, выберите пакет`,
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
+    course: 'Курс',
+    teachingLang: 'Язык обучения',
+    langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский' } as Record<string, string>,
     format: 'Формат',
     package: 'Пакет',
     lessons: (n: number) => n === 1 ? '1 урок' : `${n} уроков`,
@@ -107,6 +135,12 @@ const T = {
     tgTitle: 'Получайте уведомления в Telegram',
     tgDesc: 'Напоминания об уроках и сообщения от учителя прямо в Telegram.',
     tgCta: 'Подключить бота',
+    invoicePending: 'У вас есть неоплаченный счёт. Вы всё равно можете выбрать новый пакет.',
+    comingSoon: 'Скоро',
+    interested: 'Интересует',
+    interestedSent: 'Записали! Сообщим вам.',
+    notifyByEmail: 'Уведомить по email',
+    weeks: (n: number) => `${n} недель`,
   },
 }
 
@@ -130,12 +164,18 @@ function PackagePageInner() {
   const [appData, setAppData] = useState<{
     name: string; subject: string; lang: Lang
     learning_lang: string | null; country_code: string | null
+    hasTgChatId: boolean; telegram_username: string | null
   } | null>(null)
   const [status, setStatus] = useState<'loading' | 'invalid' | 'alreadySent' | 'paid' | 'ready' | 'sending' | 'done'>('loading')
   const [uiLang, setUiLang] = useState<Lang>('en')
 
+  const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
+  const [selectedLearningLang, setSelectedLearningLang] = useState<Lang>('en')
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
+  const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
+  const [interest8w, setInterest8w] = useState<'idle' | 'ask' | 'sending' | 'done'>('idle')
+  const [tgUsernameInput, setTgUsernameInput] = useState('')
 
   useEffect(() => {
     if (!token) { setStatus('invalid'); return }
@@ -143,11 +183,13 @@ function PackagePageInner() {
       .then(r => r.json())
       .then(d => {
         if (d.error) { setStatus('invalid'); return }
-        if (d.invoicePaid) { setStatus('paid'); return }
-        if (d.invoiceAlreadySent) { setStatus('alreadySent'); return }
         const lang = (['en', 'et', 'ru'].includes(d.lang) ? d.lang : 'en') as Lang
-        setAppData({ name: d.name, subject: d.subject, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null })
+        setAppData({ name: d.name, subject: d.subject, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null })
         setUiLang(lang)
+        if (VALID_SUBJECTS.includes(d.subject)) setSelectedSubject(d.subject as Subject)
+        if (['en', 'et', 'ru'].includes(d.learning_lang)) setSelectedLearningLang(d.learning_lang as Lang)
+        if (d.telegram_username) setTgUsernameInput(d.telegram_username)
+        if (d.invoiceAlreadySent && !d.invoicePaid) setHasPendingInvoice(true)
         setStatus('ready')
       })
       .catch(() => setStatus('invalid'))
@@ -160,14 +202,14 @@ function PackagePageInner() {
   const total = pricePerLesson * lessons * studentsCount
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
-  const tgEligible = appData ? isTgEligible(appData.country_code, appData.learning_lang) : false
+  const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
 
   async function handleConfirm() {
     setStatus('sending')
     const res = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, format, lessons_count: lessons }),
+      body: JSON.stringify({ token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }),
     })
     if (res.ok) {
       setStatus('done')
@@ -177,10 +219,25 @@ function PackagePageInner() {
     }
   }
 
+  function handleInterest8wClick() {
+    if (!appData) return
+    // TG eligible but no chat_id yet → ask for username
+    if (tgEligible && !appData.hasTgChatId) { setInterest8w('ask'); return }
+    submitInterest8w()
+  }
+
+  async function submitInterest8w(tgUsername?: string) {
+    setInterest8w('sending')
+    await fetch('/api/package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action: 'interest_8w_group', telegram_username: tgUsername || undefined }),
+    }).catch(() => {})
+    setInterest8w('done')
+  }
+
   if (status === 'loading') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><p className="text-gray-500">{T.en.loading}</p></PageShell>
   if (status === 'invalid') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><ErrorCard msg={T.en.invalidToken} /></PageShell>
-  if (status === 'paid') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><SuccessCard msg={t.paid} /></PageShell>
-  if (status === 'alreadySent') return <PageShell uiLang={uiLang} setUiLang={setUiLang}><InfoCard msg={t.alreadySent} /></PageShell>
   if (status === 'done') return (
     <PageShell uiLang={uiLang} setUiLang={setUiLang}>
       <SuccessCard msg={t.success} />
@@ -192,9 +249,56 @@ function PackagePageInner() {
     <PageShell uiLang={uiLang} setUiLang={setUiLang}>
       <div className="w-full max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          {t.title(appData!.name, appData!.subject)}
+          {t.title(appData!.name)}
         </h1>
-        <p className="text-gray-500 mb-8 text-sm">{t.subtitle}</p>
+        <p className="text-gray-500 mb-6 text-sm">{t.subtitle}</p>
+
+        {/* Pending invoice banner */}
+        {hasPendingInvoice && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 text-sm text-amber-800">
+            {t.invoicePending}
+          </div>
+        )}
+
+        {/* Course selector */}
+        <div className="mb-5">
+          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
+          <div className="flex flex-wrap gap-2">
+            {VALID_SUBJECTS.map(s => (
+              <button
+                key={s}
+                onClick={() => setSelectedSubject(s)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  selectedSubject === s
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Teaching language selector */}
+        <div className="mb-8">
+          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
+          <div className="flex gap-2">
+            {(['en', 'et', 'ru'] as Lang[]).map(l => (
+              <button
+                key={l}
+                onClick={() => setSelectedLearningLang(l)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  selectedLearningLang === l
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {t.langLabels[l]}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Format selector */}
         <div className="mb-8">
@@ -218,11 +322,11 @@ function PackagePageInner() {
         {/* Package selector */}
         <div className="mb-8">
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.package}</p>
-          <div className="grid grid-cols-4 gap-3">
-            {LESSONS_OPTIONS.map(n => {
+          <div className={`grid gap-3 ${LESSONS_OPTIONS[format].length === 1 ? 'grid-cols-2' : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+            {LESSONS_OPTIONS[format].map(n => {
               const price = BASE_PRICES[format][n]
               const isSelected = lessons === n
-              const isPopular = n === 8
+              const isPopular = format !== 'group' && n === 8
               return (
                 <button
                   key={n}
@@ -236,7 +340,7 @@ function PackagePageInner() {
                       {t.popular}
                     </span>
                   )}
-                  <p className="font-semibold text-gray-900 text-sm">{t.lessons(n)}</p>
+                  <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
                   {DISCOUNTS[n] && (
                     <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>
                   )}
@@ -247,6 +351,59 @@ function PackagePageInner() {
                 </button>
               )
             })}
+
+            {/* Group 8w — coming soon */}
+            {format === 'group' && (
+              <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
+                <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">
+                  {t.comingSoon}
+                </span>
+                <p className="font-semibold text-gray-400 text-sm">{t.weeks(8)}</p>
+                <p className="text-base font-bold text-gray-300 mt-1">—</p>
+
+                {interest8w === 'done' ? (
+                  <p className="mt-2 text-[11px] text-green-600 font-medium">{t.interestedSent}</p>
+                ) : interest8w === 'ask' ? (
+                  <div className="mt-2 space-y-1.5">
+                    {tgEligible ? (
+                      <>
+                        <input
+                          value={tgUsernameInput}
+                          onChange={e => setTgUsernameInput(e.target.value)}
+                          placeholder="@username"
+                          className="w-full text-xs border border-gray-300 rounded-lg px-2 py-1 outline-none focus:border-blue-400"
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => submitInterest8w(tgUsernameInput || undefined)}
+                            className="text-[11px] font-semibold text-blue-500 hover:text-blue-600"
+                          >
+                            {t.interested}
+                          </button>
+                          <span className="text-gray-300 text-[11px]">·</span>
+                          <button
+                            onClick={() => submitInterest8w()}
+                            className="text-[11px] text-gray-400 hover:text-gray-600"
+                          >
+                            {t.notifyByEmail}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-gray-500">{t.notifyByEmail}</p>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleInterest8wClick}
+                    disabled={interest8w === 'sending'}
+                    className="mt-2 text-[11px] font-semibold text-blue-500 hover:text-blue-600 disabled:text-gray-400 transition-colors"
+                  >
+                    {interest8w === 'sending' ? '...' : t.interested}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

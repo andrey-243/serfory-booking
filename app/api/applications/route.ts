@@ -124,7 +124,6 @@ export async function POST(req: NextRequest) {
   scheduledAt = nextWindowStart(scheduledAt)
 
   const ref_token = crypto.randomUUID()
-  const token_expires_at = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
 
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
@@ -148,7 +147,6 @@ export async function POST(req: NextRequest) {
       price_tier,
       status: 'accepted',
       ref_token,
-      token_expires_at,
       scheduled_accept_at: scheduledAt.toISOString(),
     })
     .select('id')
@@ -159,6 +157,20 @@ export async function POST(req: NextRequest) {
       { error: 'Failed to create application' },
       { status: 500, headers: CORS_HEADERS }
     )
+  }
+
+  // Auto-send package email immediately for test emails (no cron needed)
+  const testPatterns = (process.env.TEST_EMAIL_PATTERNS || 'andrey.bondaryev,lerussedu24').split(',').map(p => p.trim().toLowerCase())
+  const emailLocal = email.split('@')[0].toLowerCase()
+  const isTestEmail = testPatterns.some(p => emailLocal.includes(p.replace(/[^a-z0-9]/g, '').slice(0, 6)))
+  if (isTestEmail) {
+    const preferred = (learning_lang || lang) as string
+    const emailLang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
+    const tgEligible = isTelegramEligible(country_code, learning_lang)
+    try {
+      await sendPackageEmail({ to: email, name, token: ref_token, lang: emailLang, subject, appId: data.id, showTelegram: tgEligible })
+      await getSupabaseAdmin().from('applications').update({ package_email_sent_at: new Date().toISOString() }).eq('id', data.id)
+    } catch (e) { console.error('Test auto-send failed:', e) }
   }
 
   // Notify admin group

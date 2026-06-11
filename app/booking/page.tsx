@@ -69,6 +69,10 @@ function BookingPageInner() {
         if (d.prefill.learning_lang && VALID_LANGS.includes(d.prefill.learning_lang)) {
           setLang(d.prefill.learning_lang)
         }
+        const LANG_TO_TEACHING: Record<string, TeachingLang> = { en: 'English', et: 'Estonian', ru: 'Russian' }
+        if (d.prefill.learning_lang && LANG_TO_TEACHING[d.prefill.learning_lang]) {
+          setSelectedLang(LANG_TO_TEACHING[d.prefill.learning_lang])
+        }
       })
       .catch(() => {})
   }, [ref, setLang])
@@ -183,15 +187,15 @@ function BookingPageInner() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters — hidden when arriving via ref token (subject + lang preset from UTM) */}
         <div className="mb-5 flex flex-wrap items-center gap-3">
-          <CourseTabFilter
+          {!ref && <CourseTabFilter
             selected={selectedCourse}
             onChange={course => { setSelectedCourse(course); setBooked(false) }}
-          />
+          />}
 
-          {/* Teaching language — Design B dropdown */}
-          <div className="relative">
+          {/* Teaching language — hidden when ref token present (preset from UTM) */}
+          {!ref && <div className="relative">
             <button
               onClick={() => setLangDropdownOpen(o => !o)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors shadow-sm ${
@@ -237,7 +241,7 @@ function BookingPageInner() {
                 </div>
               </>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Main layout */}
