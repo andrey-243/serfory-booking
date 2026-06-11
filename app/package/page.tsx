@@ -67,6 +67,7 @@ const T = {
     courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz' } as Record<string, string>,
     teachingLang: 'Teaching language',
     langLabels: { en: 'English', et: 'Estonian', ru: 'Russian', ky: 'Kyrgyz' } as Record<string, string>,
+    onlyAvailableIn: 'This course is available in:',
     format: 'Format',
     package: 'Package',
     lessons: (n: number) => n === 1 ? '1 lesson' : `${n} lessons`,
@@ -99,6 +100,7 @@ const T = {
     courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel' } as Record<string, string>,
     teachingLang: 'Õppekeel',
     langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene', ky: 'Kirgiisi' } as Record<string, string>,
+    onlyAvailableIn: 'See kursus on saadaval keeltes:',
     format: 'Formaat',
     package: 'Pakett',
     lessons: (n: number) => n === 1 ? '1 tund' : `${n} tundi`,
@@ -131,6 +133,7 @@ const T = {
     courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский' } as Record<string, string>,
     teachingLang: 'Язык обучения',
     langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский', ky: 'Кыргызский' } as Record<string, string>,
+    onlyAvailableIn: 'Этот курс доступен на:',
     format: 'Формат',
     package: 'Пакет',
     lessons: (n: number) => n === 1 ? '1 урок' : `${n} уроков`,
@@ -227,15 +230,19 @@ function PackagePageInner() {
     fetch(`/api/teachers?subject=${encodeURIComponent(selectedSubject)}`)
       .then(r => r.json())
       .then(d => {
+        const LANG_NAME_TO_CODE: Record<string, TeachingLang> = {
+          English: 'en', Estonian: 'et', Russian: 'ru', Kyrgyz: 'ky',
+        }
         const langs = new Set<TeachingLang>()
         for (const t of d.teachers ?? []) {
           for (const l of (t.teaching_languages ?? []) as string[]) {
-            if (['en', 'et', 'ru', 'ky'].includes(l)) langs.add(l as TeachingLang)
+            const code = LANG_NAME_TO_CODE[l]
+            if (code) langs.add(code)
           }
         }
         const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
         setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
-        setSelectedLearningLang(prev => langs.has(prev) ? prev : (available[0] ?? 'en'))
+        // Do NOT auto-reset selectedLearningLang — user picks manually if needed
       })
       .catch(() => {})
   }, [selectedSubject])
@@ -327,21 +334,32 @@ function PackagePageInner() {
           <div className="flex gap-2">
             {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => {
               const avail = availableLangs.includes(l)
+              const tooltipText = availableLangs.length < 4
+                ? `${t.onlyAvailableIn} ${availableLangs.map(ll => t.langLabels[ll]).join(', ')}`
+                : null
               return (
-                <button
-                  key={l}
-                  onClick={() => avail && setSelectedLearningLang(l)}
-                  disabled={!avail}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                    !avail
-                      ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                      : selectedLearningLang === l
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  {t.langLabels[l]}
-                </button>
+                <div key={l} className="relative group">
+                  <button
+                    onClick={() => avail && setSelectedLearningLang(l)}
+                    disabled={!avail}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                      !avail
+                        ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                        : selectedLearningLang === l
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {t.langLabels[l]}
+                  </button>
+                  {!avail && tooltipText && (
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap">
+                      <div className="bg-gray-800 text-white text-[10px] rounded-md px-2.5 py-1.5">
+                        {tooltipText}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -528,7 +546,7 @@ function PageShell({ children, uiLang, onLangChange }: {
   onLangChange: (l: Lang) => void
 }) {
   return (
-    <div className="min-h-screen bg-[#EEF2FF] flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-[#EEF2FF] flex flex-col items-center py-12 px-6">
       <div className="w-full max-w-2xl">
         <div className="flex items-center justify-between mb-8">
           <a href="https://serfory.eu" className="flex items-center gap-2">
