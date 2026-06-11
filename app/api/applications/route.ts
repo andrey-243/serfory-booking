@@ -296,18 +296,19 @@ export async function GET(req: NextRequest) {
     if (error || !data) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 404 })
     if (data.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
-    // Fetch format from latest paid invoice
-    const { data: invoice } = await getSupabaseAdmin()
+    // Fetch latest invoice (check for pending + get format from last paid)
+    const { data: invoices } = await getSupabaseAdmin()
       .from('invoices')
-      .select('format')
+      .select('format, status')
       .eq('application_id', data.id)
-      .eq('status', 'paid')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+      .limit(5)
+
+    const hasPendingInvoice = !!(invoices ?? []).find(i => i.status === 'sent')
+    const lastPaidInvoice = (invoices ?? []).find(i => i.status === 'paid')
 
     const { price_tier: _, status: __, id: _id, ...prefill } = data
-    return NextResponse.json({ prefill, bookingFormat: invoice?.format ?? null })
+    return NextResponse.json({ prefill, bookingFormat: lastPaidInvoice?.format ?? null, hasPendingInvoice })
   }
 
   // Admin only: list all applications

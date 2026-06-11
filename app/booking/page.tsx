@@ -57,12 +57,14 @@ function BookingPageInner() {
   const [loadingTeachers, setLoadingTeachers] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
+  const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
 
   useEffect(() => {
     if (!ref) return
     fetch(`/api/applications?ref=${ref}`)
       .then(r => r.json())
       .then(d => {
+        if (d.hasPendingInvoice) { setHasPendingInvoice(true); return }
         if (!d.prefill) return
         setPrefill(d.prefill)
         if (d.bookingFormat) setBookingFormat(d.bookingFormat)
@@ -149,6 +151,18 @@ function BookingPageInner() {
         ts.slots.length > 0 &&
         (selectedLang === '' || ts.teacher.teaching_languages.includes(selectedLang))
       )
+
+  if (hasPendingInvoice) {
+    return (
+      <main className="min-h-screen bg-[#EEF2FF] flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow">
+          <div className="text-4xl mb-4">⏳</div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.booking.pendingPayment}</h2>
+          <p className="text-gray-500 text-sm">{t.booking.pendingPaymentDesc}</p>
+        </div>
+      </main>
+    )
+  }
 
   if (booked) {
     return (

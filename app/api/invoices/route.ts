@@ -89,18 +89,9 @@ export async function POST(req: NextRequest) {
   if (appErr || !app) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
   if (app.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
-  // Apply overrides if student changed subject/lang on the package page
+  // Store overrides on invoice — applied to application only when invoice is marked paid
   const effectiveSubject = subjectOverride || app.subject
   const effectiveLearningLang = learningLangOverride || app.learning_lang || app.lang
-  if (subjectOverride && subjectOverride !== app.subject || learningLangOverride && learningLangOverride !== app.learning_lang) {
-    await getSupabaseAdmin()
-      .from('applications')
-      .update({
-        ...(subjectOverride && subjectOverride !== app.subject ? { subject: subjectOverride } : {}),
-        ...(learningLangOverride && learningLangOverride !== app.learning_lang ? { learning_lang: learningLangOverride } : {}),
-      })
-      .eq('id', app.id)
-  }
 
   // Block only if there's an unpaid invoice pending
   const { data: existing } = await getSupabaseAdmin()
@@ -180,6 +171,8 @@ export async function POST(req: NextRequest) {
       total_amount: totalAmount,
       status: 'sent',
       pdf_url: pdfUrl,
+      subject: effectiveSubject,
+      learning_lang: effectiveLearningLang,
     })
     .select('id')
     .single()
