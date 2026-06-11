@@ -64,6 +64,7 @@ const T = {
     title: (name: string) => `Hi ${name}, choose your package`,
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
     course: 'Course',
+    courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz' } as Record<string, string>,
     teachingLang: 'Teaching language',
     langLabels: { en: 'English', et: 'Estonian', ru: 'Russian', ky: 'Kyrgyz' } as Record<string, string>,
     format: 'Format',
@@ -95,6 +96,7 @@ const T = {
     title: (name: string) => `Tere ${name}, vali oma pakett`,
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
     course: 'Kursus',
+    courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel' } as Record<string, string>,
     teachingLang: 'Õppekeel',
     langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene', ky: 'Kirgiisi' } as Record<string, string>,
     format: 'Formaat',
@@ -126,6 +128,7 @@ const T = {
     title: (name: string) => `Привет ${name}, выберите пакет`,
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
+    courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский' } as Record<string, string>,
     teachingLang: 'Язык обучения',
     langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский', ky: 'Кыргызский' } as Record<string, string>,
     format: 'Формат',
@@ -178,6 +181,7 @@ function PackagePageInner() {
 
   const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
   const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
+  const [availableLangs, setAvailableLangs] = useState<TeachingLang[]>(['en', 'et', 'ru', 'ky'])
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
@@ -216,6 +220,24 @@ function PackagePageInner() {
     if (!getAvailableFormats(selectedSubject).includes(format)) {
       setFormat('individual')
     }
+  }, [selectedSubject])
+
+  // Fetch available teaching languages for selected subject
+  useEffect(() => {
+    fetch(`/api/teachers?subject=${encodeURIComponent(selectedSubject)}`)
+      .then(r => r.json())
+      .then(d => {
+        const langs = new Set<TeachingLang>()
+        for (const t of d.teachers ?? []) {
+          for (const l of (t.teaching_languages ?? []) as string[]) {
+            if (['en', 'et', 'ru', 'ky'].includes(l)) langs.add(l as TeachingLang)
+          }
+        }
+        const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
+        setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
+        setSelectedLearningLang(prev => langs.has(prev) ? prev : (available[0] ?? 'en'))
+      })
+      .catch(() => {})
   }, [selectedSubject])
 
   async function handleConfirm() {
@@ -293,7 +315,7 @@ function PackagePageInner() {
                     : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                 }`}
               >
-                {s}
+                {t.courseLabels[s] ?? s}
               </button>
             ))}
           </div>
@@ -303,19 +325,25 @@ function PackagePageInner() {
         <div className="mb-8">
           <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
           <div className="flex gap-2">
-            {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
-              <button
-                key={l}
-                onClick={() => setSelectedLearningLang(l)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                  selectedLearningLang === l
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                }`}
-              >
-                {t.langLabels[l]}
-              </button>
-            ))}
+            {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => {
+              const avail = availableLangs.includes(l)
+              return (
+                <button
+                  key={l}
+                  onClick={() => avail && setSelectedLearningLang(l)}
+                  disabled={!avail}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    !avail
+                      ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                      : selectedLearningLang === l
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  {t.langLabels[l]}
+                </button>
+              )
+            })}
           </div>
         </div>
 

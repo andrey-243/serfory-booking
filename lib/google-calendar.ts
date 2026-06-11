@@ -117,6 +117,36 @@ export async function getAvailableSlots(
   return slots
 }
 
+// Blank calendar fallback: generate slots from availability only, no busy intervals
+export function getAvailableSlotsNoCalendar(
+  weekStart: Date,
+  availabilities: TeacherAvailability[]
+): CalendarSlot[] {
+  const slots: CalendarSlot[] = []
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const day = new Date(weekStart)
+    day.setDate(day.getDate() + dayOffset)
+    const dayOfWeek = day.getDay()
+    const windows = availabilities.length > 0
+      ? availabilities.filter(a => a.day_of_week === dayOfWeek)
+      : [{ start_time: '08:00:00', end_time: '20:00:00' }]
+    for (const window of windows) {
+      const [startH, startM] = window.start_time.split(':').map(Number)
+      const [endH, endM] = window.end_time.split(':').map(Number)
+      const windowStart = new Date(day)
+      windowStart.setHours(startH, startM, 0, 0)
+      const windowEnd = new Date(day)
+      windowEnd.setHours(endH, endM, 0, 0)
+      let cursor = windowStart.getTime()
+      while (cursor + SLOT_DURATION_MS <= windowEnd.getTime()) {
+        slots.push({ start: new Date(cursor).toISOString(), end: new Date(cursor + SLOT_DURATION_MS).toISOString() })
+        cursor += SLOT_DURATION_MS
+      }
+    }
+  }
+  return slots
+}
+
 export async function getCalendarEventStatus(
   refreshToken: string,
   calendarId: string,

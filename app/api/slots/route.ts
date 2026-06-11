@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getAvailableSlots } from '@/lib/google-calendar'
+import { getAvailableSlots, getAvailableSlotsNoCalendar } from '@/lib/google-calendar'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -21,14 +21,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Teacher not found' }, { status: 404 })
   }
 
-  if (!teacher.google_refresh_token) {
-    return NextResponse.json({ slots: [] })
-  }
-
   const { data: availabilities } = await getSupabaseAdmin()
     .from('teacher_availability')
     .select('*')
     .eq('teacher_id', teacherId)
+
+  // No token → blank calendar: all availability slots are free
+  if (!teacher.google_refresh_token) {
+    const slots = getAvailableSlotsNoCalendar(new Date(weekStart), availabilities ?? [])
+    return NextResponse.json({ slots })
+  }
 
   try {
     const slots = await getAvailableSlots(

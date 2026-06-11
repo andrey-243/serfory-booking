@@ -48,6 +48,7 @@ type Application = {
   telegram_parent_chat_id: number | null
   learning_lang: string | null
   lang: string
+  communication_lang: string | null
   status: string
   parent_approved: boolean
   price_tier: string | null
@@ -80,6 +81,7 @@ type StudentRow = {
   tgSynced: boolean
   gcalResponse: string | null
   learningLang: string | null
+  communicationLang: string | null
   createdAt: string | null
 }
 
@@ -788,6 +790,10 @@ export default function AdminPage() {
     const langMap: Record<string, string> = {}
     applications.forEach(a => { if (a.learning_lang && !langMap[a.email]) langMap[a.email] = a.learning_lang })
 
+    // Build communication_lang map from applications (email → communication_lang)
+    const commLangMap: Record<string, string> = {}
+    applications.forEach(a => { if (a.communication_lang && !commLangMap[a.email]) commLangMap[a.email] = a.communication_lang })
+
     // Build TG sync map from applications (email → chat_id presence)
     const syncMap: Record<string, boolean> = {}
     applications.forEach(a => { if (a.telegram_chat_id) syncMap[a.email] = true })
@@ -839,6 +845,7 @@ export default function AdminPage() {
           tgSynced: syncMap[b.student_email] ?? false,
           gcalResponse: latestBooking.get(b.student_email)?.student_response ?? null,
           learningLang: langMap[b.student_email] ?? null,
+          communicationLang: commLangMap[b.student_email] ?? null,
           createdAt: createdAtMap[b.student_email] ?? null,
         })
       }
@@ -870,6 +877,7 @@ export default function AdminPage() {
         tgSynced: syncMap[a.email] ?? !!a.telegram_chat_id,
         gcalResponse: null,
         learningLang: a.learning_lang ?? null,
+        communicationLang: commLangMap[a.email] ?? null,
         createdAt: a.created_at,
       })
     })
@@ -1209,7 +1217,16 @@ export default function AdminPage() {
                             #{String(inv.invoice_number).padStart(3, '0')}
                           </td>
                           <td className="px-4 py-3">
-                            <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
+                            {app?.email ? (
+                              <button
+                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors text-left"
+                                onClick={() => setStatsModal(app.email)}
+                              >
+                                {app.name}
+                              </button>
+                            ) : (
+                              <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
+                            )}
                             <p className="text-xs text-gray-400">{app?.email ?? ''}</p>
                           </td>
                           <td className="px-4 py-3 text-gray-700">{app?.subject ?? '—'}</td>
@@ -1341,13 +1358,17 @@ export default function AdminPage() {
                                 </span>
                               </button>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <p className="font-bold text-gray-900">{s.name}</p>
-                                  {s.learningLang && (
-                                    <span title={s.learningLang.toUpperCase()} className="text-base leading-none">
-                                      {s.learningLang === 'en' ? '🇬🇧' : s.learningLang === 'et' ? '🇪🇪' : s.learningLang === 'ru' ? '🇷🇺' : s.learningLang === 'ky' ? '🇰🇬' : null}
-                                    </span>
-                                  )}
+                                  {(s.communicationLang ?? s.learningLang) && (() => {
+                                    const cl = (s.communicationLang ?? s.learningLang)!
+                                    const badge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
+                                    return (
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${badge[cl] ?? 'bg-gray-100 text-gray-500'}`}>
+                                        {cl}
+                                      </span>
+                                    )
+                                  })()}
                                 </div>
                                 <p className="text-xs text-gray-400 mt-0.5 truncate">{s.email}</p>
                                 <p className="text-xs text-gray-400">{s.phone}</p>
@@ -1364,7 +1385,7 @@ export default function AdminPage() {
                               ))}
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {tgOk && (
+                              {tgOk ? (
                                 <>
                                   <a href={tgLink(s.phone)} target="_blank" rel="noopener noreferrer"
                                     className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${s.prefs.includes('telegram') ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-sky-50 text-sky-600 hover:bg-sky-100'}`}>
@@ -1377,6 +1398,10 @@ export default function AdminPage() {
                                     : <span title="Bot not connected" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-dashed border-gray-300 text-gray-400 text-[9px] font-bold shrink-0">?</span>
                                   }
                                 </>
+                              ) : (
+                                <span title="Telegram not available for this region" className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium bg-gray-50 text-gray-300 line-through cursor-default whitespace-nowrap select-none">
+                                  <TgIcon /> Telegram
+                                </span>
                               )}
                               <a href={`mailto:${s.email}`}
                                 className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${s.prefs.includes('email') ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}>
