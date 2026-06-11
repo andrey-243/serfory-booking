@@ -851,9 +851,9 @@ export default function AdminPage() {
       if (existing) existing.count++
       else s.combos.push({ subject: b.subject, teacher: tName, count: 1 })
     })
-    // Add accepted applications not yet in the map (no booking yet)
+    // Add applications (pending or accepted) not yet in the map (no booking yet)
     applications.forEach(a => {
-      if (a.status !== 'accepted') return
+      if (a.status === 'rejected') return
       if (map.has(a.email)) return
       map.set(a.email, {
         name: a.name,

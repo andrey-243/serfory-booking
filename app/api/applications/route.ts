@@ -123,6 +123,9 @@ export async function POST(req: NextRequest) {
 
   scheduledAt = nextWindowStart(scheduledAt)
 
+  const ref_token = crypto.randomUUID()
+  const token_expires_at = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
     .insert({
@@ -143,6 +146,9 @@ export async function POST(req: NextRequest) {
       telegram_parent_username: telegram_parent_username || null,
       lang,
       price_tier,
+      status: 'accepted',
+      ref_token,
+      token_expires_at,
       scheduled_accept_at: scheduledAt.toISOString(),
     })
     .select('id')
@@ -223,7 +229,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: app, error: fetchErr } = await getSupabaseAdmin()
     .from('applications')
-    .select('name, email, lang, learning_lang, country_code, subject, contact_pref, telegram_chat_id')
+    .select('name, email, lang, learning_lang, country_code, subject')
     .eq('id', id)
     .single()
 
@@ -236,36 +242,13 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
 
-  // Dispatch acceptance notifications (email + Telegram) based on contact preferences
   if (status === 'accepted' && ref_token) {
     const preferred = (app.learning_lang || app.lang) as string
     const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
-    const link = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?ref=${ref_token}`
     const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
-
-    const TG_STUDENT: Record<string, string> = {
-      en: `Hi ${app.name}! Your application has been accepted. Here's your booking link for ${app.subject}:\n\n${link}\n\nChoose your teacher and a time that works for you.`,
-      et: `Tere ${app.name}! Teie avaldus on vastu võetud. Siin on teie broneeringulink ${app.subject} jaoks:\n\n${link}\n\nValige õpetaja ja teile sobiv aeg.`,
-      ru: `Привет, ${app.name}! Ваша заявка принята. Вот ваша ссылка для бронирования ${app.subject}:\n\n${link}\n\nВыберите учителя и удобное время.`,
-    }
-
-    const tgSend = async (chatId: number, text: string) => {
-      await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      })
-    }
-
-    // Student dispatch
     try {
-      if (tgEligible && app.contact_pref === 'telegram' && app.telegram_chat_id) {
-        await tgSend(app.telegram_chat_id, TG_STUDENT[lang] ?? TG_STUDENT.en)
-      } else {
-        await sendPackageEmail({ to: app.email, name: app.name, token: ref_token, lang, subject: app.subject, appId: id, showTelegram: tgEligible })
-      }
+      await sendPackageEmail({ to: app.email, name: app.name, token: ref_token, lang, subject: app.subject, appId: id, showTelegram: tgEligible })
     } catch (e) { console.error('Student notification failed:', e) }
-
   }
 
   return NextResponse.json({ ok: true })
@@ -279,7 +262,7 @@ export async function GET(req: NextRequest) {
   if (ref) {
     const { data, error } = await getSupabaseAdmin()
       .from('applications')
-      .select('name, email, phone, contact_pref, price_tier, status')
+      .select('name, email, phone, contact_pref, subject, learning_lang, price_tier, status')
       .eq('ref_token', ref)
       .single()
 

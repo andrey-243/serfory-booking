@@ -14,22 +14,21 @@ export async function GET(req: NextRequest) {
 
   const { data: pending, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, email, subject, lang, learning_lang, country_code, contact_pref, telegram_chat_id')
-    .eq('status', 'pending')
+    .select('id, name, email, subject, lang, learning_lang, country_code, contact_pref, telegram_chat_id, ref_token')
+    .eq('status', 'accepted')
     .lte('scheduled_accept_at', now)
-    .is('ref_token', null)
+    .is('package_email_sent_at', null)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!pending?.length) return NextResponse.json({ accepted: 0 })
 
   let accepted = 0
   for (const app of pending) {
-    const ref_token = crypto.randomUUID()
-    const token_expires_at = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+    if (!app.ref_token) continue
 
     const { error: updateErr } = await getSupabaseAdmin()
       .from('applications')
-      .update({ status: 'accepted', ref_token, token_expires_at })
+      .update({ package_email_sent_at: new Date().toISOString() })
       .eq('id', app.id)
 
     if (updateErr) continue
@@ -37,7 +36,7 @@ export async function GET(req: NextRequest) {
     const preferred = (app.learning_lang || app.lang || 'en') as string
     const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
     const tgEligible = isTelegramEligible(app.country_code, app.learning_lang)
-    const packageLink = `${process.env.NEXT_PUBLIC_BASE_URL}/package?token=${ref_token}`
+    const packageLink = `${process.env.NEXT_PUBLIC_BASE_URL}/package?token=${app.ref_token}`
 
     const TG_MSG: Record<string, string> = {
       en: `Hi ${app.name}! Your ${app.subject} application has been accepted.\n\nChoose your lesson package here:\n${packageLink}`,
@@ -56,7 +55,7 @@ export async function GET(req: NextRequest) {
         await sendPackageEmail({
           to: app.email,
           name: app.name,
-          token: ref_token,
+          token: app.ref_token,
           lang,
           subject: app.subject,
           appId: app.id,

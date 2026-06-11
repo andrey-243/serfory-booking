@@ -17,6 +17,8 @@ export type ApplicationPrefill = {
   email: string
   phone: string
   contact_pref: string
+  subject?: string
+  learning_lang?: string | null
 }
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
@@ -35,7 +37,7 @@ export default function BookingPage() {
 }
 
 function BookingPageInner() {
-  const { t } = useLang()
+  const { t, setLang } = useLang()
   const searchParams = useSearchParams()
   const ref = searchParams.get('ref')
 
@@ -56,9 +58,20 @@ function BookingPageInner() {
     if (!ref) return
     fetch(`/api/applications?ref=${ref}`)
       .then(r => r.json())
-      .then(d => { if (d.prefill) setPrefill(d.prefill) })
+      .then(d => {
+        if (!d.prefill) return
+        setPrefill(d.prefill)
+        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
+        if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
+          setSelectedCourse(d.prefill.subject as Course)
+        }
+        const VALID_LANGS = ['en', 'et', 'ru']
+        if (d.prefill.learning_lang && VALID_LANGS.includes(d.prefill.learning_lang)) {
+          setLang(d.prefill.learning_lang)
+        }
+      })
       .catch(() => {})
-  }, [ref])
+  }, [ref, setLang])
 
   function selectLang(lang: TeachingLang | '') {
     setSelectedLang(lang)
