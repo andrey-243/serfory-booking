@@ -55,6 +55,16 @@ function isTgEligible(country_code: string | null, learning_lang: string | null)
   return learning_lang === 'ru' || (!!country_code && TG_COUNTRIES.has(country_code.toUpperCase()))
 }
 
+const GRADE_KEYS_PKG = ['kindergarten','1','2','3-4','5-6','7-8','9','10-12','A1','A2','B1','B2'] as const
+type GradeKeyPkg = typeof GRADE_KEYS_PKG[number]
+const GRADE_LABELS_PKG: Record<Lang, Record<GradeKeyPkg, string>> = {
+  en: { 'kindergarten':'Kindergarten','1':'Grade 1','2':'Grade 2','3-4':'Grade 3–4','5-6':'Grade 5–6','7-8':'Grade 7–8','9':'Grade 9','10-12':'Grade 10–12','A1':'A1','A2':'A2','B1':'B1','B2':'B2' },
+  et: { 'kindergarten':'Lasteaed','1':'1. klass','2':'2. klass','3-4':'3.–4. klass','5-6':'5.–6. klass','7-8':'7.–8. klass','9':'9. klass','10-12':'10.–12. klass','A1':'A1','A2':'A2','B1':'B1','B2':'B2' },
+  ru: { 'kindergarten':'Детский сад','1':'1 класс','2':'2 класс','3-4':'3–4 класс','5-6':'5–6 класс','7-8':'7–8 класс','9':'9 класс','10-12':'10–12 класс','A1':'A1','A2':'A2','B1':'B1','B2':'B2' },
+}
+const SCHOOL_GRADES: GradeKeyPkg[] = ['kindergarten','1','2','3-4','5-6','7-8','9','10-12']
+const CEFR_GRADES: GradeKeyPkg[] = ['A1','A2','B1','B2']
+
 const T = {
   en: {
     loading: 'Loading...',
@@ -65,6 +75,10 @@ const T = {
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
     course: 'Course',
     courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz' } as Record<string, string>,
+    grade: 'Grade / Level',
+    gradeSection: 'Grade',
+    levelSection: 'Level',
+    gradeDefault: 'Not specified',
     teachingLang: 'Teaching language',
     langLabels: { en: 'English', et: 'Estonian', ru: 'Russian', ky: 'Kyrgyz' } as Record<string, string>,
     onlyAvailableIn: 'This course is available in:',
@@ -98,6 +112,10 @@ const T = {
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
     course: 'Kursus',
     courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel' } as Record<string, string>,
+    grade: 'Klass / tase',
+    gradeSection: 'Klass',
+    levelSection: 'Tase',
+    gradeDefault: 'Täpsustamata',
     teachingLang: 'Õppekeel',
     langLabels: { en: 'Inglise', et: 'Eesti', ru: 'Vene', ky: 'Kirgiisi' } as Record<string, string>,
     onlyAvailableIn: 'See kursus on saadaval keeltes:',
@@ -131,6 +149,10 @@ const T = {
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
     courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский' } as Record<string, string>,
+    grade: 'Класс / уровень',
+    gradeSection: 'Класс',
+    levelSection: 'Уровень',
+    gradeDefault: 'Не указан',
     teachingLang: 'Язык обучения',
     langLabels: { en: 'Английский', et: 'Эстонский', ru: 'Русский', ky: 'Кыргызский' } as Record<string, string>,
     onlyAvailableIn: 'Этот курс доступен на:',
@@ -175,7 +197,7 @@ function PackagePageInner() {
   const token = params.get('token') ?? ''
 
   const [appData, setAppData] = useState<{
-    name: string; subject: string; lang: Lang
+    name: string; subject: string; grade: string | null; lang: Lang
     learning_lang: string | null; country_code: string | null
     hasTgChatId: boolean; telegram_username: string | null
   } | null>(null)
@@ -185,6 +207,8 @@ function PackagePageInner() {
   const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
   const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
   const [availableLangs, setAvailableLangs] = useState<TeachingLang[]>(['en', 'et', 'ru', 'ky'])
+  const [selectedGrade, setSelectedGrade] = useState<string>('')
+  const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
@@ -198,10 +222,11 @@ function PackagePageInner() {
       .then(d => {
         if (d.error) { setStatus('invalid'); return }
         const lang = (['en', 'et', 'ru'].includes(d.lang) ? d.lang : 'en') as Lang
-        setAppData({ name: d.name, subject: d.subject, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null })
+        setAppData({ name: d.name, subject: d.subject, grade: d.grade ?? null, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null })
         setUiLang(lang)
         if (VALID_SUBJECTS.includes(d.subject)) setSelectedSubject(d.subject as Subject)
         if (['en', 'et', 'ru', 'ky'].includes(d.learning_lang)) setSelectedLearningLang(d.learning_lang as TeachingLang)
+        if (d.grade && (GRADE_KEYS_PKG as readonly string[]).includes(d.grade)) setSelectedGrade(d.grade)
         if (d.telegram_username) setTgUsernameInput(d.telegram_username)
         if (d.invoiceAlreadySent && !d.invoicePaid) setHasPendingInvoice(true)
         setStatus('ready')
@@ -224,6 +249,24 @@ function PackagePageInner() {
       setFormat('individual')
     }
   }, [selectedSubject])
+
+  // Fetch available grades for selected subject via subject_levels union
+  useEffect(() => {
+    fetch(`/api/teachers?subject=${encodeURIComponent(selectedSubject)}`)
+      .then(r => r.json())
+      .then((d: { teachers?: Array<{ subject_levels?: Record<string, string[]> }> }) => {
+        const union = new Set<string>()
+        for (const t of d.teachers ?? []) {
+          for (const lvl of t.subject_levels?.[selectedSubject] ?? []) union.add(lvl)
+        }
+        setAvailableGradesPkg(union.size > 0 ? GRADE_KEYS_PKG.filter(k => union.has(k)) : [...GRADE_KEYS_PKG])
+      })
+      .catch(() => setAvailableGradesPkg([...GRADE_KEYS_PKG]))
+  }, [selectedSubject])
+
+  useEffect(() => {
+    if (selectedGrade && !availableGradesPkg.includes(selectedGrade)) setSelectedGrade('')
+  }, [availableGradesPkg])
 
   // Fetch available teaching languages for selected subject
   useEffect(() => {
@@ -284,6 +327,12 @@ function PackagePageInner() {
     if (token) fetch('/api/package', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, communication_lang: l }) }).catch(() => {})
   }
 
+  const handleGradeChange = (key: string) => {
+    const next = selectedGrade === key ? '' : key
+    setSelectedGrade(next)
+    if (token && next) fetch('/api/package', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, grade: next }) }).catch(() => {})
+  }
+
   if (status === 'loading') return <PageShell uiLang={uiLang} onLangChange={setUiLang}><p className="text-gray-500">{T.en.loading}</p></PageShell>
   if (status === 'invalid') return <PageShell uiLang={uiLang} onLangChange={setUiLang}><ErrorCard msg={T.en.invalidToken} /></PageShell>
   if (status === 'done') return (
@@ -308,61 +357,100 @@ function PackagePageInner() {
           </div>
         )}
 
-        {/* Course selector */}
-        <div className="mb-5">
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
-          <div className="flex flex-wrap gap-2">
-            {VALID_SUBJECTS.map(s => (
-              <button
-                key={s}
-                onClick={() => setSelectedSubject(s)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                  selectedSubject === s
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                }`}
-              >
-                {t.courseLabels[s] ?? s}
-              </button>
-            ))}
+        {/* Row 1: Course + Teaching language */}
+        <div className="mb-5 flex flex-wrap items-end gap-6">
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
+            <div className="flex flex-wrap gap-2">
+              {VALID_SUBJECTS.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSubject(s)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    selectedSubject === s
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  {t.courseLabels[s] ?? s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
+            <select
+              value={selectedLearningLang}
+              onChange={e => {
+                const v = e.target.value as TeachingLang
+                if (availableLangs.includes(v)) setSelectedLearningLang(v)
+              }}
+              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
+                <option key={l} value={l} disabled={!availableLangs.includes(l)}>
+                  {t.langLabels[l]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Teaching language selector */}
-        <div className="mb-8">
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
-          <div className="flex gap-2">
-            {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => {
-              const avail = availableLangs.includes(l)
-              const tooltipText = availableLangs.length < 4
-                ? `${t.onlyAvailableIn} ${availableLangs.map(ll => t.langLabels[ll]).join(', ')}`
-                : null
-              return (
-                <div key={l} className="relative group">
+        {/* Grade + Level side by side */}
+        <div className="mb-8 flex flex-wrap gap-8 items-start">
+          {/* School grades */}
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.gradeSection}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {SCHOOL_GRADES.map(key => {
+                const avail = availableGradesPkg.includes(key)
+                return (
                   <button
-                    onClick={() => avail && setSelectedLearningLang(l)}
+                    key={key}
+                    onClick={() => avail && handleGradeChange(key)}
                     disabled={!avail}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                       !avail
                         ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                        : selectedLearningLang === l
+                        : selectedGrade === key
                           ? 'bg-blue-500 text-white border-blue-500'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                     }`}
                   >
-                    {t.langLabels[l]}
+                    {GRADE_LABELS_PKG[uiLang][key]}
                   </button>
-                  {!avail && tooltipText && (
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap">
-                      <div className="bg-gray-800 text-white text-[10px] rounded-md px-2.5 py-1.5">
-                        {tooltipText}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
+
+          {/* CEFR levels — hidden for Math */}
+          {selectedSubject !== 'Math' && (
+            <div>
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.levelSection}</p>
+              <div className="flex gap-1.5">
+                {CEFR_GRADES.map(key => {
+                  const avail = availableGradesPkg.includes(key)
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => avail && handleGradeChange(key)}
+                      disabled={!avail}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                        !avail
+                          ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          : selectedGrade === key
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Format selector */}
@@ -546,8 +634,8 @@ function PageShell({ children, uiLang, onLangChange }: {
   onLangChange: (l: Lang) => void
 }) {
   return (
-    <div className="min-h-screen bg-[#EEF2FF] flex flex-col items-center py-12 px-6">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
+      <div className="max-w-screen-2xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <a href="https://serfory.eu" className="flex items-center gap-2">
             <Image src="/logo.png" alt="Serfory" width={32} height={32} className="rounded-lg" />

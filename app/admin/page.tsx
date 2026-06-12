@@ -85,6 +85,7 @@ type StudentRow = {
   gcalResponse: string | null
   learningLang: string | null
   communicationLang: string | null
+  grade: string | null
   createdAt: string | null
 }
 
@@ -367,9 +368,10 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
   )
 }
 
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName, initialPaidIds, initialInvoiceSentIds }: {
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds }: {
   bookings: PanelBooking[]
   studentName: string
+  grade?: string | null
   initialPaidIds?: Set<string>
   initialInvoiceSentIds?: Set<string>
 }) {
@@ -543,9 +545,12 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, initialPai
                 <tr key={b.id} className="border-b border-gray-50 last:border-0">
                   <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(b.date)}</td>
                   <td className="px-3 py-2">
-                    <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
-                      {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
+                        {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
+                      </span>
+                      {grade && <span className="text-[10px] text-gray-400 font-medium">{grade}</span>}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
                   <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
@@ -817,6 +822,10 @@ export default function AdminPage() {
     const countryMap: Record<string, string | null> = {}
     applications.forEach(a => { if (!countryMap[a.email]) countryMap[a.email] = a.country_code ?? null })
 
+    // Build grade map from applications (email → most recent grade)
+    const gradeMap: Record<string, string | null> = {}
+    applications.forEach(a => { if (a.grade && !gradeMap[a.email]) gradeMap[a.email] = a.grade })
+
     // Build created_at map from applications (email → earliest created_at)
     const createdAtMap: Record<string, string> = {}
     applications.forEach(a => {
@@ -851,6 +860,7 @@ export default function AdminPage() {
           gcalResponse: latestBooking.get(b.student_email)?.student_response ?? null,
           learningLang: langMap[b.student_email] ?? null,
           communicationLang: commLangMap[b.student_email] ?? null,
+          grade: gradeMap[b.student_email] ?? null,
           createdAt: createdAtMap[b.student_email] ?? null,
         })
       }
@@ -883,6 +893,7 @@ export default function AdminPage() {
         gcalResponse: null,
         learningLang: a.learning_lang ?? null,
         communicationLang: commLangMap[a.email] ?? null,
+        grade: a.grade ?? null,
         createdAt: a.created_at,
       })
     })
@@ -1385,6 +1396,7 @@ export default function AdminPage() {
                                   <span>{teacherInitialsCrm(c.teacher)}</span>
                                   <span className="opacity-50">·</span>
                                   <span>{c.subject}</span>
+                                  {s.grade && <span className="opacity-60 font-normal">{s.grade}</span>}
                                   <span className="text-blue-500 font-bold ml-0.5">×{c.count}</span>
                                 </div>
                               ))}
@@ -1530,6 +1542,9 @@ export default function AdminPage() {
                           const badge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
                           return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${badge[cl] ?? 'bg-gray-100 text-gray-500'}`}>{cl}</span>
                         })()}
+                        {s.grade && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 uppercase tracking-wide">{s.grade}</span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400">{s.email}</p>
                     </div>
@@ -1538,7 +1553,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} />
+                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} />
               </div>
             </div>
           )

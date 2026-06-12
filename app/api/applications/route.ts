@@ -86,6 +86,14 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const validGrades = ['kindergarten','1','2','3-4','5-6','7-8','9','10-12','A1','A2','B1','B2']
+  if (!validGrades.includes(grade)) {
+    return NextResponse.json(
+      { error: 'Invalid grade' },
+      { status: 400, headers: CORS_HEADERS }
+    )
+  }
+
   const price_tier = country_code ? getPriceTier(country_code) : 'normal'
 
   // Schedule auto-accept: 5–15 min from now (instant if AUTO_ACCEPT_INSTANT=true)
@@ -193,23 +201,14 @@ export async function POST(req: NextRequest) {
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
   if (adminChatId) {
     const langLabel: Record<string, string> = { en: 'EN', et: 'ET', ru: 'RU' }
-    const GRADE_NORMALIZE: Record<string, string> = {
-      'Детский сад': 'Kindergarten', 'Kindergarten': 'Kindergarten',
-      '1 класс': 'Grade 1',  '1. klass': 'Grade 1',  'Grade 1': 'Grade 1',
-      '2 класс': 'Grade 2',  '2. klass': 'Grade 2',  'Grade 2': 'Grade 2',
-      '3 класс': 'Grade 3',  '3. klass': 'Grade 3',  'Grade 3': 'Grade 3',
-      '4 класс': 'Grade 4',  '4. klass': 'Grade 4',  'Grade 4': 'Grade 4',
-      '5 класс': 'Grade 5',  '5. klass': 'Grade 5',  'Grade 5': 'Grade 5',
-      '6 класс': 'Grade 6',  '6. klass': 'Grade 6',  'Grade 6': 'Grade 6',
-      '7 класс': 'Grade 7',  '7. klass': 'Grade 7',  'Grade 7': 'Grade 7',
-      '8 класс': 'Grade 8',  '8. klass': 'Grade 8',  'Grade 8': 'Grade 8',
-      '9 класс': 'Grade 9',  '9. klass': 'Grade 9',  'Grade 9': 'Grade 9',
-      '10 класс': 'Grade 10', '10. klass': 'Grade 10', 'Grade 10': 'Grade 10',
-      '11 класс': 'Grade 11', '11. klass': 'Grade 11', 'Grade 11': 'Grade 11',
-      '12 класс': 'Grade 12', '12. klass': 'Grade 12', 'Grade 12': 'Grade 12',
-      'Взрослый': 'Adult', 'Täiskasvanu': 'Adult', 'Adult': 'Adult',
+    const GRADE_DISPLAY: Record<string, string> = {
+      'kindergarten': 'Kindergarten',
+      '1': 'Grade 1', '2': 'Grade 2',
+      '3-4': 'Grade 3–4', '5-6': 'Grade 5–6', '7-8': 'Grade 7–8',
+      '9': 'Grade 9', '10-12': 'Grade 10–12',
+      'A1': 'A1', 'A2': 'A2', 'B1': 'B1', 'B2': 'B2',
     }
-    const gradeNorm = GRADE_NORMALIZE[grade] ?? grade
+    const gradeNorm = GRADE_DISPLAY[grade] ?? grade
     const prefIcon = contact_pref === 'telegram' ? '📱' : '✉️'
     const tgSuffix = contact_pref === 'telegram' && telegram_username ? ` @${telegram_username}` : ''
     const msg = [

@@ -19,6 +19,7 @@ export type ApplicationPrefill = {
   phone: string
   contact_pref: string
   subject?: string
+  grade?: string | null
   learning_lang?: string | null
 }
 
@@ -55,6 +56,7 @@ function BookingPageInner() {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{ teacherId: string; slot: CalendarSlot } | null>(null)
   const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()))
+  const [studentGrade, setStudentGrade] = useState<string | null>(null)
   const [loadingTeachers, setLoadingTeachers] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
@@ -77,6 +79,7 @@ function BookingPageInner() {
         if (d.format) setBookingFormat(d.format)
         if (!d.prefill) return
         setPrefill(d.prefill)
+        if (d.prefill.grade) setStudentGrade(d.prefill.grade)
         const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
         if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
           setSelectedCourse(d.prefill.subject as Course)
@@ -99,6 +102,7 @@ function BookingPageInner() {
         if (!d.prefill) return
         setPrefill(d.prefill)
         if (d.bookingFormat) setBookingFormat(d.bookingFormat)
+        if (d.prefill.grade) setStudentGrade(d.prefill.grade)
         const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
         if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
           setSelectedCourse(d.prefill.subject as Course)
@@ -167,16 +171,25 @@ function BookingPageInner() {
     ? teachers
     : teachers.filter(t => t.teaching_languages.includes(selectedLang))
 
+  // Client-side grade filter — soft: if no teacher matches fall back to all
+  const teachersMatchingGrade = studentGrade
+    ? teachersAfterLang.filter(t => (t.subject_levels?.[selectedCourse] ?? []).includes(studentGrade))
+    : teachersAfterLang
+  const gradeFilterActive = studentGrade && teachersMatchingGrade.length > 0
+  const teachersAfterGrade = gradeFilterActive ? teachersMatchingGrade : teachersAfterLang
+  const gradeMismatch = studentGrade && teachersMatchingGrade.length === 0
+
   // Hide teachers with no slots this week (only after loading is done)
   const visibleTeachers = isLoading
     ? []
-    : teachersAfterLang.filter(t => teacherSlots.find(ts => ts.teacher.id === t.id && ts.slots.length > 0))
+    : teachersAfterGrade.filter(t => teacherSlots.find(ts => ts.teacher.id === t.id && ts.slots.length > 0))
 
   const visibleTeacherSlots = selectedTeacher
     ? teacherSlots.filter(ts => ts.teacher.id === selectedTeacher.id)
     : teacherSlots.filter(ts =>
         ts.slots.length > 0 &&
-        (selectedLang === '' || ts.teacher.teaching_languages.includes(selectedLang))
+        (selectedLang === '' || ts.teacher.teaching_languages.includes(selectedLang)) &&
+        (!gradeFilterActive || (t => (t.subject_levels?.[selectedCourse] ?? []).includes(studentGrade!))(ts.teacher))
       )
 
   if (sessionInvalid) {
@@ -308,6 +321,13 @@ function BookingPageInner() {
             )}
           </div>}
         </div>
+
+        {/* Grade mismatch info — shown when student's grade isn't covered by any teacher */}
+        {gradeMismatch && (
+          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+            {t.booking.gradeMismatch}
+          </div>
+        )}
 
         {/* Main layout — stopPropagation so click-outside-to-deselect only triggers on bg */}
         <div onClick={e => e.stopPropagation()}>

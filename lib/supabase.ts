@@ -42,6 +42,7 @@ export type Teacher = {
   title: string | null
   teaching_languages: string[]
   levels: string | null
+  subject_levels: Record<string, string[]> | null
   experience_years: number | null
   created_at: string
 }

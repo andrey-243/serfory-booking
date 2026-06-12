@@ -54,15 +54,26 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+const VALID_GRADES = ['kindergarten','1','2','3-4','5-6','7-8','9','10-12','A1','A2','B1','B2']
+
 export async function PATCH(req: NextRequest) {
-  const { token, communication_lang } = await req.json()
-  if (!token || !['en', 'et', 'ru'].includes(communication_lang)) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  const { token, communication_lang, grade } = await req.json()
+  if (!token) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+
+  const updates: Record<string, string> = {}
+  if (communication_lang && ['en', 'et', 'ru'].includes(communication_lang)) {
+    updates.communication_lang = communication_lang
+  }
+  if (grade && VALID_GRADES.includes(grade)) {
+    updates.grade = grade
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   const { error } = await getSupabaseAdmin()
     .from('applications')
-    .update({ communication_lang })
+    .update(updates)
     .eq('ref_token', token)
     .eq('status', 'accepted')
 
@@ -76,7 +87,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, subject, lang, learning_lang, country_code, status, telegram_chat_id, telegram_username, communication_lang')
+    .select('id, name, subject, grade, lang, learning_lang, country_code, status, telegram_chat_id, telegram_username, communication_lang')
     .eq('ref_token', token)
     .single()
 
@@ -92,6 +103,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     name: data.name,
     subject: data.subject,
+    grade: (data as { grade?: string | null }).grade ?? null,
     lang: ((data as { communication_lang?: string }).communication_lang || data.lang || 'en') as string,
     learning_lang: data.learning_lang ?? null,
     country_code: (data as { country_code?: string | null }).country_code ?? null,

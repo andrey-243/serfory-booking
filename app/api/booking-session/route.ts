@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     .from('invoices')
     .select(`
       id, lessons_count, format, subject, learning_lang,
-      applications(id, name, email, phone, contact_pref, subject, learning_lang, price_tier)
+      applications(id, name, email, phone, contact_pref, subject, grade, learning_lang, price_tier)
     `)
     .eq('booking_token', session)
     .eq('status', 'paid')
@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
       phone: app.phone,
       contact_pref: app.contact_pref,
       subject: effectiveSubject,
+      grade: (app as { grade?: string | null }).grade ?? null,
       learning_lang: effectiveLearningLang,
     },
   })
