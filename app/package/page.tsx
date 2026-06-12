@@ -459,6 +459,9 @@ function PackagePageInner() {
           )}
         </div>
 
+        {/* Format + Package — constrained width */}
+        <div className="max-w-2xl">
+
         {/* Format selector */}
         <div className="mb-8">
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
@@ -587,6 +590,7 @@ function PackagePageInner() {
         {tgEligible && <TgBlock t={t} botUsername={BOT} />}
 
         <p className="text-xs text-gray-400 text-center mt-4">{t.personalLink}</p>
+        </div>{/* end max-w-2xl */}
       </div>
     </PageShell>
   )

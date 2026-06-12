@@ -931,44 +931,52 @@ function PkgPackCards() {
 function PackageP1() {
   return (
     <div className="min-h-screen bg-[#EEF2FF] p-8 rounded-2xl">
-      <PkgHeader name="Hi Andrey, choose your package" desc="Select a format and number of lessons. You'll receive an invoice by email." />
-      {/* Toolbar row */}
-      <div className="flex flex-wrap items-end gap-4 mb-8 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-        <div>
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Course</p>
-          <div className="flex flex-wrap gap-1.5">
-            {[...PKG_LANG_COURSES, ...PKG_OTHER_COURSES].map((s, i) => <PkgPill key={s} label={s} active={i === 1} small />)}
+      <div className="max-w-3xl mx-auto">
+        <PkgHeader name="Hi Andrey, choose your package" desc="Select a format and number of lessons. You'll receive an invoice by email." />
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-end gap-4 mb-4 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Course</p>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap gap-1.5">{PKG_LANG_COURSES.map((s, i) => <PkgPill key={s} label={s} active={i === 1} small />)}</div>
+              <div className="flex flex-wrap gap-1.5">{PKG_OTHER_COURSES.map(s => <PkgPill key={s} label={s} small />)}</div>
+            </div>
+          </div>
+          <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Teaching language</p>
+            <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700">
+              <option>English</option><option>Estonian</option><option>Russian</option>
+            </select>
+          </div>
+          <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Grade</p>
+            <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700">
+              <option>A2</option>{PKG_SCHOOL.map(g => <option key={g}>{g}</option>)}
+            </select>
+          </div>
+          <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Level</p>
+            <div className="flex gap-1.5">{PKG_CEFR.map((k, i) => <PkgPill key={k} label={k} active={i === 1} small />)}</div>
           </div>
         </div>
-        <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
-        <div>
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Teaching language</p>
-          <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700">
-            <option>English</option><option>Estonian</option><option>Russian</option>
-          </select>
-        </div>
-        <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
-        <div>
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Grade</p>
-          <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700">
-            <option>A2</option>{PKG_SCHOOL.map(g => <option key={g}>{g}</option>)}
-          </select>
-        </div>
-        <div className="w-px h-10 bg-gray-100 self-end mb-0.5" />
-        <div>
-          <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Level</p>
-          <div className="flex gap-1.5">
-            {PKG_CEFR.map((k, i) => <PkgPill key={k} label={k} active={i === 1} small />)}
+        {/* Format + Package in one card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-6">
+          <div>
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Format</p>
+            <PkgFormatCards selected="Individual" />
+          </div>
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Package</p>
+            <PkgPackCards />
+          </div>
+          <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
+            <p className="text-sm text-gray-500">Total <span className="font-bold text-gray-900">200€</span></p>
+            <button className="px-6 py-2.5 bg-blue-500 text-white rounded-xl font-semibold text-sm">Confirm and receive invoice</button>
           </div>
         </div>
-      </div>
-      <div className="mb-6">
-        <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Format</p>
-        <PkgFormatCards selected="Individual" />
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Package</p>
-        <PkgPackCards />
       </div>
     </div>
   )
@@ -978,45 +986,56 @@ function PackageP1() {
 function PackageP2() {
   return (
     <div className="min-h-screen bg-[#EEF2FF] p-8 rounded-2xl">
-      <PkgHeader name="Hi Andrey, choose your package" desc="Select a format and number of lessons. You'll receive an invoice by email." />
-      <div className="flex gap-6 items-start">
-        {/* Left sidebar */}
-        <div className="w-64 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Course</p>
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap gap-1.5">{PKG_LANG_COURSES.map((s, i) => <PkgPill key={s} label={s} active={i === 1} small />)}</div>
-              <div className="flex flex-wrap gap-1.5">{PKG_OTHER_COURSES.map(s => <PkgPill key={s} label={s} small />)}</div>
+      <div className="max-w-4xl mx-auto">
+        <PkgHeader name="Hi Andrey, choose your package" desc="Select a format and number of lessons. You'll receive an invoice by email." />
+        <div className="flex gap-5 items-start">
+          {/* Left sidebar */}
+          <div className="w-56 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+            <div>
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Course</p>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1">Languages</p>
+                  <div className="flex flex-wrap gap-1">{PKG_LANG_COURSES.map((s, i) => <PkgPill key={s} label={s} active={i === 1} small />)}</div>
+                </div>
+                <div className="border-t border-gray-100 pt-2">
+                  <p className="text-[9px] text-gray-400 uppercase tracking-wide mb-1">Sciences</p>
+                  <div className="flex flex-wrap gap-1">{PKG_OTHER_COURSES.map(s => <PkgPill key={s} label={s} small />)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Teaching language</p>
+              <select className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700">
+                <option>English</option>{PKG_LANGS.slice(1).map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Grade</p>
+              <div className="flex flex-wrap gap-1">{PKG_SCHOOL.map(g => <PkgPill key={g} label={g} small />)}</div>
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Level</p>
+              <div className="flex gap-1">{PKG_CEFR.map((k, i) => <PkgPill key={k} label={k} active={i === 1} small />)}</div>
             </div>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Teaching language</p>
-            <select className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700">
-              <option>English</option>{PKG_LANGS.slice(1).map(l => <option key={l}>{l}</option>)}
-            </select>
+          {/* Right main */}
+          <div className="flex-1">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-6">
+              <div>
+                <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Format</p>
+                <PkgFormatCards selected="Individual" />
+              </div>
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Package</p>
+                <PkgPackCards />
+              </div>
+              <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-500">Total <span className="font-bold text-gray-900">200€</span></p>
+                <button className="px-6 py-2.5 bg-blue-500 text-white rounded-xl font-semibold text-sm">Confirm and receive invoice</button>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Grade</p>
-            <div className="flex flex-wrap gap-1.5">{PKG_SCHOOL.map(g => <PkgPill key={g} label={g} small />)}</div>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Level</p>
-            <div className="flex gap-1.5">{PKG_CEFR.map((k, i) => <PkgPill key={k} label={k} active={i === 1} small />)}</div>
-          </div>
-        </div>
-        {/* Right main */}
-        <div className="flex-1 space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Format</p>
-            <PkgFormatCards selected="Individual" />
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">Package</p>
-            <PkgPackCards />
-          </div>
-          <button className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold text-sm hover:bg-blue-600 transition-colors">
-            Confirm and receive invoice
-          </button>
         </div>
       </div>
     </div>
