@@ -5,7 +5,7 @@ export type LessonsCount = 1 | 4 | 8 | 12
 
 // Base price per person per lesson (before tier multiplier)
 const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
-  individual: { 1: 28, 4: 27, 8: 25, 12: 24 },
+  individual: { 1: 25, 4: 24, 8: 23, 12: 21 },
   pair:       { 1: 20, 4: 19, 8: 18, 12: 17 },
   group:      { 1: 15, 4: 14, 8: 14, 12: 13 },
 }
@@ -16,19 +16,23 @@ const STUDENTS_COUNT: Record<Format, number> = {
   group: 5,
 }
 
-const TIER_MULTIPLIERS: Record<'rich' | 'normal' | 'poor', number> = {
-  rich:   1.20,
-  normal: 1.00,
-  poor:   0.80,
+export type PriceTier = 'eu' | 'us' | 'baltics' | 'cis'
+
+const TIER_MULTIPLIERS: Record<PriceTier, number> = {
+  eu:      1.30,
+  us:      1.35,
+  baltics: 1.00,
+  cis:     0.60,
 }
 
 export function getPricePerLesson(
   format: Format,
   lessons: LessonsCount,
-  tier: 'rich' | 'normal' | 'poor' = 'normal'
+  tier: string = 'baltics'
 ): number {
   const base = BASE_PRICES[format][lessons]
-  return Math.round(base * TIER_MULTIPLIERS[tier] * 100) / 100
+  const multiplier = TIER_MULTIPLIERS[tier as PriceTier] ?? 1.00
+  return Math.round(base * multiplier * 100) / 100
 }
 
 export function getStudentsCount(format: Format): number {
@@ -38,7 +42,7 @@ export function getStudentsCount(format: Format): number {
 export function getTotalAmount(
   format: Format,
   lessons: LessonsCount,
-  tier: 'rich' | 'normal' | 'poor' = 'normal'
+  tier: string = 'baltics'
 ): number {
   const pricePerLesson = getPricePerLesson(format, lessons, tier)
   const students = STUDENTS_COUNT[format]

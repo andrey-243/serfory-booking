@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   if (existing) return NextResponse.json({ error: 'Invoice already sent' }, { status: 409 })
 
-  const tier = (app.price_tier || 'normal') as 'rich' | 'normal' | 'poor'
+  const tier = (app.price_tier || 'baltics') as string
   const pricePerLesson = getPricePerLesson(format, lessons_count, tier)
   const studentsCount = getStudentsCount(format)
   const totalAmount = getTotalAmount(format, lessons_count, tier)

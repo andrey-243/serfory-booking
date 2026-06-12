@@ -9,19 +9,14 @@ const CORS_HEADERS = {
 }
 
 // Pricing tiers — server-side only, never exposed to client
-const RICH_COUNTRIES = new Set([
+const EU_COUNTRIES = new Set([
   'AD','AT','BE','CH','CY','DE','DK','ES','FI','FR','GB','GR','IE','IS','IT',
   'LI','LU','MC','MT','NL','NO','PT','SE','SM','VA',
 ])
-
-const POOR_COUNTRIES = new Set([
-  // Africa
-  'DZ','AO','BJ','BW','BF','BI','CV','CM','CF','TD','KM','CG','CD','CI','DJ',
-  'EG','GQ','ER','SZ','ET','GA','GM','GH','GN','GW','KE','LS','LR','LY','MG',
-  'MW','ML','MR','MU','MA','MZ','NA','NE','NG','RW','ST','SN','SL','SO','ZA',
-  'SS','SD','TZ','TG','TN','UG','ZM','ZW',
-  // Poor Eastern
-  'KG','TJ','TM','UZ','MN','AF','YE','SY',
+const US_COUNTRIES = new Set(['US','CA'])
+const BALTICS_COUNTRIES = new Set(['EE','LV','LT'])
+const CIS_COUNTRIES_TIER = new Set([
+  'RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD',
 ])
 
 const CIS_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD'])
@@ -39,11 +34,13 @@ export function computeCommunicationLang(lang: string, learning_lang: string | n
   return 'en'
 }
 
-function getPriceTier(countryCode: string): 'rich' | 'normal' | 'poor' {
+function getPriceTier(countryCode: string): string {
   const code = countryCode.toUpperCase()
-  if (RICH_COUNTRIES.has(code)) return 'rich'
-  if (POOR_COUNTRIES.has(code)) return 'poor'
-  return 'normal'
+  if (US_COUNTRIES.has(code)) return 'us'
+  if (EU_COUNTRIES.has(code)) return 'eu'
+  if (BALTICS_COUNTRIES.has(code)) return 'baltics'
+  if (CIS_COUNTRIES_TIER.has(code)) return 'cis'
+  return 'baltics'
 }
 
 export async function OPTIONS() {

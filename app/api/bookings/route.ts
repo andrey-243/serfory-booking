@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { createCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 
-const TIER_MULTIPLIERS: Record<string, number> = { rich: 1.20, normal: 1.00, poor: 0.80 }
+const TIER_MULTIPLIERS: Record<string, number> = { eu: 1.30, us: 1.35, baltics: 1.00, cis: 0.60 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json()

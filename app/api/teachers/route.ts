@@ -2,24 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 // Pricing tiers — server-side only
-const RICH_COUNTRIES = new Set([
+const EU_COUNTRIES = new Set([
   'AD','AT','BE','CH','CY','DE','DK','ES','FI','FR','GB','GR','IE','IS','IT',
   'LI','LU','MC','MT','NL','NO','PT','SE','SM','VA',
 ])
-const POOR_COUNTRIES = new Set([
-  'DZ','AO','BJ','BW','BF','BI','CV','CM','CF','TD','KM','CG','CD','CI','DJ',
-  'EG','GQ','ER','SZ','ET','GA','GM','GH','GN','GW','KE','LS','LR','LY','MG',
-  'MW','ML','MR','MU','MA','MZ','NA','NE','NG','RW','ST','SN','SL','SO','ZA',
-  'SS','SD','TZ','TG','TN','UG','ZM','ZW','KG','TJ','TM','UZ','MN','AF','YE','SY',
+const US_COUNTRIES = new Set(['US','CA'])
+const BALTICS_COUNTRIES = new Set(['EE','LV','LT'])
+const CIS_COUNTRIES_TIER = new Set([
+  'RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD',
 ])
-const TIER_MULTIPLIER: Record<string, number> = { rich: 1.2, normal: 1.0, poor: 0.8 }
+const TIER_MULTIPLIER: Record<string, number> = { eu: 1.30, us: 1.35, baltics: 1.00, cis: 0.60 }
 const VAT = 1.22
 
 function getPriceTier(code: string): string {
   const c = code.toUpperCase()
-  if (RICH_COUNTRIES.has(c)) return 'rich'
-  if (POOR_COUNTRIES.has(c)) return 'poor'
-  return 'normal'
+  if (US_COUNTRIES.has(c)) return 'us'
+  if (EU_COUNTRIES.has(c)) return 'eu'
+  if (BALTICS_COUNTRIES.has(c)) return 'baltics'
+  if (CIS_COUNTRIES_TIER.has(c)) return 'cis'
+  return 'baltics'
 }
 
 export async function GET(req: NextRequest) {
