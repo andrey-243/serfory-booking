@@ -40,11 +40,14 @@ const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
   group: [4],
 }
 
-const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz'] as const
+const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'] as const
+const OTHER_SUBJECTS = ['Math', 'Chemistry', 'Physics'] as const
+const VALID_SUBJECTS = [...LANG_SUBJECTS, ...OTHER_SUBJECTS] as const
 type Subject = typeof VALID_SUBJECTS[number]
+const LANG_SUBJECT_SET = new Set<Subject>(['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'])
 
-// Math and Kyrgyz are individual-only (no group/pair formats)
-const SOLO_ONLY_SUBJECTS = new Set<Subject>(['Math', 'Kyrgyz'])
+// Individual-only subjects (no group/pair formats)
+const SOLO_ONLY_SUBJECTS = new Set<Subject>(['Math', 'Kyrgyz', 'Chemistry', 'Physics'])
 function getAvailableFormats(subject: Subject): Format[] {
   return SOLO_ONLY_SUBJECTS.has(subject) ? ['individual'] : ['individual', 'pair', 'group']
 }
@@ -74,7 +77,7 @@ const T = {
     title: (name: string) => `Hi ${name}, choose your package`,
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
     course: 'Course',
-    courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz' } as Record<string, string>,
+    courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz', Chemistry: 'Chemistry', Physics: 'Physics' } as Record<string, string>,
     grade: 'Grade / Level',
     gradeSection: 'Grade',
     levelSection: 'Level',
@@ -111,7 +114,7 @@ const T = {
     title: (name: string) => `Tere ${name}, vali oma pakett`,
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
     course: 'Kursus',
-    courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel' } as Record<string, string>,
+    courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel', Chemistry: 'Keemia', Physics: 'Füüsika' } as Record<string, string>,
     grade: 'Klass / tase',
     gradeSection: 'Klass',
     levelSection: 'Tase',
@@ -148,7 +151,7 @@ const T = {
     title: (name: string) => `Привет ${name}, выберите пакет`,
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
-    courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский' } as Record<string, string>,
+    courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский', Chemistry: 'Химия', Physics: 'Физика' } as Record<string, string>,
     grade: 'Класс / уровень',
     gradeSection: 'Класс',
     levelSection: 'Уровень',
@@ -207,6 +210,15 @@ function PackagePageInner() {
   const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
   const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
   const [availableLangs, setAvailableLangs] = useState<TeachingLang[]>(['en', 'et', 'ru', 'ky'])
+
+  type TeacherMeta = { subjects?: string[]; teaching_languages?: string[]; subject_levels?: Record<string, string[]> | null }
+  const [teacherCache, setTeacherCache] = useState<TeacherMeta[] | null>(null)
+  useEffect(() => {
+    fetch('/api/teachers')
+      .then(r => r.json())
+      .then(d => setTeacherCache(d.teachers ?? []))
+      .catch(() => setTeacherCache([]))
+  }, [])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
@@ -250,45 +262,36 @@ function PackagePageInner() {
     }
   }, [selectedSubject])
 
-  // Fetch available grades for selected subject via subject_levels union
+  // Compute available grades from cache (no per-switch fetch)
   useEffect(() => {
-    fetch(`/api/teachers?subject=${encodeURIComponent(selectedSubject)}`)
-      .then(r => r.json())
-      .then((d: { teachers?: Array<{ subject_levels?: Record<string, string[]> }> }) => {
-        const union = new Set<string>()
-        for (const t of d.teachers ?? []) {
-          for (const lvl of t.subject_levels?.[selectedSubject] ?? []) union.add(lvl)
-        }
-        setAvailableGradesPkg(union.size > 0 ? GRADE_KEYS_PKG.filter(k => union.has(k)) : [...GRADE_KEYS_PKG])
-      })
-      .catch(() => setAvailableGradesPkg([...GRADE_KEYS_PKG]))
-  }, [selectedSubject])
+    if (!teacherCache) return
+    const union = new Set<string>()
+    for (const t of teacherCache) {
+      if (!t.subjects?.includes(selectedSubject)) continue
+      for (const lvl of t.subject_levels?.[selectedSubject] ?? []) union.add(lvl)
+    }
+    setAvailableGradesPkg(union.size > 0 ? GRADE_KEYS_PKG.filter(k => union.has(k)) : [...GRADE_KEYS_PKG])
+  }, [selectedSubject, teacherCache])
 
   useEffect(() => {
     if (selectedGrade && !availableGradesPkg.includes(selectedGrade)) setSelectedGrade('')
   }, [availableGradesPkg])
 
-  // Fetch available teaching languages for selected subject
+  // Compute available teaching languages from cache
   useEffect(() => {
-    fetch(`/api/teachers?subject=${encodeURIComponent(selectedSubject)}`)
-      .then(r => r.json())
-      .then(d => {
-        const LANG_NAME_TO_CODE: Record<string, TeachingLang> = {
-          English: 'en', Estonian: 'et', Russian: 'ru', Kyrgyz: 'ky',
-        }
-        const langs = new Set<TeachingLang>()
-        for (const t of d.teachers ?? []) {
-          for (const l of (t.teaching_languages ?? []) as string[]) {
-            const code = LANG_NAME_TO_CODE[l]
-            if (code) langs.add(code)
-          }
-        }
-        const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
-        setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
-        // Do NOT auto-reset selectedLearningLang — user picks manually if needed
-      })
-      .catch(() => {})
-  }, [selectedSubject])
+    if (!teacherCache) return
+    const LANG_NAME_TO_CODE: Record<string, TeachingLang> = { English: 'en', Estonian: 'et', Russian: 'ru', Kyrgyz: 'ky' }
+    const langs = new Set<TeachingLang>()
+    for (const t of teacherCache) {
+      if (!t.subjects?.includes(selectedSubject)) continue
+      for (const l of t.teaching_languages ?? []) {
+        const code = LANG_NAME_TO_CODE[l]
+        if (code) langs.add(code)
+      }
+    }
+    const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
+    setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
+  }, [selectedSubject, teacherCache])
 
   async function handleConfirm() {
     setStatus('sending')
@@ -344,7 +347,7 @@ function PackagePageInner() {
 
   return (
     <PageShell uiLang={uiLang} onLangChange={handleLangChange}>
-      <div className="w-full max-w-2xl mx-auto">
+      <div className="w-full">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           {t.title(appData!.name)}
         </h1>
@@ -361,20 +364,23 @@ function PackagePageInner() {
         <div className="mb-5 flex flex-wrap items-end gap-6">
           <div>
             <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
-            <div className="flex flex-wrap gap-2">
-              {VALID_SUBJECTS.map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSelectedSubject(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                    selectedSubject === s
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  {t.courseLabels[s] ?? s}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap gap-2">
+                {LANG_SUBJECTS.map(s => (
+                  <button key={s} onClick={() => setSelectedSubject(s)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                    {t.courseLabels[s] ?? s}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {OTHER_SUBJECTS.map(s => (
+                  <button key={s} onClick={() => setSelectedSubject(s)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                    {t.courseLabels[s] ?? s}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div>
@@ -424,8 +430,8 @@ function PackagePageInner() {
             </div>
           </div>
 
-          {/* CEFR levels — hidden for Math */}
-          {selectedSubject !== 'Math' && (
+          {/* CEFR levels — language courses only */}
+          {LANG_SUBJECT_SET.has(selectedSubject) && (
             <div>
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.levelSection}</p>
               <div className="flex gap-1.5">
