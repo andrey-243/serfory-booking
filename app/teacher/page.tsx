@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { enUS, ru as ruLocale, et as etLocale } from 'date-fns/locale'
 import GroupSlotsTeacher from '@/components/teacher/GroupSlotsTeacher'
+import PremadeBatchesTeacher from '@/components/teacher/PremadeBatchesTeacher'
 
 type Lang = 'en' | 'ru' | 'et'
 
@@ -258,6 +259,17 @@ export default function TeacherPage() {
         {user?.teacherId && (
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
             <GroupSlotsTeacher
+              teacherId={user.teacherId}
+              subjects={teacherSubjects}
+              lang={lang}
+            />
+          </div>
+        )}
+
+        {/* Premade courses */}
+        {user?.teacherId && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <PremadeBatchesTeacher
               teacherId={user.teacherId}
               subjects={teacherSubjects}
               lang={lang}

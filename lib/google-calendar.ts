@@ -294,6 +294,44 @@ export async function deleteCalendarEvent(
   })
 }
 
+export async function createPremadeSessionEvent(
+  refreshToken: string,
+  calendarId: string,
+  { batchName, sessionName, subject, teacherName, sessionDate, startTime, durationMinutes, sessionId }: {
+    batchName: string
+    sessionName: string
+    subject: string
+    teacherName: string
+    sessionDate: string   // YYYY-MM-DD
+    startTime: string     // HH:MM
+    durationMinutes: number
+    sessionId: string
+  }
+): Promise<string | null> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+
+  const startDt = new Date(`${sessionDate}T${startTime}:00`)
+  const endDt = new Date(startDt.getTime() + durationMinutes * 60 * 1000)
+
+  const res = await calendar.events.insert({
+    calendarId: calendarId || 'primary',
+    sendUpdates: 'none',
+    conferenceDataVersion: 1,
+    requestBody: {
+      summary: `${batchName} — ${sessionName} · Serfory`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Premade course\n📖 ${sessionName}`,
+      start: { dateTime: startDt.toISOString() },
+      end: { dateTime: endDt.toISOString() },
+      conferenceData: { createRequest: { requestId: `premade-${sessionId}` } },
+    },
+  })
+
+  return res.data.id ?? null
+}
+
 export async function createCalendarEvent(
   refreshToken: string,
   calendarId: string,
