@@ -1,15 +1,14 @@
 // Server-side only — never import from client components
 
 export type Format = 'individual' | 'pair' | 'group' | 'premade'
-export type LessonsCount = 1 | 4 | 8 | 12
+export type LessonsCount = 1 | 4 | 6 | 7 | 8 | 12
 
 // Base price per person per lesson (before tier multiplier)
-// group and premade are flat — same price regardless of pack size
-const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
+const BASE_PRICES: Record<Format, Partial<Record<LessonsCount, number>>> = {
   individual: { 1: 26, 4: 25, 8: 24, 12: 23 },
   pair:       { 1: 21, 4: 20, 8: 19, 12: 18 },
-  group:      { 1: 15, 4: 15, 8: 15, 12: 15 },
-  premade:    { 1: 18, 4: 18, 8: 18, 12: 18 },
+  group:      { 4: 15 },
+  premade:    { 6: 18, 7: 18 },
 }
 
 const STUDENTS_COUNT: Record<Format, number> = {
@@ -59,7 +58,7 @@ export function getPricePerLesson(
   lessons: LessonsCount,
   tier: string = 'baltics'
 ): number {
-  const base = BASE_PRICES[format][lessons]
+  const base = BASE_PRICES[format][lessons] ?? 0
   const multiplier = TIER_MULTIPLIERS[tier as PriceTier] ?? 1.00
   return Math.round(base * multiplier * 100) / 100
 }
@@ -78,13 +77,8 @@ export function getTotalAmount(
   return Math.round(pricePerLesson * lessons * students * 100) / 100
 }
 
-// For display on the package page (base prices only, no tier)
 export const DISPLAY_PRICES = BASE_PRICES
-export const LESSONS_OPTIONS: LessonsCount[] = [1, 4, 8, 12]
 export const FORMAT_OPTIONS: Format[] = ['individual', 'pair', 'group', 'premade']
-export const DISCOUNTS: Record<LessonsCount, string> = {
-  1: '',
-  4: '-5%',
-  8: '-10%',
-  12: '-15%',
+export const DISCOUNTS: Partial<Record<LessonsCount, string>> = {
+  1: '', 4: '-5%', 6: '', 7: '', 8: '-10%', 12: '-15%',
 }

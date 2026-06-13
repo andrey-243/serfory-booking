@@ -4,8 +4,8 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 
-type Format = 'individual' | 'pair' | 'group'
-type LessonsCount = 1 | 4 | 8 | 12
+type Format = 'individual' | 'pair' | 'group' | 'premade'
+type LessonsCount = 1 | 4 | 6 | 7 | 8 | 12
 type Lang = 'en' | 'et' | 'ru'
 type TeachingLang = 'en' | 'et' | 'ru' | 'ky'
 
@@ -25,32 +25,34 @@ const FORMAT_INFO: Record<Format, Record<Lang, { label: string; students: string
     et: { label: 'Grupp', students: '4–6 õpilast' },
     ru: { label: 'Группа', students: '4–6 учеников' },
   },
+  premade: {
+    en: { label: 'Structured course', students: '3–6 students' },
+    et: { label: 'Struktureeritud kursus', students: '3–6 õpilast' },
+    ru: { label: 'Готовый курс', students: '3–6 учеников' },
+  },
 }
 
-const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
+const BASE_PRICES: Record<Format, Partial<Record<LessonsCount, number>>> = {
   individual: { 1: 26, 4: 25, 8: 24, 12: 23 },
   pair:       { 1: 21, 4: 20, 8: 19, 12: 18 },
-  group:      { 1: 15, 4: 15, 8: 15, 12: 15 },
+  group:      { 4: 15 },
+  premade:    { 6: 18, 7: 18 },
 }
 
-const DISCOUNTS: Record<LessonsCount, string> = { 1: '', 4: '-5%', 8: '-10%', 12: '-15%' }
+const DISCOUNTS: Partial<Record<LessonsCount, string>> = { 1: '', 4: '-5%', 6: '', 7: '', 8: '-10%', 12: '-15%' }
 const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
   individual: [1, 4, 8, 12],
   pair: [1, 4, 8],
   group: [4],
+  premade: [6, 7],
 }
+const FORMAT_ORDER: Format[] = ['individual', 'pair', 'group', 'premade']
 
 const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'] as const
 const OTHER_SUBJECTS = ['Math', 'Chemistry', 'Physics'] as const
 const VALID_SUBJECTS = [...LANG_SUBJECTS, ...OTHER_SUBJECTS] as const
 type Subject = typeof VALID_SUBJECTS[number]
 const LANG_SUBJECT_SET = new Set<Subject>(['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'])
-
-// Individual-only subjects (no group/pair formats)
-const SOLO_ONLY_SUBJECTS = new Set<Subject>(['Math', 'Kyrgyz', 'Chemistry', 'Physics'])
-function getAvailableFormats(subject: Subject): Format[] {
-  return SOLO_ONLY_SUBJECTS.has(subject) ? ['individual'] : ['individual', 'pair', 'group']
-}
 
 const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
 
@@ -217,7 +219,12 @@ function PackagePageInner() {
   const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
   const [availableLangs, setAvailableLangs] = useState<TeachingLang[]>(['en', 'et', 'ru', 'ky'])
 
-  type TeacherMeta = { subjects?: string[]; teaching_languages?: string[]; subject_levels?: Record<string, string[]> | null }
+  type TeacherMeta = {
+    subjects?: string[]
+    teaching_languages?: string[]
+    subject_levels?: Record<string, string[]> | null
+    subject_formats?: Record<string, string[]> | null
+  }
   const [teacherCache, setTeacherCache] = useState<TeacherMeta[] | null>(null)
   useEffect(() => {
     fetch('/api/teachers')
@@ -225,6 +232,17 @@ function PackagePageInner() {
       .then(d => setTeacherCache(d.teachers ?? []))
       .catch(() => setTeacherCache([]))
   }, [])
+
+  const [availableFormats, setAvailableFormats] = useState<Format[]>(FORMAT_ORDER)
+  useEffect(() => {
+    if (!teacherCache) return
+    const union = new Set<string>()
+    for (const tc of teacherCache) {
+      if (!tc.subjects?.includes(selectedSubject)) continue
+      for (const f of tc.subject_formats?.[selectedSubject] ?? []) union.add(f)
+    }
+    setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : FORMAT_ORDER)
+  }, [selectedSubject, teacherCache])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
@@ -254,19 +272,23 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
-  const pricePerLesson = BASE_PRICES[format][lessons]
-  const studentsCount = format === 'individual' ? 1 : format === 'pair' ? 2 : 5
+  const pricePerLesson = BASE_PRICES[format][lessons] ?? 0
+  const studentsCount = format === 'pair' ? 2 : format === 'group' ? 5 : 1
   const total = pricePerLesson * lessons * studentsCount
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
   const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
 
-  // Reset format to individual when switching to solo-only subject
+  // Reset format when switching subject (DB-driven)
   useEffect(() => {
-    if (!getAvailableFormats(selectedSubject).includes(format)) {
-      setFormat('individual')
-    }
-  }, [selectedSubject])
+    if (!availableFormats.includes(format)) setFormat('individual')
+  }, [availableFormats])
+
+  // Reset lessons when format changes (e.g. premade only has 6/7)
+  useEffect(() => {
+    const opts = LESSONS_OPTIONS[format]
+    if (!opts.includes(lessons)) setLessons(opts.includes(8) ? 8 : opts[0])
+  }, [format])
 
   // Compute available grades from cache (no per-switch fetch)
   useEffect(() => {
@@ -452,8 +474,8 @@ function PackagePageInner() {
             {/* Card 2: Format + Package */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
-              <div className={`grid gap-3 grid-cols-${getAvailableFormats(selectedSubject).length}`}>
-                {(Object.keys(FORMAT_INFO) as Format[]).filter(f => getAvailableFormats(selectedSubject).includes(f)).map(f => (
+              <div className={`grid gap-3 grid-cols-${availableFormats.length}`}>
+                {FORMAT_ORDER.filter(f => availableFormats.includes(f)).map(f => (
                   <button key={f} onClick={() => setFormat(f)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                     <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
@@ -462,11 +484,16 @@ function PackagePageInner() {
                 ))}
               </div>
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
-              <div className={`grid gap-3 ${LESSONS_OPTIONS[format].length === 1 ? 'grid-cols-2' : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+              <div className={`grid gap-3 ${
+                LESSONS_OPTIONS[format].length <= 2 ? 'grid-cols-2'
+                : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3'
+                : 'grid-cols-4'
+              }`}>
                 {LESSONS_OPTIONS[format].map(n => {
-                  const price = BASE_PRICES[format][n]
+                  const price = BASE_PRICES[format][n] ?? 0
                   const isSelected = lessons === n
-                  const isPopular = format !== 'group' && n === 8
+                  const isPopular = (format === 'individual' || format === 'pair') && n === 8
+                    || format === 'premade' && n === 6
                   return (
                     <button key={n} onClick={() => setLessons(n)}
                       className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
@@ -476,7 +503,7 @@ function PackagePageInner() {
                       <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
                       {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
                       <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
-                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
+                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' && format !== 'premade' ? ` · ${t.perPerson}` : ''}</p>
                     </button>
                   )
                 })}

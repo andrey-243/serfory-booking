@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
-  const validFormats: Format[] = ['individual', 'pair', 'group']
-  const validLessons: LessonsCount[] = [1, 4, 8, 12]
+  const validFormats: Format[] = ['individual', 'pair', 'group', 'premade']
+  const validLessons: LessonsCount[] = [1, 4, 6, 7, 8, 12]
   if (!validFormats.includes(format) || !validLessons.includes(lessons_count)) {
     return NextResponse.json({ error: 'Invalid format or lessons_count' }, { status: 400 })
   }
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
 
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
   if (adminChatId) {
-    const formatLabel: Record<string, string> = { individual: 'Individual', pair: 'Pair', group: 'Group' }
+    const formatLabel: Record<string, string> = { individual: 'Individual', pair: 'Pair', group: 'Group', premade: 'Premade' }
     const msg = [
       `🧾 <b>Invoice #${invoiceNumber} sent</b>`,
       ``,

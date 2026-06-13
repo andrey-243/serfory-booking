@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   let query = getSupabaseAdmin()
     .from('teachers')
-    .select('id, name, email, subjects, photo_url, google_photo_url, google_calendar_id, title, teaching_languages, levels, subject_levels, experience_years, price_per_hour, created_at')
+    .select('id, name, email, subjects, photo_url, google_photo_url, google_calendar_id, title, teaching_languages, levels, subject_levels, subject_formats, experience_years, price_per_hour, created_at')
     .order('name')
 
   if (subject) query = query.contains('subjects', [subject])
