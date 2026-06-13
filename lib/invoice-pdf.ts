@@ -5,7 +5,7 @@ export interface InvoiceData {
   studentName: string
   studentEmail: string
   subject: string
-  format: 'individual' | 'pair' | 'group'
+  format: 'individual' | 'pair' | 'group' | 'premade'
   lessonsCount: number
   studentsCount: number
   pricePerLesson: number
@@ -25,7 +25,7 @@ const LABELS = {
     due: 'DUE DATE',
     service: 'SERVICE',
     amount: 'AMOUNT DUE',
-    formatLabel: { individual: 'Individual', pair: 'Pair', group: 'Group' },
+    formatLabel: { individual: 'Individual', pair: 'Pair', group: 'Group', premade: 'Premade' },
   },
   et: {
     title: 'ARVE',
@@ -36,7 +36,7 @@ const LABELS = {
     due: 'TÄHTAEG',
     service: 'TEENUS',
     amount: 'TASUMISELE KUULUV SUMMA',
-    formatLabel: { individual: 'Individuaaltund', pair: 'Paartund', group: 'Grupp' },
+    formatLabel: { individual: 'Individuaaltund', pair: 'Paartund', group: 'Grupp', premade: 'Premade' },
   },
   ru: {
     title: 'СЧЁТ',
@@ -47,7 +47,7 @@ const LABELS = {
     due: 'СРОК ОПЛАТЫ',
     service: 'УСЛУГА',
     amount: 'СУММА К ОПЛАТЕ',
-    formatLabel: { individual: 'Индивидуальный', pair: 'Парный', group: 'Групповой' },
+    formatLabel: { individual: 'Индивидуальный', pair: 'Парный', group: 'Групповой', premade: 'Premade' },
   },
 }
 

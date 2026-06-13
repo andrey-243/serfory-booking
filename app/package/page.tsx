@@ -28,9 +28,9 @@ const FORMAT_INFO: Record<Format, Record<Lang, { label: string; students: string
 }
 
 const BASE_PRICES: Record<Format, Record<LessonsCount, number>> = {
-  individual: { 1: 28, 4: 27, 8: 25, 12: 24 },
-  pair:       { 1: 20, 4: 19, 8: 18, 12: 17 },
-  group:      { 1: 15, 4: 14, 8: 14, 12: 13 },
+  individual: { 1: 26, 4: 25, 8: 24, 12: 23 },
+  pair:       { 1: 21, 4: 20, 8: 19, 12: 18 },
+  group:      { 1: 15, 4: 15, 8: 15, 12: 15 },
 }
 
 const DISCOUNTS: Record<LessonsCount, string> = { 1: '', 4: '-5%', 8: '-10%', 12: '-15%' }
@@ -105,6 +105,8 @@ const T = {
     interestedSent: 'Noted! We\'ll let you know.',
     notifyByEmail: 'Notify me by email',
     weeks: (n: number) => `${n} weeks`,
+    yourOrder: 'Your order',
+    invoiceNote: 'Invoice sent to your email',
   },
   et: {
     loading: 'Laadimine...',
@@ -142,6 +144,8 @@ const T = {
     interestedSent: 'Märgitud! Anname teada.',
     notifyByEmail: 'Teavita mind e-postiga',
     weeks: (n: number) => `${n} nädalat`,
+    yourOrder: 'Sinu tellimus',
+    invoiceNote: 'Arve saadetakse e-postile',
   },
   ru: {
     loading: 'Загрузка...',
@@ -179,6 +183,8 @@ const T = {
     interestedSent: 'Записали! Сообщим вам.',
     notifyByEmail: 'Уведомить по email',
     weeks: (n: number) => `${n} недель`,
+    yourOrder: 'Ваш заказ',
+    invoiceNote: 'Счёт будет отправлен на email',
   },
 }
 
@@ -348,249 +354,214 @@ function PackagePageInner() {
   return (
     <PageShell uiLang={uiLang} onLangChange={handleLangChange}>
       <div className="w-full">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          {t.title(appData!.name)}
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.title(appData!.name)}</h1>
         <p className="text-gray-500 mb-6 text-sm">{t.subtitle}</p>
 
-        {/* Pending invoice banner */}
         {hasPendingInvoice && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 text-sm text-amber-800">
             {t.invoicePending}
           </div>
         )}
 
-        {/* Row 1: Course + Teaching language */}
-        <div className="mb-5 flex flex-wrap items-end gap-6">
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap gap-2">
-                {LANG_SUBJECTS.map(s => (
-                  <button key={s} onClick={() => setSelectedSubject(s)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                    {t.courseLabels[s] ?? s}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {OTHER_SUBJECTS.map(s => (
-                  <button key={s} onClick={() => setSelectedSubject(s)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                    {t.courseLabels[s] ?? s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
-            <select
-              value={selectedLearningLang}
-              onChange={e => {
-                const v = e.target.value as TeachingLang
-                if (availableLangs.includes(v)) setSelectedLearningLang(v)
-              }}
-              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            >
-              {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
-                <option key={l} value={l} disabled={!availableLangs.includes(l)}>
-                  {t.langLabels[l]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Grade + Level side by side */}
-        <div className="mb-8 flex flex-wrap gap-8 items-start">
-          {/* School grades */}
-          <div>
-            <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.gradeSection}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {SCHOOL_GRADES.map(key => {
-                const avail = availableGradesPkg.includes(key)
-                return (
-                  <button
-                    key={key}
-                    onClick={() => avail && handleGradeChange(key)}
-                    disabled={!avail}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                      !avail
-                        ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                        : selectedGrade === key
-                          ? 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                    }`}
+        <div className="flex gap-6 items-start">
+          {/* Left panel */}
+          <div className="flex-1 min-w-0 space-y-4">
+            {/* Card 1: Course + Teaching lang + Grade + Level */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+              <div className="flex items-start gap-8">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap gap-2">
+                      {LANG_SUBJECTS.map(s => (
+                        <button key={s} onClick={() => setSelectedSubject(s)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                          {t.courseLabels[s] ?? s}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {OTHER_SUBJECTS.map(s => (
+                        <button key={s} onClick={() => setSelectedSubject(s)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                          {t.courseLabels[s] ?? s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
+                  <select
+                    value={selectedLearningLang}
+                    onChange={e => {
+                      const v = e.target.value as TeachingLang
+                      if (availableLangs.includes(v)) setSelectedLearningLang(v)
+                    }}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                   >
-                    {GRADE_LABELS_PKG[uiLang][key]}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* CEFR levels — language courses only */}
-          {LANG_SUBJECT_SET.has(selectedSubject) && (
-            <div>
-              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.levelSection}</p>
-              <div className="flex gap-1.5">
-                {CEFR_GRADES.map(key => {
-                  const avail = availableGradesPkg.includes(key)
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => avail && handleGradeChange(key)}
-                      disabled={!avail}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                        !avail
-                          ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                          : selectedGrade === key
-                            ? 'bg-blue-500 text-white border-blue-500'
+                    {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
+                      <option key={l} value={l} disabled={!availableLangs.includes(l)}>{t.langLabels[l]}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {/* Grade + Level */}
+              <div className="flex flex-wrap items-start gap-x-8 gap-y-3 pt-3 border-t border-gray-100">
+                <div>
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.gradeSection}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SCHOOL_GRADES.map(key => {
+                      const avail = availableGradesPkg.includes(key)
+                      return (
+                        <button key={key} onClick={() => avail && handleGradeChange(key)} disabled={!avail}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            !avail ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                            : selectedGrade === key ? 'bg-blue-500 text-white border-blue-500'
                             : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                      }`}
-                    >
-                      {key}
+                          }`}>
+                          {GRADE_LABELS_PKG[uiLang][key]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                {LANG_SUBJECT_SET.has(selectedSubject) && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.levelSection}</p>
+                    <div className="flex gap-1.5">
+                      {CEFR_GRADES.map(key => {
+                        const avail = availableGradesPkg.includes(key)
+                        return (
+                          <button key={key} onClick={() => avail && handleGradeChange(key)} disabled={!avail}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                              !avail ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                              : selectedGrade === key ? 'bg-blue-500 text-white border-blue-500'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            }`}>
+                            {key}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 2: Format + Package */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
+              <div className={`grid gap-3 grid-cols-${getAvailableFormats(selectedSubject).length}`}>
+                {(Object.keys(FORMAT_INFO) as Format[]).filter(f => getAvailableFormats(selectedSubject).includes(f)).map(f => (
+                  <button key={f} onClick={() => setFormat(f)}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                    <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
+              <div className={`grid gap-3 ${LESSONS_OPTIONS[format].length === 1 ? 'grid-cols-2' : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+                {LESSONS_OPTIONS[format].map(n => {
+                  const price = BASE_PRICES[format][n]
+                  const isSelected = lessons === n
+                  const isPopular = format !== 'group' && n === 8
+                  return (
+                    <button key={n} onClick={() => setLessons(n)}
+                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                      {isPopular && (
+                        <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">{t.popular}</span>
+                      )}
+                      <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
+                      {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
+                      <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
+                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
                     </button>
                   )
                 })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Format + Package — constrained width */}
-        <div className="max-w-2xl">
-
-        {/* Format selector */}
-        <div className="mb-8">
-          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
-          <div className={`grid gap-3 grid-cols-${getAvailableFormats(selectedSubject).length}`}>
-            {(Object.keys(FORMAT_INFO) as Format[]).filter(f => getAvailableFormats(selectedSubject).includes(f)).map(f => (
-              <button
-                key={f}
-                onClick={() => setFormat(f)}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Package selector */}
-        <div className="mb-8">
-          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.package}</p>
-          <div className={`grid gap-3 ${LESSONS_OPTIONS[format].length === 1 ? 'grid-cols-2' : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-            {LESSONS_OPTIONS[format].map(n => {
-              const price = BASE_PRICES[format][n]
-              const isSelected = lessons === n
-              const isPopular = format !== 'group' && n === 8
-              return (
-                <button
-                  key={n}
-                  onClick={() => setLessons(n)}
-                  className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  {isPopular && (
-                    <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">
-                      {t.popular}
-                    </span>
-                  )}
-                  <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
-                  {DISCOUNTS[n] && (
-                    <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>
-                  )}
-                  <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
-                  <p className="text-[10px] text-gray-400">
-                    {t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}
-                  </p>
-                </button>
-              )
-            })}
-
-            {/* Group 8w — coming soon */}
-            {format === 'group' && (
-              <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
-                <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">
-                  {t.comingSoon}
-                </span>
-                <p className="font-semibold text-gray-400 text-sm">{t.weeks(8)}</p>
-                <p className="text-base font-bold text-gray-300 mt-1">—</p>
-
-                {interest8w === 'done' ? (
-                  <p className="mt-2 text-[11px] text-green-600 font-medium">{t.interestedSent}</p>
-                ) : interest8w === 'ask' ? (
-                  <div className="mt-2 space-y-1.5">
-                    {tgEligible ? (
-                      <>
-                        <input
-                          value={tgUsernameInput}
-                          onChange={e => setTgUsernameInput(e.target.value)}
-                          placeholder="@username"
-                          className="w-full text-xs border border-gray-300 rounded-lg px-2 py-1 outline-none focus:border-blue-400"
-                        />
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => submitInterest8w(tgUsernameInput || undefined)}
-                            className="text-[11px] font-semibold text-blue-500 hover:text-blue-600"
-                          >
-                            {t.interested}
-                          </button>
-                          <span className="text-gray-300 text-[11px]">·</span>
-                          <button
-                            onClick={() => submitInterest8w()}
-                            className="text-[11px] text-gray-400 hover:text-gray-600"
-                          >
-                            {t.notifyByEmail}
-                          </button>
-                        </div>
-                      </>
+                {format === 'group' && (
+                  <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
+                    <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">{t.comingSoon}</span>
+                    <p className="font-semibold text-gray-400 text-sm">{t.weeks(8)}</p>
+                    <p className="text-base font-bold text-gray-300 mt-1">—</p>
+                    {interest8w === 'done' ? (
+                      <p className="mt-2 text-[11px] text-green-600 font-medium">{t.interestedSent}</p>
+                    ) : interest8w === 'ask' ? (
+                      <div className="mt-2 space-y-1.5">
+                        {tgEligible ? (
+                          <>
+                            <input value={tgUsernameInput} onChange={e => setTgUsernameInput(e.target.value)}
+                              placeholder="@username"
+                              className="w-full text-xs border border-gray-300 rounded-lg px-2 py-1 outline-none focus:border-blue-400" />
+                            <div className="flex gap-1.5">
+                              <button onClick={() => submitInterest8w(tgUsernameInput || undefined)}
+                                className="text-[11px] font-semibold text-blue-500 hover:text-blue-600">{t.interested}</button>
+                              <span className="text-gray-300 text-[11px]">·</span>
+                              <button onClick={() => submitInterest8w()}
+                                className="text-[11px] text-gray-400 hover:text-gray-600">{t.notifyByEmail}</button>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-gray-500">{t.notifyByEmail}</p>
+                        )}
+                      </div>
                     ) : (
-                      <p className="text-[11px] text-gray-500">{t.notifyByEmail}</p>
+                      <button onClick={handleInterest8wClick} disabled={interest8w === 'sending'}
+                        className="mt-2 text-[11px] font-semibold text-blue-500 hover:text-blue-600 disabled:text-gray-400 transition-colors">
+                        {interest8w === 'sending' ? '...' : t.interested}
+                      </button>
                     )}
                   </div>
-                ) : (
-                  <button
-                    onClick={handleInterest8wClick}
-                    disabled={interest8w === 'sending'}
-                    className="mt-2 text-[11px] font-semibold text-blue-500 hover:text-blue-600 disabled:text-gray-400 transition-colors"
-                  >
-                    {interest8w === 'sending' ? '...' : t.interested}
-                  </button>
                 )}
               </div>
-            )}
+            </div>
+
+            {tgEligible && <TgBlock t={t} botUsername={BOT} />}
+          </div>
+
+          {/* Right sidebar — sticky order summary */}
+          <div className="w-72 shrink-0 sticky top-8">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 space-y-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.yourOrder}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.course}</span>
+                  <span className="font-medium text-gray-800">{t.courseLabels[selectedSubject] ?? selectedSubject}</span>
+                </div>
+                {selectedGrade && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{CEFR_GRADES.includes(selectedGrade as GradeKeyPkg) ? t.levelSection : t.gradeSection}</span>
+                    <span className="font-medium text-gray-800">{GRADE_LABELS_PKG[uiLang][selectedGrade as GradeKeyPkg]}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.format}</span>
+                  <span className="font-medium text-gray-800">{FORMAT_INFO[format][uiLang].label}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.package}</span>
+                  <span className="font-medium text-gray-800">{format === 'group' ? t.weeks(lessons) : t.lessons(lessons)}</span>
+                </div>
+              </div>
+              <div className="border-t border-gray-100 pt-3 flex justify-between items-baseline">
+                <span className="text-xs text-gray-500">{t.total}</span>
+                <span className="text-xl font-bold text-gray-900">{total}€</span>
+              </div>
+              <button onClick={handleConfirm} disabled={status === 'sending'}
+                className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors">
+                {status === 'sending' ? t.sending : t.confirm}
+              </button>
+              <p className="text-[10px] text-center text-gray-400">{t.invoiceNote}</p>
+              <div className="border-t border-gray-100 pt-3 flex items-start gap-1.5">
+                <svg className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 102 0V7zm-1 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"/>
+                </svg>
+                <p className="text-[10px] text-gray-400 leading-snug">{t.personalLink}</p>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Total + CTA */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between mb-4">
-          <div>
-            <p className="text-sm text-gray-500">{t.total}</p>
-            <p className="text-2xl font-bold text-gray-900">{total}€</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {format !== 'individual' ? `${studentsCount} × ` : ''}{lessons} × {pricePerLesson}€
-            </p>
-          </div>
-          <button
-            onClick={handleConfirm}
-            disabled={status === 'sending'}
-            className="bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm"
-          >
-            {status === 'sending' ? t.sending : t.confirm}
-          </button>
-        </div>
-
-        {tgEligible && <TgBlock t={t} botUsername={BOT} />}
-
-        <p className="text-xs text-gray-400 text-center mt-4">{t.personalLink}</p>
-        </div>{/* end max-w-2xl */}
       </div>
     </PageShell>
   )
