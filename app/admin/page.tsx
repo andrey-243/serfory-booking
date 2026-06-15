@@ -724,8 +724,8 @@ export default function AdminPage() {
   const [adminPremadeBatches, setAdminPremadeBatches] = useState<AdminPremadeBatch[]>([])
   const [expandedGroupBatch, setExpandedGroupBatch] = useState<string | null>(null)
   const [expandedPremadeBatch, setExpandedPremadeBatch] = useState<string | null>(null)
-  const [showGroupSection, setShowGroupSection] = useState(true)
-  const [showPremadeSection, setShowPremadeSection] = useState(true)
+  const [showGroupSection, setShowGroupSection] = useState(false)
+  const [showPremadeSection, setShowPremadeSection] = useState(false)
 
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -1028,19 +1028,18 @@ export default function AdminPage() {
             {groupBatches.length > 0 && (() => {
               const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
               return (
-                <div className="mb-4">
+                <div className="mb-6">
                   <button
                     onClick={() => setShowGroupSection(v => !v)}
-                    className="flex items-center gap-2 mb-2 px-1 hover:opacity-70 transition-opacity"
+                    className="flex items-center gap-2 mb-3 px-1 hover:opacity-70 transition-opacity"
                   >
                     <svg className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${showGroupSection ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Group courses</span>
                     <span className="text-xs text-gray-400">({groupBatches.length})</span>
                   </button>
                   {showGroupSection && (
-                    <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                       {groupBatches.map(batch => {
-                        const isOpen = expandedGroupBatch === batch.id
                         const sessions = batch.group_slot_sessions
                         const firstDate = sessions[0]?.session_date
                         const lastDate = sessions[sessions.length - 1]?.session_date
@@ -1048,75 +1047,63 @@ export default function AdminPage() {
                         const langs = batch.teachers?.teaching_languages ?? []
                         const students = batch.enrolled_students ?? []
                         return (
-                          <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                            <button
-                              onClick={() => setExpandedGroupBatch(isOpen ? null : batch.id)}
-                              className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                            >
-                              <svg className={`w-3.5 h-3.5 text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                          <div key={batch.id} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
+                            {/* Header */}
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${subjectColor.bg} ${subjectColor.text}`}>{batch.subject}</span>
                               {batch.teachers?.name && <TeacherAvatar name={batch.teachers.name} />}
                               {batch.teachers?.name && <span className="text-sm text-gray-700">{batch.teachers.name.split(' ')[0]}</span>}
                               {langs.map(l => (
                                 <span key={l} className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${langBadge[l] ?? 'bg-gray-100 text-gray-500'}`}>{l}</span>
                               ))}
-                              {firstDate && (
-                                <span className="text-xs text-gray-400">
-                                  {fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}
-                                </span>
-                              )}
-                              <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                                {batch.enrollment_count}/{batch.max_students}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'prelock' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
+                              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'prelock' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
                                 {batch.status}
                               </span>
-                            </button>
-                            {isOpen && (
-                              <div className="border-t border-gray-100 px-4 py-3 flex flex-col gap-3">
-                                {/* Sessions */}
-                                <div className="flex flex-wrap gap-2">
-                                  {sessions.map((s, i) => (
-                                    <div key={s.id} className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                                      <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
-                                      <span>{fmtDate(s.session_date)}</span>
-                                      <span className="text-gray-300">·</span>
-                                      <span>{s.start_time.slice(0, 5)}</span>
-                                      {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
-                                    </div>
-                                  ))}
+                            </div>
+                            {/* Dates + count */}
+                            <div className="flex items-center justify-between">
+                              {firstDate && <span className="text-xs text-gray-400">{fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}</span>}
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {batch.enrollment_count}/{batch.max_students}
+                              </span>
+                            </div>
+                            {/* Sessions */}
+                            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+                              {sessions.map((s, i) => (
+                                <div key={s.id} className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                                  <span className="text-gray-300 font-mono text-[10px] w-3 shrink-0">{i + 1}</span>
+                                  <span className="font-medium text-gray-600">{fmtDate(s.session_date)}</span>
+                                  <span className="text-gray-300">·</span>
+                                  <span>{s.start_time.slice(0, 5)}</span>
+                                  {s.gcal_event_id && <span className="ml-auto text-[10px] text-emerald-500">✓</span>}
                                 </div>
-                                {/* Students — card grid */}
-                                {students.length === 0 ? (
-                                  <p className="text-xs text-gray-400 italic">No students enrolled yet.</p>
-                                ) : (
-                                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {students.map(s => (
-                                      <div key={s.id} className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
-                                            {nameInitials(s.name)}
-                                          </span>
-                                          <span className="text-sm font-semibold text-gray-800 truncate">{s.name}</span>
-                                        </div>
-                                        <p className="text-[11px] text-gray-400 truncate">{s.email}</p>
-                                        <p className="text-[11px] text-gray-500">{s.phone}</p>
-                                        <div className="flex gap-1.5 flex-wrap">
-                                          {s.telegram_username && (
-                                            <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
-                                              className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-600 hover:bg-sky-100 font-medium whitespace-nowrap">
-                                              <TgIcon /> @{s.telegram_username}
-                                            </a>
-                                          )}
-                                          <a href={`mailto:${s.email}`}
-                                            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 hover:bg-violet-100 font-medium whitespace-nowrap">
-                                            <EmailIcon /> Email
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ))}
+                              ))}
+                            </div>
+                            {/* Students */}
+                            {students.length === 0 ? (
+                              <p className="text-[11px] text-gray-300 italic">No students enrolled yet.</p>
+                            ) : (
+                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
+                                {students.map(s => (
+                                  <div key={s.id} className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
+                                      {nameInitials(s.name)}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-gray-800 truncate">{s.name}</p>
+                                      <p className="text-[10px] text-gray-400 truncate">{s.phone}</p>
+                                    </div>
+                                    {s.telegram_username && (
+                                      <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
+                                        className="text-[10px] text-sky-500 hover:underline shrink-0">
+                                        <TgIcon />
+                                      </a>
+                                    )}
+                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0">
+                                      <EmailIcon />
+                                    </a>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             )}
                           </div>
@@ -1132,19 +1119,18 @@ export default function AdminPage() {
             {adminPremadeBatches.length > 0 && (() => {
               const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
               return (
-                <div className="mb-4">
+                <div className="mb-6">
                   <button
                     onClick={() => setShowPremadeSection(v => !v)}
-                    className="flex items-center gap-2 mb-2 px-1 hover:opacity-70 transition-opacity"
+                    className="flex items-center gap-2 mb-3 px-1 hover:opacity-70 transition-opacity"
                   >
                     <svg className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${showPremadeSection ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Premade courses</span>
                     <span className="text-xs text-gray-400">({adminPremadeBatches.length})</span>
                   </button>
                   {showPremadeSection && (
-                    <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                       {adminPremadeBatches.map(batch => {
-                        const isOpen = expandedPremadeBatch === batch.id
                         const sessions = batch.premade_sessions
                         const firstDate = sessions[0]?.session_date
                         const lastDate = sessions[sessions.length - 1]?.session_date
@@ -1152,79 +1138,68 @@ export default function AdminPage() {
                         const lang = batch.teaching_language
                         const students = batch.enrolled_students ?? []
                         return (
-                          <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                            <button
-                              onClick={() => setExpandedPremadeBatch(isOpen ? null : batch.id)}
-                              className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                            >
-                              <svg className={`w-3.5 h-3.5 text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                          <div key={batch.id} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
+                            {/* Header */}
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${subjectColor.bg} ${subjectColor.text}`}>{batch.subject}</span>
                               {batch.teachers?.name && <TeacherAvatar name={batch.teachers.name} />}
                               {batch.teachers?.name && <span className="text-sm text-gray-700">{batch.teachers.name.split(' ')[0]}</span>}
                               {lang && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${langBadge[lang] ?? 'bg-gray-100 text-gray-500'}`}>{lang}</span>}
-                              <span className="text-sm font-medium text-gray-700 truncate max-w-[180px]">{batch.name}</span>
-                              {batch.target_levels?.length > 0 && (
-                                <span className="text-[10px] text-gray-400">{batch.target_levels.join(', ')}</span>
-                              )}
-                              {firstDate && (
-                                <span className="text-xs text-gray-400">
-                                  {fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}
-                                </span>
-                              )}
-                              <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                                {batch.enrollment_count}/{batch.max_students}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'completed' ? 'bg-blue-50 text-blue-500' : 'bg-gray-100 text-gray-400'}`}>
+                              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'completed' ? 'bg-blue-50 text-blue-500' : 'bg-gray-100 text-gray-400'}`}>
                                 {batch.status}
                               </span>
-                            </button>
-                            {isOpen && (
-                              <div className="border-t border-gray-100 px-4 py-3 flex flex-col gap-3">
-                                {/* Sessions */}
-                                <div className="flex flex-wrap gap-2">
-                                  {sessions.map((s, i) => (
-                                    <div key={s.id} className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                                      <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
-                                      <span className="text-gray-600 font-medium">{s.name}</span>
-                                      <span className="text-gray-300">·</span>
-                                      <span>{fmtDate(s.session_date)}</span>
-                                      <span className="text-gray-300">·</span>
-                                      <span>{s.start_time.slice(0, 5)}</span>
-                                      {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
-                                    </div>
-                                  ))}
+                            </div>
+                            {/* Course name + levels + dates + count */}
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 truncate">{batch.name}</p>
+                              {batch.target_levels?.length > 0 && (
+                                <p className="text-[10px] text-gray-400 mt-0.5">{batch.target_levels.join(', ')}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              {firstDate && <span className="text-xs text-gray-400">{fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}</span>}
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {batch.enrollment_count}/{batch.max_students}
+                              </span>
+                            </div>
+                            {/* Sessions */}
+                            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+                              {sessions.map((s, i) => (
+                                <div key={s.id} className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                                  <span className="text-gray-300 font-mono text-[10px] w-3 shrink-0">{i + 1}</span>
+                                  <span className="font-medium text-gray-600 truncate flex-1">{s.name}</span>
+                                  <span className="text-gray-400 shrink-0">{fmtDate(s.session_date)}</span>
+                                  <span className="text-gray-300">·</span>
+                                  <span className="shrink-0">{s.start_time.slice(0, 5)}</span>
+                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500 shrink-0">✓</span>}
                                 </div>
-                                {/* Students — card grid */}
-                                {students.length === 0 ? (
-                                  <p className="text-xs text-gray-400 italic">No students enrolled yet.</p>
-                                ) : (
-                                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {students.map(s => (
-                                      <div key={s.id} className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
-                                            {nameInitials(s.name)}
-                                          </span>
-                                          <span className="text-sm font-semibold text-gray-800 truncate">{s.name}</span>
-                                        </div>
-                                        <p className="text-[11px] text-gray-400 truncate">{s.email}</p>
-                                        <p className="text-[11px] text-gray-500">{s.phone}</p>
-                                        <div className="flex gap-1.5 flex-wrap">
-                                          {s.telegram_username && (
-                                            <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
-                                              className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-600 hover:bg-sky-100 font-medium whitespace-nowrap">
-                                              <TgIcon /> @{s.telegram_username}
-                                            </a>
-                                          )}
-                                          <a href={`mailto:${s.email}`}
-                                            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 hover:bg-violet-100 font-medium whitespace-nowrap">
-                                            <EmailIcon /> Email
-                                          </a>
-                                        </div>
-                                      </div>
-                                    ))}
+                              ))}
+                            </div>
+                            {/* Students */}
+                            {students.length === 0 ? (
+                              <p className="text-[11px] text-gray-300 italic">No students enrolled yet.</p>
+                            ) : (
+                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
+                                {students.map(s => (
+                                  <div key={s.id} className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
+                                      {nameInitials(s.name)}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-gray-800 truncate">{s.name}</p>
+                                      <p className="text-[10px] text-gray-400 truncate">{s.phone}</p>
+                                    </div>
+                                    {s.telegram_username && (
+                                      <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
+                                        className="text-[10px] text-sky-500 hover:underline shrink-0">
+                                        <TgIcon />
+                                      </a>
+                                    )}
+                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0">
+                                      <EmailIcon />
+                                    </a>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             )}
                           </div>
