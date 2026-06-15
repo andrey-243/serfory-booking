@@ -252,7 +252,7 @@ export default function TeacherPage() {
                       value={row.start_time}
                       onChange={e => e.target.value && setAvailability(prev => prev.map((r, j) => j === i ? { ...r, start_time: e.target.value } : r))}
                       onBlur={e => { if (!e.target.value) setAvailability(prev => prev.map((r, j) => j === i ? { ...r, start_time: '08:00' } : r)) }}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                     <span className="text-gray-400 text-sm">–</span>
                     <input
@@ -260,7 +260,7 @@ export default function TeacherPage() {
                       value={row.end_time}
                       onChange={e => e.target.value && setAvailability(prev => prev.map((r, j) => j === i ? { ...r, end_time: e.target.value } : r))}
                       onBlur={e => { if (!e.target.value) setAvailability(prev => prev.map((r, j) => j === i ? { ...r, end_time: '20:00' } : r)) }}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
                 ) : (

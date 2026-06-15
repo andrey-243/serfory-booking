@@ -106,7 +106,22 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const today = toDateStr(new Date())
 
-  // Count only active batches — prelocks are auto-managed and don't count as distinct groups
+  // Auto-complete active batches where all sessions are in the past
+  const { data: activeGroupBatches } = await supabase
+    .from('group_slot_batches')
+    .select('id, group_slot_sessions(session_date)')
+    .eq('teacher_id', teacher_id)
+    .eq('subject', subject)
+    .eq('status', 'active')
+
+  for (const b of activeGroupBatches ?? []) {
+    const sessions = (b as { id: string; group_slot_sessions: { session_date: string }[] }).group_slot_sessions ?? []
+    if (sessions.length > 0 && sessions.every(s => s.session_date < today)) {
+      await supabase.from('group_slot_batches').update({ status: 'completed' }).eq('id', b.id)
+    }
+  }
+
+  // Count only active batches (after auto-complete) — prelocks don't count as distinct groups
   const { count } = await supabase
     .from('group_slot_batches')
     .select('*', { count: 'exact', head: true })

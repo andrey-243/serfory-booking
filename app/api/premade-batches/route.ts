@@ -94,8 +94,24 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin()
+  const today = new Date().toISOString().slice(0, 10)
 
-  // Max 2 active premade batches per teacher per subject
+  // Auto-complete active batches where all sessions are in the past
+  const { data: activeBatches } = await supabase
+    .from('premade_batches')
+    .select('id, premade_sessions(session_date)')
+    .eq('teacher_id', teacher_id)
+    .eq('subject', subject)
+    .eq('status', 'active')
+
+  for (const b of activeBatches ?? []) {
+    const sessions = (b as { id: string; premade_sessions: { session_date: string }[] }).premade_sessions ?? []
+    if (sessions.length > 0 && sessions.every(s => s.session_date < today)) {
+      await supabase.from('premade_batches').update({ status: 'completed' }).eq('id', b.id)
+    }
+  }
+
+  // Max 2 active premade batches per teacher per subject (after auto-complete)
   const { count: activePremadeCount } = await supabase
     .from('premade_batches')
     .select('*', { count: 'exact', head: true })
