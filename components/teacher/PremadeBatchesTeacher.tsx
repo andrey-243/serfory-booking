@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz']
 
@@ -150,6 +150,15 @@ type Props = {
   teacherId: string
   subjects: string[]
   lang: 'en' | 'ru' | 'et'
+  teachingLanguages?: string[]
+}
+
+const LANG_LABELS: Record<string, string> = { en: 'EN', ru: 'RU', et: 'ET', ky: 'KY' }
+const LANG_COLORS: Record<string, string> = {
+  en: 'bg-blue-100 text-blue-700',
+  ru: 'bg-orange-100 text-orange-700',
+  et: 'bg-green-100 text-green-700',
+  ky: 'bg-purple-100 text-purple-700',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -173,7 +182,7 @@ function emptySession(): SessionDraft {
   return { name: '', session_date: new Date().toISOString().slice(0, 10), start_time: '14:00' }
 }
 
-export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Props) {
+export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teachingLanguages = [] }: Props) {
   const t = LABELS[lang]
   const gl = GRADE_LABELS[lang]
 
@@ -184,6 +193,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
   // Session name editing: batchId → { names: Record<sessionId, string>, saving, editMode }
   const [sessionEdits, setSessionEdits] = useState<Record<string, { names: Record<string, string>; saving: boolean; editMode: boolean }>>({})
 
@@ -191,7 +201,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
   const [subject, setSubject] = useState(subjects[0] || '')
   const [durationMin, setDurationMin] = useState(60)
   const [targetLevels, setTargetLevels] = useState<string[]>([])
-  const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(), emptySession(), emptySession(), emptySession(), emptySession(), emptySession()])
+  const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(), emptySession()])
 
   const isLang = LANG_SUBJECTS.includes(subject)
   const availableLevels = isLang ? [...ALL_GRADES, ...CEFR_LEVELS] : ALL_GRADES
@@ -220,7 +230,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
     setSubject(subjects[0] || '')
     setDurationMin(60)
     setTargetLevels([])
-    setSessions([emptySession(), emptySession(), emptySession(), emptySession(), emptySession(), emptySession()])
+    setSessions([emptySession(), emptySession()])
     setFormError(null)
   }
 
@@ -237,7 +247,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
     )
     setShowForm(true)
     setFormError(null)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
   function initSessionEdit(batch: PremadeBatch) {
@@ -319,7 +329,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-900">{t.title}</h2>
         <button
-          onClick={() => { setShowForm(s => !s); if (showForm) resetForm() }}
+          onClick={() => { if (showForm) { setShowForm(false); resetForm() } else { resetForm(); setShowForm(true) } }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -330,7 +340,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
       </div>
 
       {showForm && (
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-4">
+        <div ref={formRef} className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-4">
           {/* Row 1: name + subject + duration */}
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1 col-span-1">
@@ -495,6 +505,15 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
+                  {teachingLanguages.length > 0 && (
+                    <div className="flex gap-1">
+                      {teachingLanguages.map(l => (
+                        <span key={l} className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${LANG_COLORS[l] ?? 'bg-gray-100 text-gray-500'}`}>
+                          {LANG_LABELS[l] ?? l.toUpperCase()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
                   <span className="text-xs text-gray-400">{batch.premade_sessions.length} {t.sessions.toLowerCase()}</span>
                   <svg

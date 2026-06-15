@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
       `<b>Sessions:</b>`,
       sessionLines,
     ].join('\n')
-    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'HTML' }),

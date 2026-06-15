@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest) {
       changes.push(`🎯 Levels:\n${lines.join('\n')}`)
     }
     const msg = [`⚙️ <b>${teacher.name}</b> updated their teaching profile`, '', ...changes].join('\n')
-    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'HTML' }),

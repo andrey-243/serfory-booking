@@ -298,6 +298,7 @@ export default function TeacherPage() {
               teacherId={user.teacherId}
               subjects={teacherSubjects}
               lang={lang}
+              teachingLanguages={teachingLanguages}
             />
           </div>
         )}
