@@ -335,7 +335,13 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
-  const filteredPremadeBatches = premadeBatches.filter(b => b.teaching_language === selectedLearningLang)
+  const filteredPremadeBatches = teacherCache
+    ? premadeBatches.filter(b => teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang))
+    : premadeBatches
+
+  const filteredGroupBatches = teacherCache
+    ? groupBatches.filter(b => teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang))
+    : groupBatches
 
   const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
   const pricePerLesson = BASE_PRICES[format][lessons] ?? 0
@@ -573,22 +579,23 @@ function PackagePageInner() {
               {format === 'premade' ? (
                 <div className="space-y-3">
                   {filteredPremadeBatches.map(batch => {
-                    const sessions = batch.premade_sessions.length
+                    const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                     const spotsLeft = batch.max_students - batch.enrollment_count
-                    const firstDate = batch.premade_sessions[0]?.session_date
-                    const lastDate = batch.premade_sessions[batch.premade_sessions.length - 1]?.session_date
-                    const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                     return (
                       <button key={batch.id} onClick={() => setSelectedBatchId(batch.id)}
                         className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedBatchId === batch.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                         <div className="flex justify-between items-start gap-4">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{sessions} sessions · {batch.duration_min}min</p>
-                            {firstDate && <p className="text-xs text-gray-400 mt-1">{fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` → ${fmtDate(lastDate)}` : ''}</p>}
+                            <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} sessions · {batch.duration_min}min</p>
+                            <div className="mt-2 space-y-0.5">
+                              {batch.premade_sessions.map((s, i) => (
+                                <p key={s.id} className="text-xs text-gray-400">{i + 1}. {s.name} · {fmtDate(s.session_date)} {s.start_time.slice(0, 5)}</p>
+                              ))}
+                            </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="font-bold text-gray-900 text-base">{sessions * 18}€</p>
+                            <p className="font-bold text-gray-900 text-base">{batch.premade_sessions.length * 18}€</p>
                             <p className="text-[10px] text-gray-400 mt-0.5">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
                           </div>
                         </div>
@@ -619,6 +626,32 @@ function PackagePageInner() {
                     </button>
                   )
                 })}
+                {format === 'group' && filteredGroupBatches.length > 0 && (
+                  <div className="col-span-full mt-1 space-y-2">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Available sessions</p>
+                    {filteredGroupBatches.map(b => {
+                      const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                      const spotsLeft = b.max_students - b.enrollment_count
+                      return (
+                        <div key={b.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-sm">
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-800 text-sm">
+                                {DAYS[uiLang][b.day_of_week]} · {b.start_time.slice(0, 5)} · {b.duration_minutes}min
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                {b.group_slot_sessions.map(s => (
+                                  <span key={s.id} className="text-xs text-gray-400">{fmtDate(s.session_date)}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-400 shrink-0">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
                 {format === 'group' && (
                   <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
                     <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">{t.comingSoon}</span>
