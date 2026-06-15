@@ -184,7 +184,7 @@ const T = {
     loading: 'Chargement…',
     empty: 'Aucune réservation.',
     emptyCrm: 'Aucun élève.',
-    status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé' },
+    status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé', active: 'Actif', prelock: 'Pré-réservé', completed: 'Terminé' },
     cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Élève', contact: 'Contact', status: 'Statut' },
     crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
     parent: 'Parent',
@@ -211,7 +211,7 @@ const T = {
     loading: 'Loading…',
     empty: 'No bookings.',
     emptyCrm: 'No students.',
-    status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled' },
+    status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled', active: 'Active', prelock: 'Prelock', completed: 'Completed' },
     cols: { date: 'Date / Time', teacher: 'Teacher', course: 'Course', student: 'Student', contact: 'Contact', status: 'Status' },
     crmCols: { student: 'Student', contact: 'Contact', courses: 'Courses', teachers: 'Teachers' },
     parent: 'Parent',
@@ -703,7 +703,7 @@ export default function AdminPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
 
-  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed']))
+  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed', 'active', 'prelock']))
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
@@ -842,6 +842,32 @@ export default function AdminPage() {
     if (filterTeachers.size > 0 && !filterTeachers.has(b.teachers?.name ?? '')) return false
     if (timeFilter === 'upcoming' && new Date(b.slot_start) < now) return false
     if (timeFilter === 'past' && new Date(b.slot_start) >= now) return false
+    return true
+  })
+
+  const filteredGroupBatches = groupBatches.filter(batch => {
+    if (filterStatuses.size > 0 && !filterStatuses.has(batch.status)) return false
+    if (filterCourses.size > 0 && !filterCourses.has(batch.subject)) return false
+    if (filterTeachers.size > 0 && !filterTeachers.has(batch.teachers?.name ?? '')) return false
+    const lastSession = batch.group_slot_sessions[batch.group_slot_sessions.length - 1]
+    if (lastSession) {
+      const lastDate = new Date(lastSession.session_date)
+      if (timeFilter === 'upcoming' && lastDate < now) return false
+      if (timeFilter === 'past' && lastDate >= now) return false
+    }
+    return true
+  })
+
+  const filteredPremadeBatches = adminPremadeBatches.filter(batch => {
+    if (filterStatuses.size > 0 && !filterStatuses.has(batch.status)) return false
+    if (filterCourses.size > 0 && !filterCourses.has(batch.subject)) return false
+    if (filterTeachers.size > 0 && !filterTeachers.has(batch.teachers?.name ?? '')) return false
+    const lastSession = batch.premade_sessions[batch.premade_sessions.length - 1]
+    if (lastSession) {
+      const lastDate = new Date(lastSession.session_date)
+      if (timeFilter === 'upcoming' && lastDate < now) return false
+      if (timeFilter === 'past' && lastDate >= now) return false
+    }
     return true
   })
 
@@ -1028,13 +1054,34 @@ export default function AdminPage() {
             <div className="space-y-2 mb-4">
               {/* Row 1: Status + Matière */}
               <div className="flex flex-wrap gap-2 items-center">
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex gap-1.5 flex-wrap items-center">
                   <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Statut</span>
-                  {(['pending', 'confirmed', 'cancelled'] as const).map(s => {
+                  {(['pending', 'confirmed'] as const).map(s => {
                     const on = filterStatuses.has(s)
                     return (
                       <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
                         className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                        {t.status[s]}
+                      </button>
+                    )
+                  })}
+                  <div className="h-4 w-px bg-gray-200" />
+                  {(['active', 'prelock', 'completed'] as const).map(s => {
+                    const on = filterStatuses.has(s)
+                    const color = s === 'active' ? 'bg-emerald-500 border-emerald-500' : s === 'prelock' ? 'bg-amber-500 border-amber-500' : 'bg-sky-500 border-sky-500'
+                    return (
+                      <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? `${color} text-white` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                        {t.status[s]}
+                      </button>
+                    )
+                  })}
+                  <div className="h-4 w-px bg-gray-200" />
+                  {(['cancelled'] as const).map(s => {
+                    const on = filterStatuses.has(s)
+                    return (
+                      <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-red-400 text-white border-red-400' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300'}`}>
                         {t.status[s]}
                       </button>
                     )
@@ -1098,7 +1145,7 @@ export default function AdminPage() {
             </div>
 
             {/* ── Group courses ── */}
-            {groupBatches.length > 0 && (() => {
+            {filteredGroupBatches.length > 0 && (() => {
               const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
               return (
                 <div className="mb-6">
@@ -1108,11 +1155,11 @@ export default function AdminPage() {
                   >
                     <svg className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${showGroupSection ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Group courses</span>
-                    <span className="text-xs text-gray-400">({groupBatches.length})</span>
+                    <span className="text-xs text-gray-400">({filteredGroupBatches.length})</span>
                   </button>
                   {showGroupSection && (
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                      {groupBatches.map(batch => {
+                      {filteredGroupBatches.map(batch => {
                         const sessions = batch.group_slot_sessions
                         const firstDate = sessions[0]?.session_date
                         const lastDate = sessions[sessions.length - 1]?.session_date
@@ -1189,7 +1236,7 @@ export default function AdminPage() {
             })()}
 
             {/* ── Premade courses ── */}
-            {adminPremadeBatches.length > 0 && (() => {
+            {filteredPremadeBatches.length > 0 && (() => {
               const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
               return (
                 <div className="mb-6">
@@ -1199,11 +1246,11 @@ export default function AdminPage() {
                   >
                     <svg className={`w-3 h-3 text-gray-400 shrink-0 transition-transform ${showPremadeSection ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Premade courses</span>
-                    <span className="text-xs text-gray-400">({adminPremadeBatches.length})</span>
+                    <span className="text-xs text-gray-400">({filteredPremadeBatches.length})</span>
                   </button>
                   {showPremadeSection && (
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                      {adminPremadeBatches.map(batch => {
+                      {filteredPremadeBatches.map(batch => {
                         const sessions = batch.premade_sessions
                         const firstDate = sessions[0]?.session_date
                         const lastDate = sessions[sessions.length - 1]?.session_date
