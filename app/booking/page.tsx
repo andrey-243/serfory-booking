@@ -27,7 +27,7 @@ type BookingFormat = 'individual' | 'pair' | 'group' | null
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
-const TEACHING_LANGS = ['Russian', 'Estonian', 'English', 'Kyrgyz'] as const
+const TEACHING_LANGS = ['ru', 'et', 'en', 'ky'] as const
 type TeachingLang = typeof TEACHING_LANGS[number]
 
 export default function BookingPage() {
@@ -313,7 +313,7 @@ function BookingPageInner() {
                         selectedLang === lang ? 'text-blue-600 font-medium' : 'text-gray-700'
                       }`}
                     >
-                      {t.booking.courses[lang]}
+                      {t.booking.teachingLangs[lang] ?? lang}
                     </button>
                   ))}
                 </div>

@@ -22,6 +22,12 @@ export const translations = {
       taughtIn: 'Taught in',
       allLanguages: 'All languages',
       experienceYears: '{n} years of experience',
+      teachingLangs: {
+        en: 'English',
+        ru: 'Russian',
+        et: 'Estonian',
+        ky: 'Kyrgyz',
+      },
       courses: {
         Russian: 'Russian',
         English: 'English',
@@ -83,6 +89,12 @@ export const translations = {
       taughtIn: 'Õpetatakse keeles',
       allLanguages: 'Kõik keeled',
       experienceYears: '{n} aastat kogemust',
+      teachingLangs: {
+        en: 'Inglise keel',
+        ru: 'Vene keel',
+        et: 'Eesti keel',
+        ky: 'Kirgiisi keel',
+      },
       courses: {
         Russian: 'Vene keel',
         English: 'Inglise keel',
@@ -144,6 +156,12 @@ export const translations = {
       taughtIn: 'Язык обучения',
       allLanguages: 'Все языки',
       experienceYears: '{n} лет опыта',
+      teachingLangs: {
+        en: 'Английский',
+        ru: 'Русский',
+        et: 'Эстонский',
+        ky: 'Кыргызский',
+      },
       courses: {
         Russian: 'Русский',
         English: 'Английский',

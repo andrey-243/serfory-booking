@@ -329,14 +329,10 @@ function PackagePageInner() {
   // Compute available teaching languages from cache
   useEffect(() => {
     if (!teacherCache) return
-    const LANG_NAME_TO_CODE: Record<string, TeachingLang> = { English: 'en', Estonian: 'et', Russian: 'ru', Kyrgyz: 'ky' }
     const langs = new Set<TeachingLang>()
     for (const t of teacherCache) {
       if (!t.subjects?.includes(selectedSubject)) continue
-      for (const l of t.teaching_languages ?? []) {
-        const code = LANG_NAME_TO_CODE[l]
-        if (code) langs.add(code)
-      }
+      for (const l of t.teaching_languages ?? []) langs.add(l as TeachingLang)
     }
     const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
     setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
