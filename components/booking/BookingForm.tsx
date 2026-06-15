@@ -205,6 +205,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
   function validate(): boolean {
     const errs: Partial<Record<keyof FormData, string>> = {}
+    if (!form.student_name.trim()) errs.student_name = ft.nameRequired
     if (!isValidEmail(form.student_email)) errs.student_email = ft.invalidEmail
     if (!isValidLocalPhone(form.student_phone)) errs.student_phone = ft.invalidPhone
     setFieldErrors(errs)
@@ -277,13 +278,12 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-3">
-        <Field label={ft.fullName} required>
+        <Field label={ft.fullName} required error={fieldErrors.student_name}>
           <input
             type="text"
             value={form.student_name}
-            onChange={e => set('student_name', e.target.value)}
-            required
-            className={inputClass}
+            onChange={e => { set('student_name', e.target.value); setFieldErrors(f => ({ ...f, student_name: undefined })) }}
+            className={`${inputClass} ${fieldErrors.student_name ? 'border-red-300 focus:ring-red-300' : ''}`}
             placeholder={ft.namePlaceholder}
           />
         </Field>
