@@ -61,7 +61,7 @@ export async function PATCH(
   const commLang = (app as { communication_lang?: string | null }).communication_lang
   const preferred = (commLang || effectiveLearningLang || app.lang || 'en') as string
   const lang = (['en', 'et', 'ru'].includes(preferred) ? preferred : 'en') as 'en' | 'et' | 'ru'
-  const bookingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?session=${bookingToken}`
+  const bookingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/booking?session=${bookingToken}&ref=${app.ref_token}`
   const tgEligible = isTelegramEligible(app.country_code, effectiveLearningLang)
 
   // Send booking link via email

@@ -206,9 +206,9 @@ function BookingPageInner() {
           <div className="text-4xl mb-4">🔒</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.booking.noLessonsRemaining}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.booking.noLessonsRemainingDesc}</p>
-          {sessionRefToken && (
+          {(sessionRefToken || ref) && (
             <a
-              href={`/package?token=${sessionRefToken}`}
+              href={`/package?token=${sessionRefToken ?? ref}`}
               className="inline-block px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold transition-colors"
             >
               {t.booking.buyNewPackage}
