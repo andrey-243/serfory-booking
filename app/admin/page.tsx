@@ -184,7 +184,7 @@ const T = {
     loading: 'Chargement…',
     empty: 'Aucune réservation.',
     emptyCrm: 'Aucun élève.',
-    status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé', active: 'Actif', prelock: 'Pré-réservé', completed: 'Terminé' },
+    status: { pending: 'En attente', confirmed: 'Confirmé', cancelled: 'Annulé', active: 'Actif', completed: 'Terminé' },
     cols: { date: 'Date / Heure', teacher: 'Professeur', course: 'Matière', student: 'Élève', contact: 'Contact', status: 'Statut' },
     crmCols: { student: 'Élève', contact: 'Contact', courses: 'Matières', teachers: 'Professeurs' },
     parent: 'Parent',
@@ -211,7 +211,7 @@ const T = {
     loading: 'Loading…',
     empty: 'No bookings.',
     emptyCrm: 'No students.',
-    status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled', active: 'Active', prelock: 'Prelock', completed: 'Completed' },
+    status: { pending: 'Pending', confirmed: 'Confirmed', cancelled: 'Cancelled', active: 'Active', completed: 'Completed' },
     cols: { date: 'Date / Time', teacher: 'Teacher', course: 'Course', student: 'Student', contact: 'Contact', status: 'Status' },
     crmCols: { student: 'Student', contact: 'Contact', courses: 'Courses', teachers: 'Teachers' },
     parent: 'Parent',
@@ -836,7 +836,7 @@ export default function AdminPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
 
-  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed', 'active', 'prelock']))
+  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed', 'active']))
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
@@ -1218,9 +1218,9 @@ export default function AdminPage() {
                     )
                   })}
                   <div className="h-4 w-px bg-gray-200" />
-                  {(['active', 'prelock', 'completed'] as const).map(s => {
+                  {(['active', 'completed'] as const).map(s => {
                     const on = filterStatuses.has(s)
-                    const color = s === 'active' ? 'bg-emerald-500 border-emerald-500' : s === 'prelock' ? 'bg-amber-500 border-amber-500' : 'bg-sky-500 border-sky-500'
+                    const color = s === 'active' ? 'bg-emerald-500 border-emerald-500' : 'bg-sky-500 border-sky-500'
                     return (
                       <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
                         className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? `${color} text-white` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
@@ -1328,7 +1328,7 @@ export default function AdminPage() {
                               {langs.map(l => (
                                 <span key={l} className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${langBadge[l] ?? 'bg-gray-100 text-gray-500'}`}>{l}</span>
                               ))}
-                              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'prelock' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
+                              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
                                 {batch.status}
                               </span>
                             </div>

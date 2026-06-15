@@ -38,12 +38,12 @@ export async function GET(req: NextRequest) {
   const weekStartStr = toDateStr(weekStartDate)
   const weekEndStr = toDateStr(weekEndDate)
 
-  // Fetch group sessions (active + prelock) in the week window
+  // Fetch group sessions (active) in the week window
   const { data: groupSessions } = await supabase
     .from('group_slot_sessions')
     .select('session_date, start_time, group_slot_batches!inner(teacher_id, status, duration_minutes)')
     .eq('group_slot_batches.teacher_id', teacherId)
-    .in('group_slot_batches.status', ['active', 'prelock'])
+    .eq('group_slot_batches.status', 'active')
     .gte('session_date', weekStartStr)
     .lt('session_date', weekEndStr)
 
