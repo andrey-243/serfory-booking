@@ -48,6 +48,12 @@ const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
 }
 const FORMAT_ORDER: Format[] = ['individual', 'pair', 'group', 'premade']
 
+const DAYS: Record<Lang, string[]> = {
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  et: ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'],
+  ru: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+}
+
 const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'] as const
 const OTHER_SUBJECTS = ['Math', 'Chemistry', 'Physics'] as const
 const VALID_SUBJECTS = [...LANG_SUBJECTS, ...OTHER_SUBJECTS] as const
@@ -229,6 +235,7 @@ function PackagePageInner() {
   type PremadeSession = { id: string; name: string; session_date: string; start_time: string }
   type PremadeBatch = {
     id: string; teacher_id: string; name: string; subject: string; duration_min: number
+    teaching_language: string | null
     max_students: number; enrollment_count: number
     premade_sessions: PremadeSession[]
   }
@@ -249,6 +256,21 @@ function PackagePageInner() {
       .then(r => r.json())
       .then(d => setPremadeBatches(d.batches ?? []))
       .catch(() => setPremadeBatches([]))
+  }, [selectedSubject])
+
+  type GroupSession = { id: string; session_date: string; start_time: string }
+  type GroupBatch = {
+    id: string; teacher_id: string; subject: string; day_of_week: number
+    start_time: string; duration_minutes: number; max_students: number
+    enrollment_count: number; group_slot_sessions: GroupSession[]
+  }
+  const [groupBatches, setGroupBatches] = useState<GroupBatch[]>([])
+  useEffect(() => {
+    setGroupBatches([])
+    fetch(`/api/group-slots?subject=${encodeURIComponent(selectedSubject)}`)
+      .then(r => r.json())
+      .then(d => setGroupBatches(d.batches ?? []))
+      .catch(() => setGroupBatches([]))
   }, [selectedSubject])
 
   const [availableSubjectsForLang, setAvailableSubjectsForLang] = useState<Set<Subject>>(new Set(VALID_SUBJECTS))
@@ -280,10 +302,7 @@ function PackagePageInner() {
       if (!tc.teaching_languages?.includes(selectedLearningLang)) continue
       for (const f of tc.subject_formats?.[selectedSubject] ?? []) union.add(f)
     }
-    const premadeAvailableForLang = premadeBatches.some(b => {
-      const tc = teacherCache.find(t => t.id === b.teacher_id)
-      return tc?.teaching_languages?.includes(selectedLearningLang)
-    })
+    const premadeAvailableForLang = premadeBatches.some(b => b.teaching_language === selectedLearningLang)
     if (!premadeAvailableForLang) union.delete('premade')
     setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : ['individual'])
   }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches])
@@ -316,12 +335,7 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
-  const filteredPremadeBatches = teacherCache
-    ? premadeBatches.filter(b => {
-        const tc = teacherCache.find(t => t.id === b.teacher_id)
-        return tc?.teaching_languages?.includes(selectedLearningLang)
-      })
-    : premadeBatches
+  const filteredPremadeBatches = premadeBatches.filter(b => b.teaching_language === selectedLearningLang)
 
   const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
   const pricePerLesson = BASE_PRICES[format][lessons] ?? 0

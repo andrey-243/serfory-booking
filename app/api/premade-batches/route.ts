@@ -5,18 +5,42 @@ import { createPremadeSessionEvent } from '@/lib/google-calendar'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
 
+// GET /api/premade-batches?all=true        → admin view (all batches, teacher info joined)
 // GET /api/premade-batches?teacherId=<id>  → teacher dashboard
 // GET /api/premade-batches?subject=<s>     → student booking (active only)
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const teacherId = searchParams.get('teacherId')
   const subject = searchParams.get('subject')
+  const all = searchParams.get('all') === 'true'
 
-  if (!teacherId && !subject) {
+  if (!teacherId && !subject && !all) {
     return NextResponse.json({ error: 'teacherId or subject required' }, { status: 400 })
   }
 
   const supabase = getSupabaseAdmin()
+
+  type RawBatch = Record<string, unknown> & {
+    premade_sessions: { session_date: string; [k: string]: unknown }[]
+    premade_enrollments: { status: string }[]
+    teachers?: { name: string; teaching_languages: string[] | null } | null
+  }
+
+  if (all) {
+    const { data, error } = await supabase
+      .from('premade_batches')
+      .select('*, premade_sessions(*), premade_enrollments(id, status), teachers(name, teaching_languages)')
+      .order('created_at', { ascending: false })
+    if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
+    const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
+      ...b,
+      premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
+      enrollment_count: (b.premade_enrollments || []).filter(e => e.status === 'active').length,
+      premade_enrollments: undefined,
+    }))
+    return NextResponse.json({ batches })
+  }
+
   let query = supabase
     .from('premade_batches')
     .select('*, premade_sessions(*), premade_enrollments(id, status)')
@@ -28,12 +52,10 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
 
-  const batches = (data || []).map(b => ({
+  const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
     ...b,
-    premade_sessions: (b.premade_sessions || []).sort(
-      (a: { session_date: string }, b: { session_date: string }) => a.session_date.localeCompare(b.session_date)
-    ),
-    enrollment_count: (b.premade_enrollments || []).filter((e: { status: string }) => e.status === 'active').length,
+    premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
+    enrollment_count: (b.premade_enrollments || []).filter(e => e.status === 'active').length,
     premade_enrollments: undefined,
   }))
 
@@ -49,9 +71,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { teacher_id, name, subject, target_levels = [], duration_min = 60, sessions } = body
+  const { teacher_id, name, subject, teaching_language, target_levels = [], duration_min = 60, sessions } = body
 
-  if (!teacher_id || !name || !subject || !sessions?.length) {
+  if (!teacher_id || !name || !subject || !teaching_language || !sessions?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   if (session.teacherId !== teacher_id) {
@@ -70,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   const { data: batch, error: batchErr } = await supabase
     .from('premade_batches')
-    .insert({ teacher_id, name, subject, target_levels, duration_min, max_students: 6, status: 'active' })
+    .insert({ teacher_id, name, subject, teaching_language, target_levels, duration_min, max_students: 6, status: 'active' })
     .select()
     .single()
 
