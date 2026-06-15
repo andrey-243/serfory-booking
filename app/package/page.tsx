@@ -220,6 +220,7 @@ function PackagePageInner() {
   const [availableLangs, setAvailableLangs] = useState<TeachingLang[]>(['en', 'et', 'ru', 'ky'])
 
   type TeacherMeta = {
+    id?: string
     subjects?: string[]
     teaching_languages?: string[]
     subject_levels?: Record<string, string[]> | null
@@ -227,7 +228,7 @@ function PackagePageInner() {
   }
   type PremadeSession = { id: string; name: string; session_date: string; start_time: string }
   type PremadeBatch = {
-    id: string; name: string; subject: string; duration_min: number
+    id: string; teacher_id: string; name: string; subject: string; duration_min: number
     max_students: number; enrollment_count: number
     premade_sessions: PremadeSession[]
   }
@@ -250,17 +251,42 @@ function PackagePageInner() {
       .catch(() => setPremadeBatches([]))
   }, [selectedSubject])
 
+  const [availableSubjectsForLang, setAvailableSubjectsForLang] = useState<Set<Subject>>(new Set(VALID_SUBJECTS))
+  useEffect(() => {
+    if (!teacherCache) return
+    const available = new Set<Subject>()
+    for (const tc of teacherCache) {
+      if (!tc.teaching_languages?.includes(selectedLearningLang)) continue
+      for (const s of tc.subjects ?? []) {
+        if ((VALID_SUBJECTS as readonly string[]).includes(s)) available.add(s as Subject)
+      }
+    }
+    setAvailableSubjectsForLang(available.size > 0 ? available : new Set(VALID_SUBJECTS))
+  }, [selectedLearningLang, teacherCache])
+
+  useEffect(() => {
+    if (!availableSubjectsForLang.has(selectedSubject)) {
+      const first = VALID_SUBJECTS.find(s => availableSubjectsForLang.has(s))
+      if (first) setSelectedSubject(first)
+    }
+  }, [availableSubjectsForLang])
+
   const [availableFormats, setAvailableFormats] = useState<Format[]>(FORMAT_ORDER)
   useEffect(() => {
     if (!teacherCache) return
     const union = new Set<string>()
     for (const tc of teacherCache) {
       if (!tc.subjects?.includes(selectedSubject)) continue
+      if (!tc.teaching_languages?.includes(selectedLearningLang)) continue
       for (const f of tc.subject_formats?.[selectedSubject] ?? []) union.add(f)
     }
-    if (premadeBatches.length === 0) union.delete('premade')
+    const premadeAvailableForLang = premadeBatches.some(b => {
+      const tc = teacherCache.find(t => t.id === b.teacher_id)
+      return tc?.teaching_languages?.includes(selectedLearningLang)
+    })
+    if (!premadeAvailableForLang) union.delete('premade')
     setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : ['individual'])
-  }, [selectedSubject, teacherCache, premadeBatches])
+  }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
@@ -290,7 +316,14 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
-  const selectedBatch = premadeBatches.find(b => b.id === selectedBatchId) ?? null
+  const filteredPremadeBatches = teacherCache
+    ? premadeBatches.filter(b => {
+        const tc = teacherCache.find(t => t.id === b.teacher_id)
+        return tc?.teaching_languages?.includes(selectedLearningLang)
+      })
+    : premadeBatches
+
+  const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
   const pricePerLesson = BASE_PRICES[format][lessons] ?? 0
   const studentsCount = format === 'pair' ? 2 : format === 'group' ? 5 : 1
   const total = format === 'premade'
@@ -305,6 +338,13 @@ function PackagePageInner() {
     if (!availableFormats.includes(format)) setFormat('individual')
   }, [availableFormats])
 
+  // Reset selected batch if it's no longer in filteredPremadeBatches
+  useEffect(() => {
+    if (selectedBatchId && !filteredPremadeBatches.find(b => b.id === selectedBatchId)) {
+      setSelectedBatchId(null)
+    }
+  }, [filteredPremadeBatches])
+
   // Reset lessons when format changes (e.g. premade only has 6/7)
   useEffect(() => {
     const opts = LESSONS_OPTIONS[format]
@@ -317,26 +357,26 @@ function PackagePageInner() {
     const union = new Set<string>()
     for (const t of teacherCache) {
       if (!t.subjects?.includes(selectedSubject)) continue
+      if (!t.teaching_languages?.includes(selectedLearningLang)) continue
       for (const lvl of t.subject_levels?.[selectedSubject] ?? []) union.add(lvl)
     }
     setAvailableGradesPkg(union.size > 0 ? GRADE_KEYS_PKG.filter(k => union.has(k)) : [...GRADE_KEYS_PKG])
-  }, [selectedSubject, teacherCache])
+  }, [selectedSubject, selectedLearningLang, teacherCache])
 
   useEffect(() => {
     if (selectedGrade && !availableGradesPkg.includes(selectedGrade)) setSelectedGrade('')
   }, [availableGradesPkg])
 
-  // Compute available teaching languages from cache
+  // Compute available teaching languages globally (across all subjects)
   useEffect(() => {
     if (!teacherCache) return
     const langs = new Set<TeachingLang>()
     for (const t of teacherCache) {
-      if (!t.subjects?.includes(selectedSubject)) continue
       for (const l of t.teaching_languages ?? []) langs.add(l as TeachingLang)
     }
     const available = (['en', 'et', 'ru', 'ky'] as TeachingLang[]).filter(l => langs.has(l))
     setAvailableLangs(available.length > 0 ? available : ['en', 'et', 'ru', 'ky'])
-  }, [selectedSubject, teacherCache])
+  }, [teacherCache])
 
   async function handleConfirm() {
     if (format === 'premade' && !selectedBatchId) return
@@ -416,20 +456,34 @@ function PackagePageInner() {
                   <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.course}</p>
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap gap-2">
-                      {LANG_SUBJECTS.map(s => (
-                        <button key={s} onClick={() => setSelectedSubject(s)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                          {t.courseLabels[s] ?? s}
-                        </button>
-                      ))}
+                      {LANG_SUBJECTS.map(s => {
+                        const avail = availableSubjectsForLang.has(s)
+                        return (
+                          <button key={s} onClick={() => avail && setSelectedSubject(s)} disabled={!avail}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                              !avail ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                              : selectedSubject === s ? 'bg-blue-500 text-white border-blue-500'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            }`}>
+                            {t.courseLabels[s] ?? s}
+                          </button>
+                        )
+                      })}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {OTHER_SUBJECTS.map(s => (
-                        <button key={s} onClick={() => setSelectedSubject(s)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${selectedSubject === s ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                          {t.courseLabels[s] ?? s}
-                        </button>
-                      ))}
+                      {OTHER_SUBJECTS.map(s => {
+                        const avail = availableSubjectsForLang.has(s)
+                        return (
+                          <button key={s} onClick={() => avail && setSelectedSubject(s)} disabled={!avail}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                              !avail ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                              : selectedSubject === s ? 'bg-blue-500 text-white border-blue-500'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                            }`}>
+                            {t.courseLabels[s] ?? s}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -437,10 +491,7 @@ function PackagePageInner() {
                   <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">{t.teachingLang}</p>
                   <select
                     value={selectedLearningLang}
-                    onChange={e => {
-                      const v = e.target.value as TeachingLang
-                      if (availableLangs.includes(v)) setSelectedLearningLang(v)
-                    }}
+                    onChange={e => setSelectedLearningLang(e.target.value as TeachingLang)}
                     className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                   >
                     {(['en', 'et', 'ru', 'ky'] as TeachingLang[]).map(l => (
@@ -507,7 +558,7 @@ function PackagePageInner() {
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
               {format === 'premade' ? (
                 <div className="space-y-3">
-                  {premadeBatches.map(batch => {
+                  {filteredPremadeBatches.map(batch => {
                     const sessions = batch.premade_sessions.length
                     const spotsLeft = batch.max_students - batch.enrollment_count
                     const firstDate = batch.premade_sessions[0]?.session_date
@@ -630,7 +681,7 @@ function PackagePageInner() {
                 <span className="text-xs text-gray-500">{t.total}</span>
                 <span className="text-xl font-bold text-gray-900">{total > 0 ? `${total}€` : '—'}</span>
               </div>
-              <button onClick={handleConfirm} disabled={status === 'sending' || (format === 'premade' && !selectedBatchId)}
+              <button onClick={handleConfirm} disabled={status === 'sending' || !selectedGrade || (format === 'premade' && !selectedBatchId)}
                 className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors">
                 {status === 'sending' ? t.sending : t.confirm}
               </button>
