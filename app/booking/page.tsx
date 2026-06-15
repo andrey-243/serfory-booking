@@ -65,6 +65,8 @@ function BookingPageInner() {
   const [lessonsRemaining, setLessonsRemaining] = useState<number | null>(null)
   const [lessonsTotal, setLessonsTotal] = useState<number | null>(null)
   const [sessionInvalid, setSessionInvalid] = useState(false)
+  const [sessionRefToken, setSessionRefToken] = useState<string | null>(null)
+  const [sessionAppRefToken, setSessionAppRefToken] = useState<string | null>(null)
 
   // Session flow: ?session=<booking_token>
   useEffect(() => {
@@ -72,11 +74,16 @@ function BookingPageInner() {
     fetch(`/api/booking-session?session=${session}`)
       .then(r => r.json())
       .then(d => {
-        if (d.error) { setSessionInvalid(true); return }
+        if (d.error) {
+          if (d.refToken) setSessionRefToken(d.refToken)
+          setSessionInvalid(true)
+          return
+        }
         setInvoiceId(d.invoiceId)
         setLessonsRemaining(d.lessonsRemaining)
         setLessonsTotal(d.lessonsTotal)
         if (d.format) setBookingFormat(d.format)
+        if (d.appRefToken) setSessionAppRefToken(d.appRefToken)
         if (!d.prefill) return
         setPrefill(d.prefill)
         if (d.prefill.grade) setStudentGrade(d.prefill.grade)
@@ -198,7 +205,15 @@ function BookingPageInner() {
         <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow">
           <div className="text-4xl mb-4">🔒</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.booking.noLessonsRemaining}</h2>
-          <p className="text-gray-500 text-sm">{t.booking.noLessonsRemainingDesc}</p>
+          <p className="text-gray-500 text-sm mb-6">{t.booking.noLessonsRemainingDesc}</p>
+          {sessionRefToken && (
+            <a
+              href={`/package?token=${sessionRefToken}`}
+              className="inline-block px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold transition-colors"
+            >
+              {t.booking.buyNewPackage}
+            </a>
+          )}
         </div>
       </main>
     )
@@ -334,7 +349,7 @@ function BookingPageInner() {
         {bookingFormat === 'group' ? (
           <GroupBatchView
             subject={selectedCourse}
-            refToken={ref!}
+            refToken={ref ?? sessionAppRefToken ?? ''}
             prefill={prefill ?? undefined}
             onSuccess={() => setBooked(true)}
           />

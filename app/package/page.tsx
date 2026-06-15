@@ -228,6 +228,7 @@ function PackagePageInner() {
 
   type TeacherMeta = {
     id?: string
+    name?: string
     subjects?: string[]
     teaching_languages?: string[]
     subject_levels?: Record<string, string[]> | null
@@ -584,13 +585,14 @@ function PackagePageInner() {
                   {filteredPremadeBatches.map(batch => {
                     const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                     const spotsLeft = batch.max_students - batch.enrollment_count
+                    const teacherName = teacherCache?.find(tc => tc.id === batch.teacher_id)?.name
                     return (
                       <button key={batch.id} onClick={() => setSelectedBatchId(batch.id)}
                         className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedBatchId === batch.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                         <div className="flex justify-between items-start gap-4">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} sessions · {batch.duration_min}min</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} sessions · {batch.duration_min}min{teacherName ? ` · ${teacherName}` : ''}</p>
                             <div className="mt-2 space-y-0.5">
                               {batch.premade_sessions.map((s, i) => (
                                 <p key={s.id} className="text-xs text-gray-400">{i + 1}. {s.name} · {fmtDate(s.session_date)} {s.start_time.slice(0, 5)}</p>
@@ -606,56 +608,23 @@ function PackagePageInner() {
                     )
                   })}
                 </div>
-              ) : (
-              <div className={`grid gap-3 ${
-                LESSONS_OPTIONS[format].length <= 2 ? 'grid-cols-2'
-                : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3'
-                : 'grid-cols-4'
-              }`}>
-                {LESSONS_OPTIONS[format].map(n => {
-                  const price = applyTier(BASE_PRICES[format][n] ?? 0)
-                  const isSelected = lessons === n
-                  const isPopular = (format === 'individual' || format === 'pair') && n === 8
-                  return (
-                    <button key={n} onClick={() => setLessons(n)}
-                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                      {isPopular && (
-                        <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">{t.popular}</span>
-                      )}
-                      <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
-                      {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
-                      <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
-                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
-                    </button>
-                  )
-                })}
-                {format === 'group' && filteredGroupBatches.length > 0 && (
-                  <div className="col-span-full mt-1 space-y-2">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Available sessions</p>
-                    {filteredGroupBatches.map(b => {
-                      const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                      const spotsLeft = b.max_students - b.enrollment_count
-                      return (
-                        <div key={b.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-sm">
-                          <div className="flex justify-between items-start gap-3">
-                            <div className="min-w-0">
-                              <p className="font-medium text-gray-800 text-sm">
-                                {DAYS[uiLang][b.day_of_week]} · {b.start_time.slice(0, 5)} · {b.duration_minutes}min
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                                {b.group_slot_sessions.map(s => (
-                                  <span key={s.id} className="text-xs text-gray-400">{fmtDate(s.session_date)}</span>
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-xs text-gray-400 shrink-0">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                {format === 'group' && (
+              ) : format === 'group' ? (
+              <div className="flex gap-4 items-start">
+                {/* Package options — left column */}
+                <div className="flex flex-col gap-3 w-[160px] shrink-0">
+                  {LESSONS_OPTIONS[format].map(n => {
+                    const price = applyTier(BASE_PRICES[format][n] ?? 0)
+                    const isSelected = lessons === n
+                    return (
+                      <button key={n} onClick={() => setLessons(n)}
+                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        <p className="font-semibold text-gray-900 text-sm">{t.weeks(n)}</p>
+                        {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
+                        <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
+                        <p className="text-[10px] text-gray-400">{t.perLesson} · {t.perPerson}</p>
+                      </button>
+                    )
+                  })}
                   <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
                     <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">{t.comingSoon}</span>
                     <p className="font-semibold text-gray-400 text-sm">{t.weeks(8)}</p>
@@ -688,7 +657,60 @@ function PackagePageInner() {
                       </button>
                     )}
                   </div>
+                </div>
+                {/* Available sessions — right column */}
+                {filteredGroupBatches.length > 0 && (
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Available sessions</p>
+                    {filteredGroupBatches.map(b => {
+                      const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                      const spotsLeft = b.max_students - b.enrollment_count
+                      const teacherName = teacherCache?.find(tc => tc.id === b.teacher_id)?.name
+                      return (
+                        <div key={b.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-sm">
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-800 text-sm">
+                                {DAYS[uiLang][b.day_of_week]} · {b.start_time.slice(0, 5)} · {b.duration_minutes}min
+                              </p>
+                              {teacherName && <p className="text-xs text-blue-500 font-medium mt-0.5">{teacherName}</p>}
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                {b.group_slot_sessions.map(s => (
+                                  <span key={s.id} className="text-xs text-gray-400">{fmtDate(s.session_date)}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-400 shrink-0">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
+              </div>
+              ) : (
+              <div className={`grid gap-3 ${
+                LESSONS_OPTIONS[format].length <= 2 ? 'grid-cols-2'
+                : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3'
+                : 'grid-cols-4'
+              }`}>
+                {LESSONS_OPTIONS[format].map(n => {
+                  const price = applyTier(BASE_PRICES[format][n] ?? 0)
+                  const isSelected = lessons === n
+                  const isPopular = (format === 'individual' || format === 'pair') && n === 8
+                  return (
+                    <button key={n} onClick={() => setLessons(n)}
+                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                      {isPopular && (
+                        <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">{t.popular}</span>
+                      )}
+                      <p className="font-semibold text-gray-900 text-sm">{t.lessons(n)}</p>
+                      {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
+                      <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
+                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
+                    </button>
+                  )
+                })}
               </div>
               )}
             </div>

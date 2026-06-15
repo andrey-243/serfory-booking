@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     .from('invoices')
     .select(`
       id, lessons_count, format, subject, learning_lang,
-      applications(id, name, email, phone, contact_pref, subject, grade, learning_lang, price_tier)
+      applications(id, name, email, phone, contact_pref, subject, grade, learning_lang, price_tier, ref_token)
     `)
     .eq('booking_token', session)
     .eq('status', 'paid')
@@ -38,7 +38,8 @@ export async function GET(req: NextRequest) {
       .from('invoices')
       .update({ booking_token: null })
       .eq('id', invoice.id)
-    return NextResponse.json({ error: 'No lessons remaining on this package' }, { status: 410 })
+    const refToken = (app as { ref_token?: string | null }).ref_token ?? null
+    return NextResponse.json({ error: 'No lessons remaining on this package', refToken }, { status: 410 })
   }
 
   const effectiveSubject = (invoice as { subject?: string | null }).subject || app.subject
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
     lessonsRemaining,
     lessonsTotal,
     format: invoice.format,
+    appRefToken: (app as { ref_token?: string | null }).ref_token ?? null,
     prefill: {
       name: app.name,
       email: app.email,
