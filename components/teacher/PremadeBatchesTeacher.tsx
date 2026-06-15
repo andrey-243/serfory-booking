@@ -65,6 +65,7 @@ const LABELS = {
     confirmReview: 'Review',
     confirmCreate: 'Confirm & Create',
     maxReached: 'You already have 2 active courses for this subject. A slot will free up automatically once all sessions of a course have passed.',
+    duplicateCourse: 'You already have an active course with this name for this language and level. Change the language or level to create a variant.',
     saveAsTemplate: 'Save as template',
     savedTemplate: 'Saved!',
     templates: 'Templates',
@@ -107,6 +108,7 @@ const LABELS = {
     confirmReview: 'Проверить',
     confirmCreate: 'Подтвердить и создать',
     maxReached: 'У вас уже 2 активных курса по этому предмету. Слот освободится автоматически, когда все занятия курса пройдут.',
+    duplicateCourse: 'Активный курс с таким названием для этого языка и уровня уже существует. Измените язык или уровень для создания варианта.',
     saveAsTemplate: 'Сохранить как шаблон',
     savedTemplate: 'Сохранено!',
     templates: 'Шаблоны',
@@ -149,6 +151,7 @@ const LABELS = {
     confirmReview: 'Vaata üle',
     confirmCreate: 'Kinnita ja loo',
     maxReached: 'Teil on juba 2 aktiivset kursust selle aine jaoks. Koht vabaneb automaatselt, kui kõik kursuse tunnid on möödas.',
+    duplicateCourse: 'Selle keele ja tasemega sama nimega aktiivne kursus on juba olemas. Variandi loomiseks muutke keelt või taset.',
     saveAsTemplate: 'Salvesta mallina',
     savedTemplate: 'Salvestatud!',
     templates: 'Mallid',
@@ -418,7 +421,12 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       })
       const data = await res.json()
       if (!res.ok) {
-        setFormError(res.status === 422 ? t.maxReached : (data.error || t.errorGeneric))
+        if (res.status === 422) {
+          const isDuplicate = (data.error as string)?.toLowerCase().includes('same name')
+          setFormError(isDuplicate ? t.duplicateCourse : t.maxReached)
+        } else {
+          setFormError(data.error || t.errorGeneric)
+        }
         return
       }
       setShowForm(false)
@@ -527,11 +535,15 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
               <label className="text-xs font-medium text-gray-500">{t.batchName}</label>
               <input
                 type="text"
+                list="premade-course-names"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Chemistry Basics"
                 className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <datalist id="premade-course-names">
+                {[...new Set(batches.map(b => b.name))].map(n => <option key={n} value={n} />)}
+              </datalist>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">{t.subject}</label>

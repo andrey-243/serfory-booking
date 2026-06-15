@@ -77,7 +77,8 @@ const LABELS = {
     spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 sessions:',
     empty: 'No group batches yet.',
-    maxReached: 'Max 5 future batches for this subject.',
+    maxReached: 'Max 5 active groups for this subject.',
+    duplicateSlot: 'A group already exists for this subject at this date and time.',
     errorGeneric: 'Failed to create batch.',
     errorFields: 'Please fill all required fields.',
     confirmTitle: 'Confirm creation',
@@ -101,7 +102,8 @@ const LABELS = {
     spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 занятия:',
     empty: 'Групп пока нет.',
-    maxReached: 'Максимум 5 будущих групп для этого предмета.',
+    maxReached: 'Максимум 5 активных групп для этого предмета.',
+    duplicateSlot: 'Группа для этого предмета на эту дату и время уже существует.',
     errorGeneric: 'Не удалось создать группу.',
     errorFields: 'Заполните все обязательные поля.',
     confirmTitle: 'Подтвердить создание',
@@ -125,7 +127,8 @@ const LABELS = {
     spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 tundi:',
     empty: 'Gruppe pole veel.',
-    maxReached: 'Maksimaalselt 5 tulevast gruppi selle aine jaoks.',
+    maxReached: 'Maksimaalselt 5 aktiivset gruppi selle aine jaoks.',
+    duplicateSlot: 'Sellele ainele sellel kuupäeval ja kellaajal on grupp juba olemas.',
     errorGeneric: 'Grupi loomine ebaõnnestus.',
     errorFields: 'Täitke kõik kohustuslikud väljad.',
     confirmTitle: 'Kinnita loomine',
@@ -223,7 +226,12 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
       })
       const data = await res.json()
       if (!res.ok) {
-        setFormError(res.status === 422 ? t.maxReached : (data.error || t.errorGeneric))
+        if (res.status === 422) {
+          const isDuplicate = (data.error as string)?.toLowerCase().includes('already exists')
+          setFormError(isDuplicate ? t.duplicateSlot : t.maxReached)
+        } else {
+          setFormError(data.error || t.errorGeneric)
+        }
         return
       }
       setShowForm(false)

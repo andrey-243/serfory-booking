@@ -124,17 +124,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Count only active batches (after auto-complete) — prelocks don't count as distinct groups
+  // Count all active batches (after auto-complete) — no start_date filter: batches created in the past but still running count
   const { count } = await supabase
     .from('group_slot_batches')
     .select('*', { count: 'exact', head: true })
     .eq('teacher_id', teacher_id)
     .eq('subject', subject)
     .eq('status', 'active')
-    .gte('start_date', today)
 
   if ((count ?? 0) >= MAX_FUTURE_BATCHES) {
     return NextResponse.json({ error: 'Max 5 distinct active groups for this subject' }, { status: 422 })
+  }
+
+  // Reject duplicate slot (same teacher × subject × start_date × start_time)
+  const { count: dupCount } = await supabase
+    .from('group_slot_batches')
+    .select('*', { count: 'exact', head: true })
+    .eq('teacher_id', teacher_id)
+    .eq('subject', subject)
+    .eq('start_date', start_date)
+    .eq('start_time', start_time)
+    .eq('status', 'active')
+
+  if ((dupCount ?? 0) > 0) {
+    return NextResponse.json({ error: 'A group session already exists for this subject at this date and time' }, { status: 422 })
   }
 
   // Parse start_date to get day_of_week

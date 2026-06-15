@@ -123,6 +123,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Max 2 active premade courses per subject reached' }, { status: 422 })
   }
 
+  // Reject duplicate: same course name (case-insensitive) + same lang + same level
+  const { data: sameNameBatches } = await supabase
+    .from('premade_batches')
+    .select('id, teaching_language, target_levels')
+    .eq('teacher_id', teacher_id)
+    .eq('subject', subject)
+    .eq('status', 'active')
+    .ilike('name', name.trim())
+
+  const newLevels = [...(target_levels ?? [])].sort().join(',')
+  const isDuplicate = (sameNameBatches ?? []).some(b => {
+    if (b.teaching_language !== teaching_language) return false
+    return [...((b.target_levels as string[]) ?? [])].sort().join(',') === newLevels
+  })
+
+  if (isDuplicate) {
+    return NextResponse.json({ error: 'A course with the same name, language and level already exists' }, { status: 422 })
+  }
+
   const { data: batch, error: batchErr } = await supabase
     .from('premade_batches')
     .insert({ teacher_id, name, subject, teaching_language, target_levels, duration_min, max_students: 6, status: 'active' })
