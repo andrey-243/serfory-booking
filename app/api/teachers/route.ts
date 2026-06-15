@@ -23,6 +23,16 @@ function getPriceTier(code: string): string {
   return 'baltics'
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': 'https://serfory.eu',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS })
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const id = searchParams.get('id')
@@ -37,8 +47,8 @@ export async function GET(req: NextRequest) {
       .select('id, name, subjects, teaching_languages, subject_formats, subject_levels')
       .eq('id', id)
       .single()
-    if (error || !data) return NextResponse.json({ teacher: null }, { status: 404 })
-    return NextResponse.json({ teacher: data })
+    if (error || !data) return NextResponse.json({ teacher: null }, { status: 404, headers: CORS_HEADERS })
+    return NextResponse.json({ teacher: data }, { headers: CORS_HEADERS })
   }
 
   // Resolve price tier from ref token (server-side only)
@@ -62,7 +72,7 @@ export async function GET(req: NextRequest) {
   if (teachingLang) query = query.contains('teaching_languages', [teachingLang])
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: 'Failed to fetch teachers' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Failed to fetch teachers' }, { status: 500, headers: CORS_HEADERS })
 
   const teachers = (data ?? []).map(t => {
     if (!priceTier || !t.price_per_hour) return { ...t, price_per_hour: undefined }
@@ -70,7 +80,7 @@ export async function GET(req: NextRequest) {
     return { ...t, price_per_hour: undefined, adjusted_price: adjusted }
   })
 
-  return NextResponse.json({ teachers })
+  return NextResponse.json({ teachers }, { headers: CORS_HEADERS })
 }
 
 export async function PATCH(req: NextRequest) {
