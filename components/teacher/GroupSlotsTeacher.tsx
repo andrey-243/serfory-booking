@@ -194,7 +194,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   const availableLangs = teachingLanguages
 
   function toggleLevel(level: string) {
-    setFormLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level])
+    setFormLevels(prev => prev.includes(level) ? [] : [level])
   }
 
   function resetForm() {

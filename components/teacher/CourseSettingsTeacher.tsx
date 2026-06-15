@@ -78,6 +78,7 @@ type Props = {
   initialSubjectFormats: Record<string, string[]>
   initialSubjectLevels: Record<string, string[]>
   lang: 'en' | 'ru' | 'et'
+  onSaved?: () => void
 }
 
 export default function CourseSettingsTeacher({
@@ -87,6 +88,7 @@ export default function CourseSettingsTeacher({
   initialSubjectFormats,
   initialSubjectLevels,
   lang,
+  onSaved,
 }: Props) {
   const t = T[lang]
   const gl = GRADE_LABELS[lang]
@@ -153,6 +155,7 @@ export default function CourseSettingsTeacher({
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      onSaved?.()
     } finally {
       setSaving(false)
     }

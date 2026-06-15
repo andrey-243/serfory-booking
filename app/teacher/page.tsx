@@ -107,6 +107,19 @@ export default function TeacherPage() {
 
   const t = T[lang]
 
+  function reloadTeacherData(teacherId: string) {
+    fetch(`/api/teachers?id=${teacherId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.teacher) {
+          if (d.teacher.subjects) setTeacherSubjects(d.teacher.subjects)
+          if (d.teacher.teaching_languages) setTeachingLanguages(d.teacher.teaching_languages)
+          if (d.teacher.subject_formats) setSubjectFormats(d.teacher.subject_formats)
+          if (d.teacher.subject_levels) setSubjectLevels(d.teacher.subject_levels)
+        }
+      })
+  }
+
   async function handleStatusChange(id: string, status: string) {
     await fetch('/api/bookings', {
       method: 'PATCH',
@@ -276,6 +289,7 @@ export default function TeacherPage() {
               initialSubjectFormats={subjectFormats}
               initialSubjectLevels={subjectLevels}
               lang={lang}
+              onSaved={() => reloadTeacherData(user.teacherId!)}
             />
           </div>
         )}
