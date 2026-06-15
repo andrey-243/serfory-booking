@@ -1024,6 +1024,79 @@ export default function AdminPage() {
         {/* ── BOOKINGS VIEW ── */}
         {view === 'bookings' && (
           <>
+            {/* Filter bar */}
+            <div className="space-y-2 mb-4">
+              {/* Row 1: Status + Matière */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Statut</span>
+                  {(['pending', 'confirmed', 'cancelled'] as const).map(s => {
+                    const on = filterStatuses.has(s)
+                    return (
+                      <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                        {t.status[s]}
+                      </button>
+                    )
+                  })}
+                </div>
+                {courses.length > 1 && <div className="h-5 w-px bg-gray-200" />}
+                {courses.length > 1 && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Matière</span>
+                    {courses.map(c => {
+                      const col = SUBJECT_COLORS_CRM[c] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+                      const on = filterCourses.has(c)
+                      return (
+                        <button key={c} onClick={() => setFilterCourses(prev => { const n = new Set(prev); on ? n.delete(c) : n.add(c); return n })}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? `${col.bg} ${col.text} border-transparent` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                          {c}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: Prof dropdown + GCal élève + group + period */}
+              <div className="flex flex-wrap gap-2 items-center">
+                {teachers.length > 0 && (
+                  <MultiSelectDropdown
+                    label={filterTeachers.size === 0 ? t.allProfs : [...filterTeachers].map(n => n.split(' ')[0]).join(', ')}
+                    options={teachers.map(tc => ({ value: tc, label: tc }))}
+                    selected={filterTeachers}
+                    onChange={setFilterTeachers}
+                  />
+                )}
+
+                <div className="h-5 w-px bg-gray-200 ml-auto" />
+
+                {/* Group by */}
+                <div className="flex gap-1.5 items-center">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase">{t.groupByLabel}</span>
+                  {(['none', 'teacher', 'subject'] as const).map(v => (
+                    <button key={v} onClick={() => setGroupBy(v)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${groupBy === v ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'}`}>
+                      {t.groupBy[v]}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="h-5 w-px bg-gray-200" />
+
+                {/* Période */}
+                <div className="flex gap-1.5 items-center">
+                  {(['all', 'upcoming', 'past'] as const).map(v => (
+                    <button key={v} onClick={() => setTimeFilter(v)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${timeFilter === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200 hover:border-teal-300'}`}>
+                      {t.period[v]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
             {/* ── Group courses ── */}
             {groupBatches.length > 0 && (() => {
               const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
@@ -1210,79 +1283,6 @@ export default function AdminPage() {
                 </div>
               )
             })()}
-
-            {/* Filter bar */}
-            <div className="space-y-2 mb-4">
-              {/* Row 1: Status + Matière */}
-              <div className="flex flex-wrap gap-2 items-center">
-                <div className="flex gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Statut</span>
-                  {(['pending', 'confirmed', 'cancelled'] as const).map(s => {
-                    const on = filterStatuses.has(s)
-                    return (
-                      <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
-                        {t.status[s]}
-                      </button>
-                    )
-                  })}
-                </div>
-                {courses.length > 1 && <div className="h-5 w-px bg-gray-200" />}
-                {courses.length > 1 && (
-                  <div className="flex gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Matière</span>
-                    {courses.map(c => {
-                      const col = SUBJECT_COLORS_CRM[c] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
-                      const on = filterCourses.has(c)
-                      return (
-                        <button key={c} onClick={() => setFilterCourses(prev => { const n = new Set(prev); on ? n.delete(c) : n.add(c); return n })}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? `${col.bg} ${col.text} border-transparent` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
-                          {c}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Row 2: Prof dropdown + GCal élève + group + period */}
-              <div className="flex flex-wrap gap-2 items-center">
-                {teachers.length > 0 && (
-                  <MultiSelectDropdown
-                    label={filterTeachers.size === 0 ? t.allProfs : [...filterTeachers].map(n => n.split(' ')[0]).join(', ')}
-                    options={teachers.map(tc => ({ value: tc, label: tc }))}
-                    selected={filterTeachers}
-                    onChange={setFilterTeachers}
-                  />
-                )}
-
-                <div className="h-5 w-px bg-gray-200 ml-auto" />
-
-                {/* Group by */}
-                <div className="flex gap-1.5 items-center">
-                  <span className="text-[10px] font-semibold text-gray-400 uppercase">{t.groupByLabel}</span>
-                  {(['none', 'teacher', 'subject'] as const).map(v => (
-                    <button key={v} onClick={() => setGroupBy(v)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${groupBy === v ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'}`}>
-                      {t.groupBy[v]}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="h-5 w-px bg-gray-200" />
-
-                {/* Période */}
-                <div className="flex gap-1.5 items-center">
-                  {(['all', 'upcoming', 'past'] as const).map(v => (
-                    <button key={v} onClick={() => setTimeFilter(v)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${timeFilter === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200 hover:border-teal-300'}`}>
-                      {t.period[v]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-            </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {loading ? (
