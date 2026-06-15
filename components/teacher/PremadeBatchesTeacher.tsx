@@ -60,6 +60,11 @@ const LABELS = {
     saveNames: 'Save',
     savingNames: 'Saving…',
     useTemplate: 'Use as template',
+    confirmTitle: 'Confirm creation',
+    confirmBody: 'Once created, this course cannot be deleted. Enrolled students will hold these sessions permanently. Make sure all details are correct and that these time slots will be dedicated to this course.',
+    confirmReview: 'Review',
+    confirmCreate: 'Confirm & Create',
+    maxReached: 'Max 2 active courses per subject. Archive one before creating a new version.',
   },
   ru: {
     title: 'Готовые курсы',
@@ -92,6 +97,11 @@ const LABELS = {
     saveNames: 'Сохранить',
     savingNames: 'Сохранение…',
     useTemplate: 'Использовать как шаблон',
+    confirmTitle: 'Подтвердить создание',
+    confirmBody: 'После создания курс нельзя удалить. Записанные студенты займут эти занятия навсегда. Убедитесь, что все данные верны и эти временные слоты будут посвящены этому курсу.',
+    confirmReview: 'Проверить',
+    confirmCreate: 'Подтвердить и создать',
+    maxReached: 'Макс. 2 активных курса для этого предмета. Архивируйте один перед созданием новой версии.',
   },
   et: {
     title: 'Valmiskursused',
@@ -124,6 +134,11 @@ const LABELS = {
     saveNames: 'Salvesta',
     savingNames: 'Salvestamine…',
     useTemplate: 'Kasuta mallina',
+    confirmTitle: 'Kinnita loomine',
+    confirmBody: 'Pärast loomist ei saa kursust kustutada. Registreeritud õpilased hoiavad neid tunde jäädavalt. Veenduge, et kõik andmed on õiged ja need ajad on pühendatud sellele kursusele.',
+    confirmReview: 'Vaata üle',
+    confirmCreate: 'Kinnita ja loo',
+    maxReached: 'Maks 2 aktiivset kursust aine kohta. Arhiveeri üks enne uue versiooni loomist.',
   },
 }
 
@@ -155,6 +170,7 @@ type Props = {
   subjects: string[]
   lang: 'en' | 'ru' | 'et'
   teachingLanguages?: string[]
+  subjectFormats?: Record<string, string[]>
 }
 
 const LANG_LABELS: Record<string, string> = { en: 'EN', ru: 'RU', et: 'ET', ky: 'KY' }
@@ -186,7 +202,7 @@ function emptySession(): SessionDraft {
   return { name: '', session_date: new Date().toISOString().slice(0, 10), start_time: '14:00' }
 }
 
-export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teachingLanguages = [] }: Props) {
+export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teachingLanguages = [], subjectFormats = {} }: Props) {
   const t = LABELS[lang]
   const gl = GRADE_LABELS[lang]
 
@@ -197,19 +213,21 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [showConfirm, setShowConfirm] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
   // Session name editing: batchId → { names: Record<sessionId, string>, saving, editMode }
   const [sessionEdits, setSessionEdits] = useState<Record<string, { names: Record<string, string>; saving: boolean; editMode: boolean }>>({})
 
   const [name, setName] = useState('')
-  const [subject, setSubject] = useState(subjects[0] || '')
+  const [subject, setSubject] = useState(() => subjects.find(s => subjectFormats[s]?.includes('premade')) ?? subjects[0] ?? '')
   const [durationMin, setDurationMin] = useState(60)
   const [targetLevels, setTargetLevels] = useState<string[]>([])
+  const [levelMode, setLevelMode] = useState<'grade' | 'cefr'>('grade')
   const [teachingLanguage, setTeachingLanguage] = useState<string>(teachingLanguages[0] ?? '')
   const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(), emptySession()])
 
   const isLang = LANG_SUBJECTS.includes(subject)
-  const availableLevels = isLang ? [...ALL_GRADES, ...CEFR_LEVELS] : ALL_GRADES
+  const availableLevels = isLang ? (levelMode === 'cefr' ? CEFR_LEVELS : ALL_GRADES) : ALL_GRADES
 
   function toggleLevel(level: string) {
     setTargetLevels(prev =>
@@ -231,10 +249,12 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   }
 
   function resetForm() {
+    const firstPremadeSubject = subjects.find(s => subjectFormats[s]?.includes('premade')) ?? subjects[0] ?? ''
     setName('')
-    setSubject(subjects[0] || '')
+    setSubject(firstPremadeSubject)
     setDurationMin(60)
     setTargetLevels([])
+    setLevelMode('grade')
     setTeachingLanguage(teachingLanguages[0] ?? '')
     setSessions([emptySession(), emptySession()])
     setFormError(null)
@@ -287,8 +307,10 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       .finally(() => setLoading(false))
   }, [teacherId, refreshKey])
 
-  async function handleCreate() {
-    if (!name.trim()) { setFormError(t.errorFields); return }
+  function handleSubmitClick() {
+    if (!name.trim() || !teachingLanguage || targetLevels.length === 0) {
+      setFormError(t.errorFields); return
+    }
     for (const s of sessions) {
       if (!s.name.trim() || !s.session_date || !s.start_time) { setFormError(t.errorFields); return }
     }
@@ -304,9 +326,13 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
         }
       }
     }
-
-    setCreating(true)
     setFormError(null)
+    setShowConfirm(true)
+  }
+
+  async function handleCreate() {
+    setShowConfirm(false)
+    setCreating(true)
     try {
       const res = await fetch('/api/premade-batches', {
         method: 'POST',
@@ -315,7 +341,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       })
       const data = await res.json()
       if (!res.ok) {
-        setFormError(data.error || t.errorGeneric)
+        setFormError(res.status === 422 ? t.maxReached : (data.error || t.errorGeneric))
         return
       }
       setShowForm(false)
@@ -333,17 +359,43 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Confirmation modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+            <h3 className="text-base font-semibold text-gray-900">{t.confirmTitle}</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">{t.confirmBody}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors"
+              >
+                {t.confirmReview}
+              </button>
+              <button
+                onClick={handleCreate}
+                className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                {t.confirmCreate}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-900">{t.title}</h2>
-        <button
-          onClick={() => { if (showForm) { setShowForm(false); resetForm() } else { resetForm(); setShowForm(true) } }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          {t.newBatch}
-        </button>
+        {subjects.some(s => subjectFormats[s]?.includes('premade')) && (
+          <button
+            onClick={() => { if (showForm) { setShowForm(false); resetForm() } else { resetForm(); setShowForm(true) } }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            {t.newBatch}
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -365,15 +417,13 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
               <select
                 value={subject}
                 onChange={e => {
-                  const s = e.target.value
-                  setSubject(s)
-                  if (!LANG_SUBJECTS.includes(s)) {
-                    setTargetLevels(prev => prev.filter(l => !CEFR_LEVELS.includes(l)))
-                  }
+                  setSubject(e.target.value)
+                  setTargetLevels([])
+                  setLevelMode('grade')
                 }}
                 className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                {subjects.filter(s => subjectFormats[s]?.includes('premade') ?? true).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -389,7 +439,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">{t.language}</label>
+              <label className="text-xs font-medium text-gray-500">{t.language} <span className="text-red-400">*</span></label>
               <div className="flex gap-1.5 flex-wrap pt-0.5">
                 {teachingLanguages.map(l => (
                   <button
@@ -411,7 +461,21 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
 
           {/* Target levels */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-gray-500">{t.targetLevels}</label>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-gray-500">{t.targetLevels} <span className="text-red-400">*</span></label>
+              {isLang && (
+                <div className="flex rounded-lg overflow-hidden border border-gray-200 text-[11px] font-medium">
+                  <button type="button" onClick={() => { setLevelMode('grade'); setTargetLevels([]) }}
+                    className={`px-2.5 py-1 transition-colors ${levelMode === 'grade' ? 'bg-blue-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                    Grades
+                  </button>
+                  <button type="button" onClick={() => { setLevelMode('cefr'); setTargetLevels([]) }}
+                    className={`px-2.5 py-1 transition-colors ${levelMode === 'cefr' ? 'bg-blue-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                    CEFR
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {availableLevels.map(level => (
                 <button
@@ -484,8 +548,8 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
 
           <div className="flex gap-2">
             <button
-              onClick={handleCreate}
-              disabled={creating || !name.trim()}
+              onClick={handleSubmitClick}
+              disabled={creating}
               className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
             >
               {creating ? t.creating : t.create}
