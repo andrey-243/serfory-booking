@@ -427,13 +427,14 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
 
 type FormatStats = { purchased: number; used: number }
 
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds, formatStats }: {
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds, formatStats, studentInvoices }: {
   bookings: PanelBooking[]
   studentName: string
   grade?: string | null
   initialPaidIds?: Set<string>
   initialInvoiceSentIds?: Set<string>
   formatStats?: { individual: FormatStats; group: FormatStats; premade: FormatStats }
+  studentInvoices?: InvoiceRow[]
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [paidIds, setPaidIds] = useState<Set<string>>(initialPaidIds ?? new Set())
@@ -460,12 +461,6 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
   const canScrollNext = monthOffset + 12 < months.length
 
   const statsSource = selectedMonth ? (byMonth[selectedMonth] ?? []) : nonCancelled
-  const received = statsSource.filter(b => paidIds.has(b.id)).length
-  const notReceived = statsSource.length - received
-
-  const totalRevenue = statsSource.reduce((s, b) => s + (b.amount ?? 0), 0)
-  const paidRevenue = statsSource.filter(b => paidIds.has(b.id)).reduce((s, b) => s + (b.amount ?? 0), 0)
-  const hasAmounts = statsSource.some(b => (b.amount ?? 0) > 0)
 
   const panelTeachers = [...new Set(allBookings.map(b => b.teacher))].sort()
   const panelCourses  = [...new Set(allBookings.map(b => b.subject))].sort()
@@ -507,32 +502,41 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
     )
   }
 
+  const invoiceTotalRevenue = studentInvoices ? studentInvoices.reduce((s, i) => s + i.total_amount, 0) : 0
+  const invoicePaidRevenue = studentInvoices ? studentInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0) : 0
+  const groupPremadeSessions = formatStats ? (formatStats.group.purchased + formatStats.premade.purchased) : 0
+
   return (
     <div className="border-t border-gray-100 bg-gray-50/40">
       <div className="px-5 pt-3 pb-2">
         <div className="flex gap-3 items-stretch">
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
             <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Sessions</p>
-            <p className="text-2xl font-bold text-gray-900">{statsSource.length}</p>
+            <p className="text-2xl font-bold text-gray-900">{statsSource.length + groupPremadeSessions}</p>
+            {groupPremadeSessions > 0 && <p className="text-[10px] text-gray-400 mt-0.5">{statsSource.length} 1:1 · {groupPremadeSessions} grp/premade</p>}
           </div>
           <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
-            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Tracked</p>
-            <p className="text-2xl font-bold text-gray-900">{received}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{received} paid · {notReceived} pending</p>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Invoices</p>
+            <p className="text-2xl font-bold text-gray-900">{studentInvoices?.length ?? 0}</p>
+            {studentInvoices && studentInvoices.length > 0 && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{studentInvoices.filter(i => i.status === 'paid').length} paid · {studentInvoices.filter(i => i.status === 'sent').length} pending</p>
+            )}
           </div>
-          {hasAmounts && (
+          {invoiceTotalRevenue > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
               <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-0.5">Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">€{totalRevenue}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">€{paidRevenue} received · €{totalRevenue - paidRevenue} pending</p>
+              <p className="text-2xl font-bold text-gray-900">€{invoiceTotalRevenue}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">€{invoicePaidRevenue} received · €{invoiceTotalRevenue - invoicePaidRevenue} pending</p>
             </div>
           )}
           {formatStats && (() => {
-            const rows: { label: string; key: keyof typeof formatStats; color: string }[] = [
+            type FKey = 'individual' | 'group' | 'premade'
+            const allRows: { label: string; key: FKey; color: string }[] = [
               { label: '1:1 / Pair', key: 'individual', color: 'text-blue-500' },
               { label: 'Group', key: 'group', color: 'text-emerald-500' },
               { label: 'Premade', key: 'premade', color: 'text-violet-500' },
-            ].filter(r => formatStats[r.key].purchased > 0)
+            ]
+            const rows = allRows.filter(r => formatStats[r.key].purchased > 0)
             if (rows.length === 0) return null
             return (
               <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
@@ -716,6 +720,60 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+
+        {/* ── Invoices section ── */}
+        {studentInvoices && studentInvoices.length > 0 && (
+          <div className="border-t border-gray-200 mt-1">
+            <div className="px-5 py-2 flex items-center gap-2">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoices</span>
+              <span className="text-[10px] text-gray-300">({studentInvoices.length})</span>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
+                  <th className="text-left px-5 py-2 font-medium w-20">Date</th>
+                  <th className="text-left px-3 py-2 font-medium w-12">#</th>
+                  <th className="text-left px-3 py-2 font-medium w-24">Format</th>
+                  <th className="text-left px-3 py-2 font-medium">Subject</th>
+                  <th className="text-left px-3 py-2 font-medium w-20">Pack</th>
+                  <th className="text-right px-3 py-2 font-medium w-20">Amount</th>
+                  <th className="text-center px-5 py-2 font-medium w-20">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...studentInvoices].sort((a, b) => b.created_at.localeCompare(a.created_at)).map(inv => {
+                  const fmtColor: Record<string, string> = {
+                    individual: 'bg-blue-50 text-blue-600',
+                    pair: 'bg-violet-50 text-violet-600',
+                    group: 'bg-emerald-50 text-emerald-600',
+                    premade: 'bg-amber-50 text-amber-600',
+                  }
+                  const subj = inv.applications?.subject ?? '—'
+                  const sc = subjectColorCrm(subj)
+                  return (
+                    <tr key={inv.id} className="border-b border-gray-50 last:border-0">
+                      <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(inv.created_at)}</td>
+                      <td className="px-3 py-2 text-gray-400 font-mono">#{String(inv.invoice_number).padStart(3, '0')}</td>
+                      <td className="px-3 py-2">
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded capitalize ${fmtColor[inv.format] ?? 'bg-gray-100 text-gray-500'}`}>{inv.format}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.text}`}>{SUBJECT_ABBR_CRM[subj] ?? subj}</span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">{inv.lessons_count} lesson{inv.lessons_count !== 1 ? 's' : ''}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-700">€{inv.total_amount}</td>
+                      <td className="px-5 py-2 text-center">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${inv.status === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-500'}`}>
+                          {inv.status === 'paid' ? 'Paid' : 'Sent'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -1919,7 +1977,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} formatStats={formatStats} />
+                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} formatStats={formatStats} studentInvoices={studentInvoices} />
               </div>
             </div>
           )
