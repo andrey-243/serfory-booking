@@ -81,13 +81,15 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+const TIER_MULTIPLIERS: Record<string, number> = { eu: 1.30, us: 1.35, baltics: 1.00, cis: 0.60 }
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
   if (!token) return NextResponse.json({ error: 'Missing token' }, { status: 400 })
 
   const { data, error } = await getSupabaseAdmin()
     .from('applications')
-    .select('id, name, subject, grade, lang, learning_lang, country_code, status, telegram_chat_id, telegram_username, communication_lang')
+    .select('id, name, subject, grade, lang, learning_lang, country_code, status, price_tier, telegram_chat_id, telegram_username, communication_lang')
     .eq('ref_token', token)
     .single()
 
@@ -100,6 +102,8 @@ export async function GET(req: NextRequest) {
     .eq('application_id', data.id)
     .single()
 
+  const tier = (data as { price_tier?: string | null }).price_tier || 'baltics'
+
   return NextResponse.json({
     name: data.name,
     subject: data.subject,
@@ -111,5 +115,6 @@ export async function GET(req: NextRequest) {
     telegram_username: (data as { telegram_username?: string | null }).telegram_username ?? null,
     invoiceAlreadySent: !!existing,
     invoicePaid: existing?.status === 'paid',
+    tierMultiplier: TIER_MULTIPLIERS[tier] ?? 1.00,
   })
 }

@@ -217,6 +217,7 @@ function PackagePageInner() {
     name: string; subject: string; grade: string | null; lang: Lang
     learning_lang: string | null; country_code: string | null
     hasTgChatId: boolean; telegram_username: string | null
+    tierMultiplier: number
   } | null>(null)
   const [status, setStatus] = useState<'loading' | 'invalid' | 'alreadySent' | 'paid' | 'ready' | 'sending' | 'done'>('loading')
   const [uiLang, setUiLang] = useState<Lang>('en')
@@ -321,7 +322,7 @@ function PackagePageInner() {
       .then(d => {
         if (d.error) { setStatus('invalid'); return }
         const lang = (['en', 'et', 'ru'].includes(d.lang) ? d.lang : 'en') as Lang
-        setAppData({ name: d.name, subject: d.subject, grade: d.grade ?? null, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null })
+        setAppData({ name: d.name, subject: d.subject, grade: d.grade ?? null, lang, learning_lang: d.learning_lang ?? null, country_code: d.country_code ?? null, hasTgChatId: !!d.hasTgChatId, telegram_username: d.telegram_username ?? null, tierMultiplier: d.tierMultiplier ?? 1.0 })
         setUiLang(lang)
         if (VALID_SUBJECTS.includes(d.subject)) setSelectedSubject(d.subject as Subject)
         if (['en', 'et', 'ru', 'ky'].includes(d.learning_lang)) setSelectedLearningLang(d.learning_lang as TeachingLang)
@@ -344,11 +345,13 @@ function PackagePageInner() {
     : groupBatches
 
   const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
-  const pricePerLesson = BASE_PRICES[format][lessons] ?? 0
-  const studentsCount = format === 'pair' ? 2 : format === 'group' ? 5 : 1
+  const tierMultiplier = appData?.tierMultiplier ?? 1.0
+  const applyTier = (base: number) => Math.round(base * tierMultiplier * 100) / 100
+  const pricePerLesson = applyTier(BASE_PRICES[format][lessons] ?? 0)
+  // Each student pays their own invoice (×1), regardless of format
   const total = format === 'premade'
-    ? (selectedBatch ? (selectedBatch.premade_sessions.length * 18) : 0)
-    : pricePerLesson * lessons * studentsCount
+    ? (selectedBatch ? applyTier(selectedBatch.premade_sessions.length * 18) : 0)
+    : pricePerLesson * lessons
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
   const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
@@ -610,7 +613,7 @@ function PackagePageInner() {
                 : 'grid-cols-4'
               }`}>
                 {LESSONS_OPTIONS[format].map(n => {
-                  const price = BASE_PRICES[format][n] ?? 0
+                  const price = applyTier(BASE_PRICES[format][n] ?? 0)
                   const isSelected = lessons === n
                   const isPopular = (format === 'individual' || format === 'pair') && n === 8
                   return (
