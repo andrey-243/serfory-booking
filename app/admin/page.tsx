@@ -147,7 +147,7 @@ type AdminPremadeBatch = {
 type InvoiceRow = {
   id: string
   invoice_number: number
-  format: 'individual' | 'pair' | 'group'
+  format: 'individual' | 'pair' | 'group' | 'premade'
   lessons_count: number
   students_count: number
   price_per_lesson: number
@@ -425,12 +425,15 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
   )
 }
 
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds }: {
+type FormatStats = { purchased: number; used: number }
+
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds, formatStats }: {
   bookings: PanelBooking[]
   studentName: string
   grade?: string | null
   initialPaidIds?: Set<string>
   initialInvoiceSentIds?: Set<string>
+  formatStats?: { individual: FormatStats; group: FormatStats; premade: FormatStats }
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [paidIds, setPaidIds] = useState<Set<string>>(initialPaidIds ?? new Set())
@@ -524,6 +527,36 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
               <p className="text-[10px] text-gray-400 mt-0.5">€{paidRevenue} received · €{totalRevenue - paidRevenue} pending</p>
             </div>
           )}
+          {formatStats && (() => {
+            const rows: { label: string; key: keyof typeof formatStats; color: string }[] = [
+              { label: '1:1 / Pair', key: 'individual', color: 'text-blue-500' },
+              { label: 'Group', key: 'group', color: 'text-emerald-500' },
+              { label: 'Premade', key: 'premade', color: 'text-violet-500' },
+            ].filter(r => formatStats[r.key].purchased > 0)
+            if (rows.length === 0) return null
+            return (
+              <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex flex-col justify-center shrink-0">
+                <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-1.5">Formats</p>
+                <div className="flex flex-col gap-1.5">
+                  {rows.map(({ label, key, color }) => {
+                    const { purchased, used } = formatStats[key]
+                    const pct = purchased > 0 ? Math.round((used / purchased) * 100) : 0
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-500 w-20 shrink-0">{label}</span>
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
+                          <div className={`h-full rounded-full ${color.replace('text-', 'bg-')}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={`text-[11px] font-semibold ${color} shrink-0`}>{used}</span>
+                        <span className="text-[10px] text-gray-300 shrink-0">/</span>
+                        <span className="text-[11px] text-gray-400 shrink-0">{purchased}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
           <div className="flex-1 flex gap-2 min-w-0 items-center">
             {canScrollPrev ? (
               <button onClick={() => setMonthOffset(o => Math.max(0, o - 12))}
@@ -1187,26 +1220,26 @@ export default function AdminPage() {
                                 {batch.enrollment_count}/{batch.max_students}
                               </span>
                             </div>
-                            {/* Sessions */}
-                            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+                            {/* Sessions — horizontal */}
+                            <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => (
-                                <div key={s.id} className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                                  <span className="text-gray-300 font-mono text-[10px] w-3 shrink-0">{i + 1}</span>
-                                  <span className="font-medium text-gray-600">{fmtDate(s.session_date)}</span>
+                                <span key={s.id} className="flex items-center gap-1 text-[11px] whitespace-nowrap bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5">
+                                  <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
+                                  <span className="font-semibold text-gray-700">{fmtDate(s.session_date)}</span>
                                   <span className="text-gray-300">·</span>
-                                  <span>{s.start_time.slice(0, 5)}</span>
-                                  {s.gcal_event_id && <span className="ml-auto text-[10px] text-emerald-500">✓</span>}
-                                </div>
+                                  <span className="text-gray-500">{s.start_time.slice(0, 5)}</span>
+                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
+                                </span>
                               ))}
                             </div>
                             {/* Students */}
                             {students.length === 0 ? (
                               <p className="text-[11px] text-gray-300 italic">No students enrolled yet.</p>
                             ) : (
-                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
+                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-1.5">
                                 {students.map(s => (
-                                  <div key={s.id} className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
+                                  <div key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors" onClick={() => setStatsModal(s.email)}>
+                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
                                       {nameInitials(s.name)}
                                     </span>
                                     <div className="min-w-0 flex-1">
@@ -1215,11 +1248,13 @@ export default function AdminPage() {
                                     </div>
                                     {s.telegram_username && (
                                       <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
-                                        className="text-[10px] text-sky-500 hover:underline shrink-0">
+                                        className="text-[10px] text-sky-500 hover:underline shrink-0"
+                                        onClick={e => e.stopPropagation()}>
                                         <TgIcon />
                                       </a>
                                     )}
-                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0">
+                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0"
+                                      onClick={e => e.stopPropagation()}>
                                       <EmailIcon />
                                     </a>
                                   </div>
@@ -1282,27 +1317,28 @@ export default function AdminPage() {
                                 {batch.enrollment_count}/{batch.max_students}
                               </span>
                             </div>
-                            {/* Sessions */}
-                            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+                            {/* Sessions — horizontal */}
+                            <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => (
-                                <div key={s.id} className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                                  <span className="text-gray-300 font-mono text-[10px] w-3 shrink-0">{i + 1}</span>
-                                  <span className="font-medium text-gray-600 truncate flex-1">{s.name}</span>
-                                  <span className="text-gray-400 shrink-0">{fmtDate(s.session_date)}</span>
+                                <span key={s.id} className="flex items-center gap-1 text-[11px] whitespace-nowrap bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5">
+                                  <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
+                                  <span className="font-medium text-gray-500 max-w-[70px] truncate">{s.name}</span>
                                   <span className="text-gray-300">·</span>
-                                  <span className="shrink-0">{s.start_time.slice(0, 5)}</span>
-                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500 shrink-0">✓</span>}
-                                </div>
+                                  <span className="font-semibold text-gray-700">{fmtDate(s.session_date)}</span>
+                                  <span className="text-gray-300">·</span>
+                                  <span className="text-gray-500">{s.start_time.slice(0, 5)}</span>
+                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
+                                </span>
                               ))}
                             </div>
                             {/* Students */}
                             {students.length === 0 ? (
                               <p className="text-[11px] text-gray-300 italic">No students enrolled yet.</p>
                             ) : (
-                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
+                              <div className="border-t border-gray-100 pt-2 flex flex-col gap-1.5">
                                 {students.map(s => (
-                                  <div key={s.id} className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
+                                  <div key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors" onClick={() => setStatsModal(s.email)}>
+                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold shrink-0 ${avatarColorCrm(s.name)}`}>
                                       {nameInitials(s.name)}
                                     </span>
                                     <div className="min-w-0 flex-1">
@@ -1311,11 +1347,13 @@ export default function AdminPage() {
                                     </div>
                                     {s.telegram_username && (
                                       <a href={`https://t.me/${s.telegram_username}`} target="_blank" rel="noreferrer"
-                                        className="text-[10px] text-sky-500 hover:underline shrink-0">
+                                        className="text-[10px] text-sky-500 hover:underline shrink-0"
+                                        onClick={e => e.stopPropagation()}>
                                         <TgIcon />
                                       </a>
                                     )}
-                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0">
+                                    <a href={`mailto:${s.email}`} className="text-[10px] text-violet-400 hover:text-violet-600 shrink-0"
+                                      onClick={e => e.stopPropagation()}>
                                       <EmailIcon />
                                     </a>
                                   </div>
@@ -1831,6 +1869,30 @@ export default function AdminPage() {
             })
           const initialPaidIds = new Set(studentBookings.filter(b => b.invoice_status === 'paid').map(b => b.id))
           const initialInvoiceSentIds = new Set(studentBookings.filter(b => b.invoice_status === 'sent' || b.invoice_status === 'paid').map(b => b.id))
+
+          // Format breakdown: purchased vs used
+          const todayStr = new Date().toISOString().slice(0, 10)
+          const studentInvoices = invoices.filter(inv => inv.applications?.email === s.email)
+          const indivPairPurchased = studentInvoices
+            .filter(inv => inv.format === 'individual' || inv.format === 'pair')
+            .reduce((sum, inv) => sum + inv.lessons_count, 0)
+          const indivPairUsed = studentBookings.filter(b => b.status !== 'cancelled').length
+
+          const studentGroupBatches = groupBatches.filter(b => b.enrolled_students.some(es => es.email === s.email))
+          const groupPurchased = studentGroupBatches.reduce((sum, b) => sum + b.group_slot_sessions.length, 0)
+          const groupUsed = studentGroupBatches.reduce((sum, b) =>
+            sum + b.group_slot_sessions.filter(sess => sess.session_date <= todayStr).length, 0)
+
+          const studentPremadeBatches = adminPremadeBatches.filter(b => b.enrolled_students.some(es => es.email === s.email))
+          const premadePurchased = studentPremadeBatches.reduce((sum, b) => sum + b.premade_sessions.length, 0)
+          const premadeUsed = studentPremadeBatches.reduce((sum, b) =>
+            sum + b.premade_sessions.filter(sess => sess.session_date <= todayStr).length, 0)
+
+          const formatStats = {
+            individual: { purchased: indivPairPurchased, used: indivPairUsed },
+            group: { purchased: groupPurchased, used: groupUsed },
+            premade: { purchased: premadePurchased, used: premadeUsed },
+          }
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-6" onClick={() => setStatsModal(null)}>
               <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
@@ -1857,7 +1919,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} />
+                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} formatStats={formatStats} />
               </div>
             </div>
           )
