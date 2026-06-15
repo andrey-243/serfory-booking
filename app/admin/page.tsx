@@ -427,7 +427,7 @@ function CrmStatusBadge({ pStatus }: { pStatus: ParentStatus }) {
 
 type FormatStats = { purchased: number; used: number }
 
-function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds, formatStats, studentInvoices }: {
+function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, initialPaidIds, initialInvoiceSentIds, formatStats, studentInvoices, studentGroupBatches, studentPremadeBatches }: {
   bookings: PanelBooking[]
   studentName: string
   grade?: string | null
@@ -435,6 +435,8 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
   initialInvoiceSentIds?: Set<string>
   formatStats?: { individual: FormatStats; group: FormatStats; premade: FormatStats }
   studentInvoices?: InvoiceRow[]
+  studentGroupBatches?: GroupBatch[]
+  studentPremadeBatches?: AdminPremadeBatch[]
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [monthOffset, setMonthOffset] = useState(0)
@@ -443,6 +445,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
   const [bookingCourseFilter, setBookingCourseFilter] = useState('all')
   const [bookingSort, setBookingSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'asc' })
   const [invoiceSort, setInvoiceSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'desc' })
+  const [invoicesOpen, setInvoicesOpen] = useState(true)
+  const [hidePaid, setHidePaid] = useState(false)
+  const [sessionsOpen, setSessionsOpen] = useState(true)
 
   const nonCancelled = allBookings.filter(b => b.status !== 'cancelled')
   const cancelledBookings = allBookings.filter(b => b.status === 'cancelled').sort((a, b) => a.date.localeCompare(b.date))
@@ -484,7 +489,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
     }
   })
 
-  const sortedInvoices = [...(studentInvoices ?? [])].sort((a, b) => {
+  const sortedInvoices = [...(studentInvoices ?? []).filter(inv => !hidePaid || inv.status !== 'paid')].sort((a, b) => {
     const d = invoiceSort.dir === 'asc' ? 1 : -1
     switch (invoiceSort.col) {
       case 'date': return d * a.created_at.localeCompare(b.created_at)
@@ -614,13 +619,22 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
 
       {/* ── Invoices ── */}
       <div className="bg-white border-t border-gray-100 overflow-hidden">
-        {sortedInvoices.length > 0 && (
+        {(studentInvoices?.length ?? 0) > 0 && (
           <>
             <div className="px-5 py-2 flex items-center gap-2 border-b border-gray-100">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoices</span>
-              <span className="text-[10px] text-gray-300">({sortedInvoices.length})</span>
+              <button onClick={() => setInvoicesOpen(o => !o)} className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className={`w-3 h-3 transition-transform ${invoicesOpen ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6"/></svg>
+                Invoices
+              </button>
+              <span className="text-[10px] text-gray-300">({sortedInvoices.length}{hidePaid && (studentInvoices?.length ?? 0) > sortedInvoices.length ? ` of ${studentInvoices?.length}` : ''})</span>
+              <button
+                onClick={() => setHidePaid(h => !h)}
+                className={`ml-1 text-[10px] px-2 py-0.5 rounded-full border transition-colors font-medium ${hidePaid ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}
+              >
+                {hidePaid ? 'Show paid' : 'Hide paid'}
+              </button>
             </div>
-            <table className="w-full text-xs">
+            {invoicesOpen && <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
                   {[['date','Date'],['number','#'],['format','Format'],['subject','Subject'],['pack','Pack'],['amount','Amount'],['status','Status']].map(([col, label], i) => (
@@ -662,14 +676,17 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                   )
                 })}
               </tbody>
-            </table>
+            </table>}
           </>
         )}
 
         {/* ── Sessions ── */}
-        <div className={`${sortedInvoices.length > 0 ? 'border-t border-gray-200' : ''}`}>
+        <div className={`${(studentInvoices?.length ?? 0) > 0 ? 'border-t border-gray-200' : ''}`}>
           <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sessions</span>
+            <button onClick={() => setSessionsOpen(o => !o)} className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className={`w-3 h-3 transition-transform ${sessionsOpen ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6"/></svg>
+              Sessions
+            </button>
             {selectedMonth && (
               <>
                 <div className="h-4 w-px bg-gray-200" />
@@ -692,65 +709,114 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
               </select>
             )}
           </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
-                {[['date','Date'],['course','Course'],['teacher','Teacher'],['status','Status'],['amount','Amount']].map(([col, label], i) => (
-                  <th key={col} onClick={() => toggleBookingSort(col)}
-                    className={`font-medium cursor-pointer select-none hover:text-gray-600 transition-colors py-2.5 ${i === 0 ? 'text-left px-5 w-20' : i === 4 ? 'text-right px-5 w-20' : 'text-left px-3'}`}>
-                    {label}<SortIcon col={col} state={bookingSort} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {displayedBookings.map(b => {
-                const bStatus = crmPanelBookingStatus(b.status, b.date)
-                return (
-                  <tr key={b.id} className="border-b border-gray-50 last:border-0">
-                    <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(b.date)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1">
-                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span>
-                        {grade && <span className="text-[10px] text-gray-400 font-medium">{grade}</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
-                    <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
-                    <td className="px-5 py-2 text-right font-medium text-gray-700">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
+          {sessionsOpen && (
+            <>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
+                    {[['date','Date'],['course','Course'],['teacher','Teacher'],['status','Status'],['amount','Amount']].map(([col, label], i) => (
+                      <th key={col} onClick={() => toggleBookingSort(col)}
+                        className={`font-medium cursor-pointer select-none hover:text-gray-600 transition-colors py-2.5 ${i === 0 ? 'text-left px-5 w-20' : i === 4 ? 'text-right px-5 w-20' : 'text-left px-3'}`}>
+                        {label}<SortIcon col={col} state={bookingSort} />
+                      </th>
+                    ))}
                   </tr>
-                )
-              })}
-              {displayedBookings.length === 0 && <tr><td colSpan={5} className="px-5 py-4 text-center text-[11px] text-gray-300 italic">No sessions booked yet.</td></tr>}
-            </tbody>
-          </table>
-
-        {cancelledBookings.length > 0 && (
-          <div className="border-t border-gray-100">
-            <button
-              onClick={() => setCancelledOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-5 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-left"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className={`w-3 h-3 transition-transform ${cancelledOpen ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6"/></svg>
-              <span>{cancelledBookings.length} cancelled session{cancelledBookings.length !== 1 ? 's' : ''}</span>
-            </button>
-            {cancelledOpen && (
-              <table className="w-full text-xs border-t border-gray-50">
+                </thead>
                 <tbody>
-                  {cancelledBookings.map(b => (
-                    <tr key={b.id} className="border-b border-gray-50 last:border-0 opacity-60">
-                      <td className="px-5 py-2 text-gray-500 whitespace-nowrap w-20">{crmFd(b.date)}</td>
-                      <td className="px-3 py-2 w-12"><span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span></td>
-                      <td className="px-3 py-2 text-gray-600 w-28">{b.teacher.split(' ')[0]}</td>
-                      <td className="px-3 py-2 text-red-400 font-medium">Cancelled</td>
-                      <td className="px-5 py-2 text-right w-20 text-gray-300">—</td>
-                    </tr>
-                  ))}
+                  {displayedBookings.map(b => {
+                    const bStatus = crmPanelBookingStatus(b.status, b.date)
+                    return (
+                      <tr key={b.id} className="border-b border-gray-50 last:border-0">
+                        <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(b.date)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span>
+                            {grade && <span className="text-[10px] text-gray-400 font-medium">{grade}</span>}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
+                        <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
+                        <td className="px-5 py-2 text-right font-medium text-gray-700">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
+                      </tr>
+                    )
+                  })}
+                  {(studentGroupBatches ?? []).flatMap(batch =>
+                    batch.group_slot_sessions.map(sess => {
+                      const today = new Date().toISOString().slice(0, 10)
+                      const sessStatus = sess.session_date <= today ? 'Done' : 'Upcoming'
+                      const sc = subjectColorCrm(batch.subject)
+                      return (
+                        <tr key={`grp-${sess.id}`} className="border-b border-gray-50 last:border-0">
+                          <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{fmtDate(sess.session_date)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1">
+                              <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.text}`}>{SUBJECT_ABBR_CRM[batch.subject] ?? batch.subject}</span>
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold">Group</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '—').split(' ')[0]}</td>
+                          <td className="px-3 py-2"><span className={`font-medium ${sessStatus === 'Done' ? 'text-blue-600' : 'text-green-600'}`}>{sessStatus}</span></td>
+                          <td className="px-5 py-2 text-right text-gray-300">—</td>
+                        </tr>
+                      )
+                    })
+                  )}
+                  {(studentPremadeBatches ?? []).flatMap(batch =>
+                    batch.premade_sessions.map(sess => {
+                      const today = new Date().toISOString().slice(0, 10)
+                      const sessStatus = sess.session_date <= today ? 'Done' : 'Upcoming'
+                      const sc = subjectColorCrm(batch.subject)
+                      return (
+                        <tr key={`pre-${sess.id}`} className="border-b border-gray-50 last:border-0">
+                          <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{fmtDate(sess.session_date)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1">
+                              <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.text}`}>{SUBJECT_ABBR_CRM[batch.subject] ?? batch.subject}</span>
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold">Premade</span>
+                              <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{sess.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '—').split(' ')[0]}</td>
+                          <td className="px-3 py-2"><span className={`font-medium ${sessStatus === 'Done' ? 'text-blue-600' : 'text-green-600'}`}>{sessStatus}</span></td>
+                          <td className="px-5 py-2 text-right text-gray-300">—</td>
+                        </tr>
+                      )
+                    })
+                  )}
+                  {displayedBookings.length === 0 && (studentGroupBatches ?? []).length === 0 && (studentPremadeBatches ?? []).length === 0 && (
+                    <tr><td colSpan={5} className="px-5 py-4 text-center text-[11px] text-gray-300 italic">No sessions booked yet.</td></tr>
+                  )}
                 </tbody>
               </table>
-            )}
-          </div>
-        )}
+
+              {cancelledBookings.length > 0 && (
+                <div className="border-t border-gray-100">
+                  <button
+                    onClick={() => setCancelledOpen(o => !o)}
+                    className="w-full flex items-center gap-2 px-5 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className={`w-3 h-3 transition-transform ${cancelledOpen ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6"/></svg>
+                    <span>{cancelledBookings.length} cancelled session{cancelledBookings.length !== 1 ? 's' : ''}</span>
+                  </button>
+                  {cancelledOpen && (
+                    <table className="w-full text-xs border-t border-gray-50">
+                      <tbody>
+                        {cancelledBookings.map(b => (
+                          <tr key={b.id} className="border-b border-gray-50 last:border-0 opacity-60">
+                            <td className="px-5 py-2 text-gray-500 whitespace-nowrap w-20">{crmFd(b.date)}</td>
+                            <td className="px-3 py-2 w-12"><span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span></td>
+                            <td className="px-3 py-2 text-gray-600 w-28">{b.teacher.split(' ')[0]}</td>
+                            <td className="px-3 py-2 text-red-400 font-medium">Cancelled</td>
+                            <td className="px-5 py-2 text-right w-20 text-gray-300">—</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1063,6 +1129,25 @@ export default function AdminPage() {
 
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [bookings, applications])
+
+  const studentBatchEnrollments = useMemo(() => {
+    const map = new Map<string, { subject: string; teacher: string; format: 'group' | 'premade'; batchName?: string }[]>()
+    groupBatches.forEach(batch => {
+      batch.enrolled_students.forEach(es => {
+        const arr = map.get(es.email) ?? []
+        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '—', format: 'group' })
+        map.set(es.email, arr)
+      })
+    })
+    adminPremadeBatches.forEach(batch => {
+      batch.enrolled_students.forEach(es => {
+        const arr = map.get(es.email) ?? []
+        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '—', format: 'premade', batchName: batch.name })
+        map.set(es.email, arr)
+      })
+    })
+    return map
+  }, [groupBatches, adminPremadeBatches])
 
   const visibleStudents = useMemo(() => {
     let result = students
@@ -1776,6 +1861,14 @@ export default function AdminPage() {
                                   <span className="text-blue-500 font-bold ml-0.5">×{c.count}</span>
                                 </div>
                               ))}
+                              {(studentBatchEnrollments.get(s.email) ?? []).map((enr, i) => (
+                                <div key={`enr-${i}`} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${enr.format === 'group' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                  <span>{teacherInitialsCrm(enr.teacher)}</span>
+                                  <span className="opacity-50">·</span>
+                                  <span>{enr.subject}</span>
+                                  <span className="font-bold ml-0.5">{enr.format === 'group' ? 'GRP' : 'PRE'}</span>
+                                </div>
+                              ))}
                             </div>
                             <div className="flex items-center gap-1.5">
                               {tgOk ? (
@@ -1953,7 +2046,7 @@ export default function AdminPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-4 h-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} formatStats={formatStats} studentInvoices={studentInvoices} />
+                <StudentStatsPanelAdmin key={s.email} bookings={studentBookings} studentName={s.name} grade={s.grade} initialPaidIds={initialPaidIds} initialInvoiceSentIds={initialInvoiceSentIds} formatStats={formatStats} studentInvoices={studentInvoices} studentGroupBatches={studentGroupBatches} studentPremadeBatches={studentPremadeBatches} />
               </div>
             </div>
           )
