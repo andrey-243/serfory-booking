@@ -91,6 +91,47 @@ type StudentRow = {
 
 type ParentStatus = 'to_contact' | 'contacted' | 'answered'
 type SortCol = 'date' | 'teacher' | 'course' | 'student' | 'status'
+
+type GroupSession = {
+  id: string
+  session_date: string
+  start_time: string
+  gcal_event_id: string | null
+}
+type GroupBatch = {
+  id: string
+  teacher_id: string
+  subject: string
+  start_date: string
+  start_time: string
+  duration_minutes: number
+  max_students: number
+  status: string
+  enrollment_count: number
+  group_slot_sessions: GroupSession[]
+  teachers: { name: string; teaching_languages: string[] | null } | null
+}
+type PremadeSession = {
+  id: string
+  name: string
+  session_date: string
+  start_time: string
+  gcal_event_id: string | null
+}
+type AdminPremadeBatch = {
+  id: string
+  teacher_id: string
+  name: string
+  subject: string
+  target_levels: string[]
+  duration_min: number
+  max_students: number
+  status: string
+  enrollment_count: number
+  premade_sessions: PremadeSession[]
+  teachers: { name: string; teaching_languages: string[] | null } | null
+}
+
 type InvoiceRow = {
   id: string
   invoice_number: number
@@ -293,6 +334,10 @@ function crmMlShort(key: string): string {
 }
 function crmFd(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+function fmtDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 function crmInitials(name: string): string {
   const parts = name.trim().split(' ')
@@ -663,6 +708,11 @@ export default function AdminPage() {
   const [statsModal, setStatsModal] = useState<string | null>(null)
   const [expandedBooking, setExpandedBooking] = useState<string | null>(null)
 
+  const [groupBatches, setGroupBatches] = useState<GroupBatch[]>([])
+  const [adminPremadeBatches, setAdminPremadeBatches] = useState<AdminPremadeBatch[]>([])
+  const [expandedGroupBatch, setExpandedGroupBatch] = useState<string | null>(null)
+  const [expandedPremadeBatch, setExpandedPremadeBatch] = useState<string | null>(null)
+
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
@@ -715,6 +765,12 @@ export default function AdminPage() {
     fetch('/api/invoices')
       .then(r => r.json())
       .then(d => { setInvoices(d.invoices || []); setLoadingInvoices(false) })
+    fetch('/api/group-slots?all=true')
+      .then(r => r.json())
+      .then(d => setGroupBatches(d.batches || []))
+    fetch('/api/premade-batches?all=true')
+      .then(r => r.json())
+      .then(d => setAdminPremadeBatches(d.batches || []))
   }, [])
 
   async function handleUpdateParentContact(appId: string, value: string) {
@@ -954,6 +1010,134 @@ export default function AdminPage() {
         {/* ── BOOKINGS VIEW ── */}
         {view === 'bookings' && (
           <>
+            {/* ── Group courses ── */}
+            {groupBatches.length > 0 && (() => {
+              const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+                  <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Group courses</span>
+                    <span className="text-xs text-gray-400">({groupBatches.length})</span>
+                  </div>
+                  {groupBatches.map(batch => {
+                    const isOpen = expandedGroupBatch === batch.id
+                    const sessions = batch.group_slot_sessions
+                    const firstDate = sessions[0]?.session_date
+                    const lastDate = sessions[sessions.length - 1]?.session_date
+                    const subjectColor = SUBJECT_COLORS_CRM[batch.subject] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+                    const langs = batch.teachers?.teaching_languages ?? []
+                    return (
+                      <div key={batch.id} className="border-b border-gray-100 last:border-0">
+                        <button
+                          onClick={() => setExpandedGroupBatch(isOpen ? null : batch.id)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <svg className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${subjectColor.bg} ${subjectColor.text}`}>{batch.subject}</span>
+                          {batch.teachers?.name && <TeacherAvatar name={batch.teachers.name} />}
+                          {batch.teachers?.name && <span className="text-sm text-gray-700">{batch.teachers.name.split(' ')[0]}</span>}
+                          {langs.map(l => (
+                            <span key={l} className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${langBadge[l] ?? 'bg-gray-100 text-gray-500'}`}>{l}</span>
+                          ))}
+                          {firstDate && (
+                            <span className="text-xs text-gray-400 ml-1">
+                              {fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}
+                            </span>
+                          )}
+                          <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {batch.enrollment_count}/{batch.max_students}
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'prelock' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
+                            {batch.status}
+                          </span>
+                        </button>
+                        {isOpen && sessions.length > 0 && (
+                          <div className="px-10 pb-3 pt-1 space-y-1.5">
+                            {sessions.map((s, i) => (
+                              <div key={s.id} className="flex items-center gap-3 text-xs text-gray-500">
+                                <span className="w-4 text-right text-gray-300 font-mono text-[11px]">{i + 1}</span>
+                                <span>{fmtDate(s.session_date)}</span>
+                                <span className="text-gray-300">·</span>
+                                <span>{s.start_time.slice(0, 5)}</span>
+                                {s.gcal_event_id && <span className="text-[10px] text-emerald-500 font-medium">GCal ✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
+            {/* ── Premade courses ── */}
+            {adminPremadeBatches.length > 0 && (() => {
+              const langBadge: Record<string, string> = { en: 'bg-blue-50 text-blue-500', et: 'bg-green-50 text-green-600', ru: 'bg-orange-50 text-orange-500', ky: 'bg-purple-50 text-purple-500' }
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+                  <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Premade courses</span>
+                    <span className="text-xs text-gray-400">({adminPremadeBatches.length})</span>
+                  </div>
+                  {adminPremadeBatches.map(batch => {
+                    const isOpen = expandedPremadeBatch === batch.id
+                    const sessions = batch.premade_sessions
+                    const firstDate = sessions[0]?.session_date
+                    const lastDate = sessions[sessions.length - 1]?.session_date
+                    const subjectColor = SUBJECT_COLORS_CRM[batch.subject] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }
+                    const langs = batch.teachers?.teaching_languages ?? []
+                    return (
+                      <div key={batch.id} className="border-b border-gray-100 last:border-0">
+                        <button
+                          onClick={() => setExpandedPremadeBatch(isOpen ? null : batch.id)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <svg className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${subjectColor.bg} ${subjectColor.text}`}>{batch.subject}</span>
+                          {batch.teachers?.name && <TeacherAvatar name={batch.teachers.name} />}
+                          {batch.teachers?.name && <span className="text-sm text-gray-700">{batch.teachers.name.split(' ')[0]}</span>}
+                          {langs.map(l => (
+                            <span key={l} className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${langBadge[l] ?? 'bg-gray-100 text-gray-500'}`}>{l}</span>
+                          ))}
+                          {batch.target_levels?.length > 0 && (
+                            <span className="text-[10px] text-gray-400">{batch.target_levels.join(', ')}</span>
+                          )}
+                          <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">{batch.name}</span>
+                          {firstDate && (
+                            <span className="text-xs text-gray-400">
+                              {fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` – ${fmtDate(lastDate)}` : ''}
+                            </span>
+                          )}
+                          <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${batch.enrollment_count >= batch.max_students ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {batch.enrollment_count}/{batch.max_students}
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${batch.status === 'active' ? 'bg-emerald-50 text-emerald-600' : batch.status === 'completed' ? 'bg-blue-50 text-blue-500' : 'bg-gray-100 text-gray-400'}`}>
+                            {batch.status}
+                          </span>
+                        </button>
+                        {isOpen && sessions.length > 0 && (
+                          <div className="px-10 pb-3 pt-1 space-y-1.5">
+                            {sessions.map((s, i) => (
+                              <div key={s.id} className="flex items-center gap-3 text-xs text-gray-500">
+                                <span className="w-4 text-right text-gray-300 font-mono text-[11px]">{i + 1}</span>
+                                <span className="text-gray-600 font-medium">{s.name}</span>
+                                <span className="text-gray-300">·</span>
+                                <span>{fmtDate(s.session_date)}</span>
+                                <span className="text-gray-300">·</span>
+                                <span>{s.start_time.slice(0, 5)}</span>
+                                {s.gcal_event_id && <span className="text-[10px] text-emerald-500 font-medium">GCal ✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
             {/* Filter bar */}
             <div className="space-y-2 mb-4">
               {/* Row 1: Status + Matière */}

@@ -11,40 +11,65 @@ function toDateStr(d: Date): string {
 }
 
 // GET /api/group-slots
+// ?all=true                     → admin view (all batches, teacher info joined)
 // ?teacherId=<id>&subject=<s>  → teacher dashboard (their batches)
 // ?subject=<s>                 → student booking (active batches with enrollment count)
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const teacherId = searchParams.get('teacherId')
   const subject = searchParams.get('subject')
+  const all = searchParams.get('all') === 'true'
 
-  if (!subject && !teacherId) {
+  if (!subject && !teacherId && !all) {
     return NextResponse.json({ error: 'subject or teacherId required' }, { status: 400 })
   }
 
   const supabase = getSupabaseAdmin()
-  let query = supabase
+
+  type RawBatch = Record<string, unknown> & {
+    group_slot_sessions: { session_date: string; [k: string]: unknown }[]
+    group_slot_enrollments: { status: string }[]
+    teachers?: { name: string; teaching_languages: string[] | null } | null
+  }
+
+  let baseQuery = supabase
     .from('group_slot_batches')
     .select('*, group_slot_sessions(*), group_slot_enrollments(id, status)')
     .order('start_date', { ascending: true })
 
-  if (teacherId) query = query.eq('teacher_id', teacherId)
-  if (subject) query = query.eq('subject', subject)
-
-  // Student view: only active batches with open spots, starting today or later
-  if (!teacherId) {
+  if (teacherId) baseQuery = baseQuery.eq('teacher_id', teacherId)
+  if (subject) baseQuery = baseQuery.eq('subject', subject)
+  if (!teacherId && !all) {
     const today = toDateStr(new Date())
-    query = query.eq('status', 'active').gte('start_date', today)
+    baseQuery = baseQuery.eq('status', 'active').gte('start_date', today)
   }
 
-  const { data, error } = await query
+  if (all) {
+    const { data, error } = await supabase
+      .from('group_slot_batches')
+      .select('*, group_slot_sessions(*), group_slot_enrollments(id, status), teachers(name, teaching_languages)')
+      .order('start_date', { ascending: true })
+    if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
+    const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
+      ...b,
+      group_slot_sessions: (b.group_slot_sessions || []).sort(
+        (a, c) => a.session_date.localeCompare(c.session_date)
+      ),
+      enrollment_count: (b.group_slot_enrollments || []).filter(e => e.status === 'active').length,
+      group_slot_enrollments: undefined,
+    }))
+    return NextResponse.json({ batches })
+  }
+
+  const { data, error } = await baseQuery
   if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
 
-  // Attach enrollment counts (active only)
-  const batches = (data || []).map(b => ({
+  const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
     ...b,
-    group_slot_sessions: b.group_slot_sessions || [],
-    enrollment_count: (b.group_slot_enrollments || []).filter((e: { status: string }) => e.status === 'active').length,
+    group_slot_sessions: (b.group_slot_sessions || []).sort(
+      (a, c) => a.session_date.localeCompare(c.session_date)
+    ),
+    enrollment_count: (b.group_slot_enrollments || []).filter(e => e.status === 'active').length,
     group_slot_enrollments: undefined,
   }))
 
