@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { enUS, ru as ruLocale, et as etLocale } from 'date-fns/locale'
 import GroupSlotsTeacher from '@/components/teacher/GroupSlotsTeacher'
 import PremadeBatchesTeacher from '@/components/teacher/PremadeBatchesTeacher'
+import CourseSettingsTeacher from '@/components/teacher/CourseSettingsTeacher'
 
 type Lang = 'en' | 'ru' | 'et'
 
@@ -93,6 +94,9 @@ type User = { email: string; role: string; teacherId: string | null; name: strin
 export default function TeacherPage() {
   const [user, setUser] = useState<User | null>(null)
   const [teacherSubjects, setTeacherSubjects] = useState<string[]>([])
+  const [teachingLanguages, setTeachingLanguages] = useState<string[]>([])
+  const [subjectFormats, setSubjectFormats] = useState<Record<string, string[]>>({})
+  const [subjectLevels, setSubjectLevels] = useState<Record<string, string[]>>({})
   const [bookings, setBookings] = useState<Booking[]>([])
   const [lang, setLang] = useState<Lang>('en')
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
@@ -132,7 +136,14 @@ export default function TeacherPage() {
             .then(d => setBookings(d.bookings || []))
           fetch(`/api/teachers?id=${d.user.teacherId}`)
             .then(r => r.json())
-            .then(d => { if (d.teacher?.subjects) setTeacherSubjects(d.teacher.subjects) })
+            .then(d => {
+              if (d.teacher) {
+                if (d.teacher.subjects) setTeacherSubjects(d.teacher.subjects)
+                if (d.teacher.teaching_languages) setTeachingLanguages(d.teacher.teaching_languages)
+                if (d.teacher.subject_formats) setSubjectFormats(d.teacher.subject_formats)
+                if (d.teacher.subject_levels) setSubjectLevels(d.teacher.subject_levels)
+              }
+            })
           fetch(`/api/availability?teacherId=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => {
@@ -254,6 +265,20 @@ export default function TeacherPage() {
             {savingAvail ? t.saving : savedAvail ? t.saved : t.save}
           </button>
         </div>
+
+        {/* Course settings */}
+        {user?.teacherId && teacherSubjects.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <CourseSettingsTeacher
+              teacherId={user.teacherId}
+              subjects={teacherSubjects}
+              initialTeachingLanguages={teachingLanguages}
+              initialSubjectFormats={subjectFormats}
+              initialSubjectLevels={subjectLevels}
+              lang={lang}
+            />
+          </div>
+        )}
 
         {/* Group sessions */}
         {user?.teacherId && (

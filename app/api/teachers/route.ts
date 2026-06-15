@@ -30,11 +30,11 @@ export async function GET(req: NextRequest) {
   const teachingLang = searchParams.get('teachingLang')
   const ref = searchParams.get('ref')
 
-  // Single teacher lookup (used by teacher dashboard to get subjects)
+  // Single teacher lookup (used by teacher dashboard to get subjects + config)
   if (id) {
     const { data, error } = await getSupabaseAdmin()
       .from('teachers')
-      .select('id, name, subjects, teaching_languages')
+      .select('id, name, subjects, teaching_languages, subject_formats, subject_levels')
       .eq('id', id)
       .single()
     if (error || !data) return NextResponse.json({ teacher: null }, { status: 404 })
@@ -71,4 +71,26 @@ export async function GET(req: NextRequest) {
   })
 
   return NextResponse.json({ teachers })
+}
+
+export async function PATCH(req: NextRequest) {
+  const body = await req.json()
+  const { id, teaching_languages, subject_formats, subject_levels } = body
+
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const update: Record<string, unknown> = {}
+  if (teaching_languages !== undefined) update.teaching_languages = teaching_languages
+  if (subject_formats !== undefined) update.subject_formats = subject_formats
+  if (subject_levels !== undefined) update.subject_levels = subject_levels
+
+  if (Object.keys(update).length === 0) return NextResponse.json({ ok: true })
+
+  const { error } = await getSupabaseAdmin()
+    .from('teachers')
+    .update(update)
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: 'Failed to update teacher' }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }

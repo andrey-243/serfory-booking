@@ -54,6 +54,7 @@ const LABELS = {
     levels: 'levels',
     addSession: 'Add session',
     removeSession: 'Remove',
+    errorDateRange: 'All sessions must be in the same calendar month as the first session.',
   },
   ru: {
     title: 'Готовые курсы',
@@ -80,6 +81,7 @@ const LABELS = {
     levels: 'уровни',
     addSession: 'Добавить занятие',
     removeSession: 'Удалить',
+    errorDateRange: 'Все занятия должны быть в том же календарном месяце, что и первое.',
   },
   et: {
     title: 'Valmiskursused',
@@ -106,6 +108,7 @@ const LABELS = {
     levels: 'tasemed',
     addSession: 'Lisa tund',
     removeSession: 'Eemalda',
+    errorDateRange: 'Kõik tunnid peavad olema esimese tunniga samas kalendrikuus.',
   },
 }
 
@@ -147,6 +150,11 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-GB', {
     weekday: 'short', month: 'short', day: 'numeric',
   })
+}
+
+function lastDayOfMonth(firstDate: string): string {
+  const d = new Date(firstDate + 'T12:00:00Z')
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
 }
 
 function emptySession(): SessionDraft {
@@ -216,6 +224,17 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
     for (const s of sessions) {
       if (!s.name.trim() || !s.session_date || !s.start_time) { setFormError(t.errorFields); return }
     }
+    if (sessions.length > 1) {
+      const first = new Date(sessions[0].session_date + 'T12:00:00Z')
+      const refYear = first.getUTCFullYear()
+      const refMonth = first.getUTCMonth()
+      for (const s of sessions.slice(1)) {
+        const d = new Date(s.session_date + 'T12:00:00Z')
+        if (d.getUTCFullYear() !== refYear || d.getUTCMonth() !== refMonth) {
+          setFormError(t.errorDateRange); return
+        }
+      }
+    }
 
     setCreating(true)
     setFormError(null)
@@ -269,7 +288,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Chemistry Basics"
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -283,7 +302,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                     setTargetLevels(prev => prev.filter(l => !CEFR_LEVELS.includes(l)))
                   }
                 }}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {subjects.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -297,7 +316,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                 step={15}
                 value={durationMin}
                 onChange={e => setDurationMin(Number(e.target.value))}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -334,19 +353,21 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                     value={s.name}
                     onChange={e => updateSession(i, 'name', e.target.value)}
                     placeholder={`Session ${i + 1}`}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     type="date"
                     value={s.session_date}
+                    min={sessions[0]?.session_date || undefined}
+                    max={sessions[0]?.session_date ? lastDayOfMonth(sessions[0].session_date) : undefined}
                     onChange={e => updateSession(i, 'session_date', e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     type="time"
                     value={s.start_time}
                     onChange={e => updateSession(i, 'start_time', e.target.value)}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button
                     type="button"

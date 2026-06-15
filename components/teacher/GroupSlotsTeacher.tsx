@@ -40,6 +40,11 @@ const LABELS = {
     empty: 'No group batches yet.',
     maxReached: 'Max 3 future batches for this subject.',
     errorGeneric: 'Failed to create batch.',
+    prelockDesc: 'Auto-reserved slot. Edit dates if needed, then activate to create calendar events.',
+    activate: 'Activate',
+    activating: 'Activating…',
+    saveAndActivate: 'Save & activate',
+    errorActivate: 'Failed to activate batch.',
   },
   ru: {
     title: 'Групповые занятия',
@@ -58,6 +63,11 @@ const LABELS = {
     empty: 'Групповых батчей нет.',
     maxReached: 'Максимум 3 будущих батча для этого предмета.',
     errorGeneric: 'Не удалось создать батч.',
+    prelockDesc: 'Автозарезервированный слот. Измените даты при необходимости, затем активируйте.',
+    activate: 'Активировать',
+    activating: 'Активация…',
+    saveAndActivate: 'Сохранить и активировать',
+    errorActivate: 'Не удалось активировать батч.',
   },
   et: {
     title: 'Grupitunnid',
@@ -76,6 +86,11 @@ const LABELS = {
     empty: 'Grupitunde pole veel.',
     maxReached: 'Maksimaalselt 3 tulevast gruppi selle aine jaoks.',
     errorGeneric: 'Grupi loomine ebaõnnestus.',
+    prelockDesc: 'Automaatselt reserveeritud aeg. Muutke kuupäevi vajadusel, seejärel aktiveerige.',
+    activate: 'Aktiveeri',
+    activating: 'Aktiveerimine…',
+    saveAndActivate: 'Salvesta ja aktiveeri',
+    errorActivate: 'Grupi aktiveerimine ebaõnnestus.',
   },
 }
 
@@ -107,6 +122,8 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
     start_date: today,
     start_time: '17:00',
   })
+  // Prelock edit state: batchId → { start_date, start_time, activating, error }
+  const [prelockEdits, setPrelockEdits] = useState<Record<string, { start_date: string; start_time: string; activating: boolean; error: string | null }>>({})
 
   function loadBatches() {
     setLoading(true)
@@ -142,6 +159,35 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
     }
   }
 
+  function initPrelockEdit(batch: Batch) {
+    setPrelockEdits(prev => ({
+      ...prev,
+      [batch.id]: prev[batch.id] ?? { start_date: batch.start_date, start_time: batch.start_time, activating: false, error: null },
+    }))
+  }
+
+  async function handleActivate(batchId: string) {
+    const edit = prelockEdits[batchId]
+    if (!edit) return
+    setPrelockEdits(prev => ({ ...prev, [batchId]: { ...prev[batchId], activating: true, error: null } }))
+    try {
+      const res = await fetch('/api/group-slots', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: batchId, start_date: edit.start_date, start_time: edit.start_time, activate: true }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setPrelockEdits(prev => ({ ...prev, [batchId]: { ...prev[batchId], activating: false, error: d.error || t.errorActivate } }))
+        return
+      }
+      setExpanded(null)
+      loadBatches()
+    } catch {
+      setPrelockEdits(prev => ({ ...prev, [batchId]: { ...prev[batchId], activating: false, error: t.errorActivate } }))
+    }
+  }
+
   const futureBatches = batches.filter(b => b.status !== 'completed' && b.status !== 'cancelled')
   const pastBatches = batches.filter(b => b.status === 'completed' || b.status === 'cancelled')
 
@@ -168,7 +214,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
               <select
                 value={form.subject}
                 onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {subjects.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -180,7 +226,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
                 min={today}
                 value={form.start_date}
                 onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -189,7 +235,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
                 type="time"
                 value={form.start_time}
                 onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -224,7 +270,11 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
             <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div
                 className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
-                onClick={() => setExpanded(expanded === batch.id ? null : batch.id)}
+                onClick={() => {
+                  const next = expanded === batch.id ? null : batch.id
+                  setExpanded(next)
+                  if (next && batch.status === 'prelock') initPrelockEdit(batch)
+                }}
               >
                 <div className="flex items-center gap-3">
                   <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[batch.status]}`}>
@@ -244,7 +294,46 @@ export default function GroupSlotsTeacher({ teacherId, subjects, lang }: Props) 
                 </div>
               </div>
 
-              {expanded === batch.id && (
+              {expanded === batch.id && batch.status === 'prelock' && (() => {
+                const edit = prelockEdits[batch.id]
+                if (!edit) return null
+                return (
+                  <div className="border-t border-amber-100 bg-amber-50/40 px-4 py-3 flex flex-col gap-3">
+                    <p className="text-xs text-amber-700">{t.prelockDesc}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-medium text-gray-500">{t.startDate}</label>
+                        <input
+                          type="date"
+                          min={today}
+                          value={edit.start_date}
+                          onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_date: e.target.value } }))}
+                          className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-medium text-gray-500">{t.startTime}</label>
+                        <input
+                          type="time"
+                          value={edit.start_time}
+                          onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_time: e.target.value } }))}
+                          className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    {edit.error && <p className="text-xs text-red-600">{edit.error}</p>}
+                    <button
+                      onClick={() => handleActivate(batch.id)}
+                      disabled={edit.activating || !edit.start_date || !edit.start_time}
+                      className="self-start px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                    >
+                      {edit.activating ? t.activating : t.saveAndActivate}
+                    </button>
+                  </div>
+                )
+              })()}
+
+              {expanded === batch.id && batch.status !== 'prelock' && (
                 <div className="border-t border-gray-100 px-4 py-3">
                   <p className="text-xs font-medium text-gray-500 mb-2">{t.sessions}</p>
                   <div className="grid grid-cols-2 gap-1.5">

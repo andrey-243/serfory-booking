@@ -193,3 +193,93 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ batch: { ...batch, sessions: createdSessions } }, { status: 201 })
 }
+
+// PATCH /api/group-slots
+// Body: { id, start_date?, start_time?, activate? }
+// Allows teacher to edit date/time of a prelock batch and optionally activate it (creates GCal events)
+export async function PATCH(req: NextRequest) {
+  const session = await verifySession(req.cookies.get('session')?.value ?? '')
+  if (!session || session.role !== 'teacher') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await req.json()
+  const { id, start_date, start_time, activate } = body
+
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const supabase = getSupabaseAdmin()
+
+  const { data: batch, error: fetchErr } = await supabase
+    .from('group_slot_batches')
+    .select('*, group_slot_sessions(*)')
+    .eq('id', id)
+    .single()
+
+  if (fetchErr || !batch) return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
+  if (batch.teacher_id !== session.teacherId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (batch.status !== 'prelock') return NextResponse.json({ error: 'Only prelock batches can be edited' }, { status: 422 })
+
+  const newStartDate = start_date ?? batch.start_date
+  const newStartTime = start_time ?? batch.start_time
+
+  // Recompute sessions if start_date or start_time changed
+  const dateChanged = newStartDate !== batch.start_date || newStartTime !== batch.start_time
+  if (dateChanged) {
+    const startDateObj = new Date(`${newStartDate}T12:00:00Z`)
+    const day_of_week = startDateObj.getUTCDay()
+
+    await supabase.from('group_slot_batches')
+      .update({ start_date: newStartDate, start_time: newStartTime, day_of_week })
+      .eq('id', id)
+
+    // Rebuild 4 sessions
+    await supabase.from('group_slot_sessions').delete().eq('batch_id', id)
+    const newSessions = [0, 7, 14, 21].map(offset => {
+      const d = new Date(startDateObj)
+      d.setUTCDate(d.getUTCDate() + offset)
+      return { batch_id: id, session_date: toDateStr(d), start_time: newStartTime }
+    })
+    await supabase.from('group_slot_sessions').insert(newSessions)
+  }
+
+  if (!activate) return NextResponse.json({ ok: true })
+
+  // Activate: status → active, create GCal events
+  await supabase.from('group_slot_batches').update({ status: 'active' }).eq('id', id)
+
+  const { data: sessions } = await supabase
+    .from('group_slot_sessions')
+    .select('*')
+    .eq('batch_id', id)
+
+  const { data: teacher } = await supabase
+    .from('teachers')
+    .select('google_refresh_token, google_calendar_id, name')
+    .eq('id', batch.teacher_id)
+    .single()
+
+  if (teacher?.google_refresh_token && sessions) {
+    for (const s of sessions) {
+      try {
+        const eventId = await createGroupSessionEvent(
+          teacher.google_refresh_token,
+          teacher.google_calendar_id || 'primary',
+          {
+            subject: batch.subject,
+            teacherName: teacher.name,
+            sessionDate: s.session_date,
+            startTime: s.start_time,
+            durationMinutes: batch.duration_minutes,
+            sessionId: s.id,
+          }
+        )
+        if (eventId) await supabase.from('group_slot_sessions').update({ gcal_event_id: eventId }).eq('id', s.id)
+      } catch {
+        // Non-blocking
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true })
+}
