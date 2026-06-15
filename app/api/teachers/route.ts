@@ -90,6 +90,37 @@ export async function PATCH(req: NextRequest) {
 
   const { data: teacher } = await supabase.from('teachers').select('name').eq('id', id).single()
 
+  // If subject_formats changed, find subjects where 'group' was removed → delete prelocks
+  if (subject_formats !== undefined) {
+    const { data: current } = await supabase
+      .from('teachers')
+      .select('subject_formats')
+      .eq('id', id)
+      .single()
+
+    const oldFormats = (current?.subject_formats ?? {}) as Record<string, string[]>
+    const newFormats = subject_formats as Record<string, string[]>
+
+    const subjectsLostGroup = Object.keys(oldFormats).filter(
+      s => oldFormats[s]?.includes('group') && !newFormats[s]?.includes('group')
+    )
+
+    if (subjectsLostGroup.length > 0) {
+      const { data: prelocks } = await supabase
+        .from('group_slot_batches')
+        .select('id')
+        .eq('teacher_id', id)
+        .eq('status', 'prelock')
+        .in('subject', subjectsLostGroup)
+
+      if (prelocks && prelocks.length > 0) {
+        const prelockIds = prelocks.map(p => p.id)
+        await supabase.from('group_slot_sessions').delete().in('batch_id', prelockIds)
+        await supabase.from('group_slot_batches').delete().in('id', prelockIds)
+      }
+    }
+  }
+
   const { error } = await supabase.from('teachers').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: 'Failed to update teacher' }, { status: 500 })
 

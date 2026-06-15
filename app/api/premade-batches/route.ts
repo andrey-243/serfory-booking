@@ -20,24 +20,29 @@ export async function GET(req: NextRequest) {
 
   const supabase = getSupabaseAdmin()
 
+  type EnrolledStudent = { status: string; applications: { id: string; name: string; email: string; phone: string; telegram_username: string | null; telegram_chat_id: number | null; contact_pref: string } | null }
   type RawBatch = Record<string, unknown> & {
     premade_sessions: { session_date: string; [k: string]: unknown }[]
-    premade_enrollments: { status: string }[]
+    premade_enrollments: EnrolledStudent[]
     teachers?: { name: string; teaching_languages: string[] | null } | null
   }
 
   if (all) {
     const { data, error } = await supabase
       .from('premade_batches')
-      .select('*, premade_sessions(*), premade_enrollments(id, status), teachers(name, teaching_languages)')
+      .select('*, premade_sessions(*), premade_enrollments(id, status, applications(id, name, email, phone, telegram_username, telegram_chat_id, contact_pref)), teachers(name, teaching_languages)')
       .order('created_at', { ascending: false })
     if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
-    const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
-      ...b,
-      premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
-      enrollment_count: (b.premade_enrollments || []).filter(e => e.status === 'active').length,
-      premade_enrollments: undefined,
-    }))
+    const batches = ((data || []) as unknown as RawBatch[]).map(b => {
+      const activeEnrollments = (b.premade_enrollments || []).filter(e => e.status === 'active')
+      return {
+        ...b,
+        premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
+        enrollment_count: activeEnrollments.length,
+        enrolled_students: activeEnrollments.map(e => e.applications).filter(Boolean),
+        premade_enrollments: undefined,
+      }
+    })
     return NextResponse.json({ batches })
   }
 

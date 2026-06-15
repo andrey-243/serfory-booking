@@ -26,9 +26,10 @@ export async function GET(req: NextRequest) {
 
   const supabase = getSupabaseAdmin()
 
+  type EnrolledStudent = { status: string; applications: { id: string; name: string; email: string; phone: string; telegram_username: string | null; telegram_chat_id: number | null; contact_pref: string } | null }
   type RawBatch = Record<string, unknown> & {
     group_slot_sessions: { session_date: string; [k: string]: unknown }[]
-    group_slot_enrollments: { status: string }[]
+    group_slot_enrollments: EnrolledStudent[]
     teachers?: { name: string; teaching_languages: string[] | null } | null
   }
 
@@ -47,17 +48,21 @@ export async function GET(req: NextRequest) {
   if (all) {
     const { data, error } = await supabase
       .from('group_slot_batches')
-      .select('*, group_slot_sessions(*), group_slot_enrollments(id, status), teachers(name, teaching_languages)')
+      .select('*, group_slot_sessions(*), group_slot_enrollments(id, status, applications(id, name, email, phone, telegram_username, telegram_chat_id, contact_pref)), teachers(name, teaching_languages)')
       .order('start_date', { ascending: true })
     if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
-    const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
-      ...b,
-      group_slot_sessions: (b.group_slot_sessions || []).sort(
-        (a, c) => a.session_date.localeCompare(c.session_date)
-      ),
-      enrollment_count: (b.group_slot_enrollments || []).filter(e => e.status === 'active').length,
-      group_slot_enrollments: undefined,
-    }))
+    const batches = ((data || []) as unknown as RawBatch[]).map(b => {
+      const activeEnrollments = (b.group_slot_enrollments || []).filter(e => e.status === 'active')
+      return {
+        ...b,
+        group_slot_sessions: (b.group_slot_sessions || []).sort(
+          (a, c) => a.session_date.localeCompare(c.session_date)
+        ),
+        enrollment_count: activeEnrollments.length,
+        enrolled_students: activeEnrollments.map(e => e.applications).filter(Boolean),
+        group_slot_enrollments: undefined,
+      }
+    })
     return NextResponse.json({ batches })
   }
 
@@ -77,7 +82,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/group-slots
-// Body: { teacher_id, subject, start_date (YYYY-MM-DD), start_time (HH:MM), duration_minutes?, max_students? }
+// Body: { teacher_id, subject, teaching_language, target_levels, start_date (YYYY-MM-DD), start_time (HH:MM), duration_minutes?, max_students? }
 // Auth: teacher session required
 export async function POST(req: NextRequest) {
   const session = await verifySession(req.cookies.get('session')?.value ?? '')
@@ -86,9 +91,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { teacher_id, subject, start_date, start_time, duration_minutes = 60, max_students = 6 } = body
+  const { teacher_id, subject, teaching_language, target_levels, start_date, start_time, duration_minutes = 60, max_students = 6 } = body
 
-  if (!teacher_id || !subject || !start_date || !start_time) {
+  if (!teacher_id || !subject || !start_date || !start_time || !teaching_language || !target_levels?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   if (session.teacherId !== teacher_id) {
@@ -121,7 +126,7 @@ export async function POST(req: NextRequest) {
   // Create batch
   const { data: batch, error: batchErr } = await supabase
     .from('group_slot_batches')
-    .insert({ teacher_id, subject, start_date, day_of_week, start_time, duration_minutes, max_students, status: 'active' })
+    .insert({ teacher_id, subject, teaching_language, target_levels, start_date, day_of_week, start_time, duration_minutes, max_students, status: 'active' })
     .select()
     .single()
 

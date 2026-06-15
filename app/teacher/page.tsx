@@ -286,6 +286,9 @@ export default function TeacherPage() {
             <GroupSlotsTeacher
               teacherId={user.teacherId}
               subjects={teacherSubjects}
+              subjectFormats={subjectFormats}
+              subjectLevels={subjectLevels}
+              teachingLanguages={teachingLanguages}
               lang={lang}
             />
           </div>
@@ -297,6 +300,7 @@ export default function TeacherPage() {
             <PremadeBatchesTeacher
               teacherId={user.teacherId}
               subjects={teacherSubjects}
+              subjectFormats={subjectFormats}
               lang={lang}
               teachingLanguages={teachingLanguages}
             />
