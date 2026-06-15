@@ -434,6 +434,17 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const activeBatches = batches.filter(b => b.status === 'active')
   const pastBatches = batches.filter(b => b.status !== 'active')
 
+  // Group by subject × lang × level
+  const groupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: PremadeBatch[] }>()
+  for (const batch of [...activeBatches, ...pastBatches]) {
+    const key = `${batch.subject}||${batch.teaching_language ?? ''}||${[...(batch.target_levels || [])].sort().join(',')}`
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { subject: batch.subject, lang: batch.teaching_language ?? '', levels: batch.target_levels || [], batches: [] })
+    }
+    groupMap.get(key)!.batches.push(batch)
+  }
+  const premadeGroups = [...groupMap.values()]
+
   return (
     <div className="flex flex-col gap-4">
       {/* Confirmation modal */}
@@ -678,11 +689,29 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
         <div className="flex flex-col gap-2">
           {[1, 2].map(i => <div key={i} className="h-14 rounded-xl bg-gray-200/70 animate-pulse" />)}
         </div>
-      ) : activeBatches.length === 0 && pastBatches.length === 0 ? (
+      ) : premadeGroups.length === 0 ? (
         <p className="text-sm text-gray-400">{t.empty}</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {[...activeBatches, ...pastBatches].map(batch => (
+        <div className="flex flex-col gap-5">
+          {premadeGroups.map(group => (
+            <div key={`${group.subject}||${group.lang}||${group.levels.sort().join(',')}`} className="flex flex-col gap-2">
+              {/* Group header: Subject · LANG · Level */}
+              <div className="flex items-center gap-2 px-0.5">
+                <span className="text-sm font-semibold text-gray-900">{group.subject}</span>
+                {group.lang && (
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold ${LANG_COLORS[group.lang] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {LANG_LABELS[group.lang] ?? group.lang}
+                  </span>
+                )}
+                {group.levels.length > 0 && (
+                  <span className="text-xs font-medium text-gray-500">
+                    {group.levels.map(l => gl[l] ?? l).join(', ')}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+          {group.batches.map(batch => (
             <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div
                 className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
@@ -697,19 +726,8 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                     {t[batch.status as 'active' | 'completed' | 'cancelled']}
                   </span>
                   <span className="text-sm font-medium text-gray-900 truncate">{batch.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{batch.subject}</span>
-                  {batch.target_levels.length > 0 && (
-                    <span className="text-xs text-gray-400 flex-shrink-0">
-                      {batch.target_levels.map(l => gl[l] ?? l).join(', ')}
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  {batch.teaching_language && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${LANG_COLORS[batch.teaching_language] ?? 'bg-gray-100 text-gray-500'}`}>
-                      {LANG_LABELS[batch.teaching_language] ?? batch.teaching_language.toUpperCase()}
-                    </span>
-                  )}
                   <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
                   <span className="text-xs text-gray-400">{batch.premade_sessions.length} {t.sessions.toLowerCase()}</span>
                   <svg
@@ -804,6 +822,9 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                   </div>
                 )
               })()}
+            </div>
+          ))}
+              </div>
             </div>
           ))}
         </div>

@@ -74,7 +74,9 @@ const LABELS = {
     active: 'Active',
     completed: 'Completed',
     cancelled: 'Cancelled',
-    spots: (n: number, max: number) => `${n}/${max} enrolled`,
+    prelock: 'Auto-preset',
+    prelockHint: 'Slot reserved automatically — set the date and activate when ready.',
+    spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 sessions:',
     empty: 'No group batches yet.',
     maxReached: 'Max 5 future batches for this subject.',
@@ -104,7 +106,9 @@ const LABELS = {
     active: 'Активна',
     completed: 'Завершена',
     cancelled: 'Отменена',
-    spots: (n: number, max: number) => `${n}/${max} записано`,
+    prelock: 'Авто-пресет',
+    prelockHint: 'Слот зарезервирован автоматически — установите дату и активируйте.',
+    spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 занятия:',
     empty: 'Групп пока нет.',
     maxReached: 'Максимум 5 будущих групп для этого предмета.',
@@ -116,7 +120,7 @@ const LABELS = {
     editDates: 'Изменить даты',
     cancelEdit: 'Отмена',
     confirmTitle: 'Подтвердить создание',
-    confirmBody: 'После создания группу нельзя удалить. Записанные студенты займут эти слоты навсегда. Убедитесь, что все данные верны и эти временные слоты будут посвящены этому курсу.',
+    confirmBody: 'После создания группу нельзя удалить. Записанные студенты займут эти слоты навсегда. Убедитесь, что все данные верны.',
     confirmReview: 'Проверить',
     confirmCreate: 'Подтвердить и создать',
     disabledHint: 'Формат группы отключён для этого предмета.',
@@ -134,7 +138,9 @@ const LABELS = {
     active: 'Aktiivne',
     completed: 'Lõpetatud',
     cancelled: 'Tühistatud',
-    spots: (n: number, max: number) => `${n}/${max} registreeritud`,
+    prelock: 'Automaatne',
+    prelockHint: 'Koht reserveeritud automaatselt — määrake kuupäev ja aktiveerige.',
+    spots: (n: number, max: number) => `${n}/${max}`,
     sessions: '4 tundi:',
     empty: 'Gruppe pole veel.',
     maxReached: 'Maksimaalselt 5 tulevast gruppi selle aine jaoks.',
@@ -146,7 +152,7 @@ const LABELS = {
     editDates: 'Muuda kuupäevi',
     cancelEdit: 'Tühista',
     confirmTitle: 'Kinnita loomine',
-    confirmBody: 'Pärast loomist ei saa gruppi kustutada. Registreeritud õpilased hoiavad neid aegu jäädavalt. Veenduge, et kõik andmed on õiged ja need ajad on pühendatud sellele kursusele.',
+    confirmBody: 'Pärast loomist ei saa gruppi kustutada. Registreeritud õpilased hoiavad neid aegu jäädavalt.',
     confirmReview: 'Vaata üle',
     confirmCreate: 'Kinnita ja loo',
     disabledHint: 'Grupi vorming on selle aine jaoks keelatud.',
@@ -159,10 +165,8 @@ function formatDate(dateStr: string): string {
   })
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-100 text-green-700',
-  completed: 'bg-gray-100 text-gray-500',
-  cancelled: 'bg-red-100 text-red-600',
+function batchGroupKey(batch: Batch): string {
+  return `${batch.subject}||${batch.teaching_language ?? ''}||${[...(batch.target_levels || [])].sort().join(',')}`
 }
 
 export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats, subjectLevels, teachingLanguages, lang }: Props) {
@@ -186,8 +190,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   const [formDate, setFormDate] = useState(today)
   const [formTime, setFormTime] = useState('17:00')
 
-  // Prelock edit state
-  const [prelockEdits, setPrelockEdits] = useState<Record<string, { start_date: string; start_time: string; activating: boolean; error: string | null; editMode: boolean }>>({})
+  const [prelockEdits, setPrelockEdits] = useState<Record<string, { start_date: string; start_time: string; activating: boolean; error: string | null }>>({})
 
   const isLang = LANG_SUBJECTS.includes(formSubject)
   const availableLevels = isLang ? (levelMode === 'cefr' ? CEFR_LEVELS : ALL_GRADES) : ALL_GRADES
@@ -267,7 +270,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   function initPrelockEdit(batch: Batch) {
     setPrelockEdits(prev => ({
       ...prev,
-      [batch.id]: prev[batch.id] ?? { start_date: batch.start_date, start_time: batch.start_time, activating: false, error: null, editMode: false },
+      [batch.id]: prev[batch.id] ?? { start_date: batch.start_date, start_time: batch.start_time, activating: false, error: null },
     }))
   }
 
@@ -293,8 +296,19 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
     }
   }
 
-  const futureBatches = batches.filter(b => b.status !== 'completed' && b.status !== 'cancelled')
+  // Build groups: subject × lang × level
+  const allBatches = batches.filter(b => b.status !== 'completed' && b.status !== 'cancelled')
   const pastBatches = batches.filter(b => b.status === 'completed' || b.status === 'cancelled')
+
+  const groupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: Batch[] }>()
+  for (const batch of [...allBatches, ...pastBatches]) {
+    const key = batchGroupKey(batch)
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { subject: batch.subject, lang: batch.teaching_language ?? '', levels: batch.target_levels || [], batches: [] })
+    }
+    groupMap.get(key)!.batches.push(batch)
+  }
+  const groups = [...groupMap.values()]
 
   const groupEnabledForSubject = (s: string) => subjectFormats[s]?.includes('group') ?? false
   const anyGroupEnabled = subjects.some(s => groupEnabledForSubject(s))
@@ -323,16 +337,10 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                 ))}
               </div>
               <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setShowConfirm(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors"
-                >
+                <button onClick={() => setShowConfirm(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors">
                   {t.confirmReview}
                 </button>
-                <button
-                  onClick={handleCreate}
-                  className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
+                <button onClick={handleCreate} className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
                   {t.confirmCreate}
                 </button>
               </div>
@@ -358,7 +366,6 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
 
       {showForm && (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
-          {/* Row 1: subject + language */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">{t.subject}</label>
@@ -383,7 +390,6 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
             </div>
           </div>
 
-          {/* Row 2: date + time */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">{t.startDate} <span className="text-red-400">*</span></label>
@@ -406,7 +412,6 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
             </div>
           </div>
 
-          {/* Target levels */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
               <label className="text-xs font-medium text-gray-500">{t.targetLevels} <span className="text-red-400">*</span></label>
@@ -464,121 +469,150 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
         <div className="flex flex-col gap-2">
           {[1, 2].map(i => <div key={i} className="h-16 rounded-xl bg-gray-200/70 animate-pulse" />)}
         </div>
-      ) : futureBatches.length === 0 && pastBatches.length === 0 ? (
+      ) : groups.length === 0 ? (
         <p className="text-sm text-gray-400">{t.empty}</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {[...futureBatches, ...pastBatches].map(batch => {
-            const edit = prelockEdits[batch.id]
-            const isPrelock = batch.status === 'prelock'
-            return (
-              <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div
-                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
-                  onClick={() => {
-                    const next = expanded === batch.id ? null : batch.id
-                    setExpanded(next)
-                    if (next && isPrelock) initPrelockEdit(batch)
-                  }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {/* No prelock label — only show status for active/completed/cancelled */}
-                    {!isPrelock && STATUS_COLORS[batch.status] && (
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[batch.status]}`}>
-                        {t[batch.status as keyof typeof t] as string}
-                      </span>
-                    )}
-                    {isPrelock && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">
-                        <svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        {edit?.editMode ? t.editDates : '·'}
-                      </span>
-                    )}
-                    <span className="text-sm font-medium text-gray-900">{batch.subject}</span>
-                    {batch.teaching_language && (
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded font-semibold ${LANG_COLORS[batch.teaching_language] ?? 'bg-gray-100 text-gray-500'}`}>
-                        {LANG_LABELS[batch.teaching_language] ?? batch.teaching_language}
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-500">{formatDate(batch.start_date)} · {batch.start_time.slice(0, 5)}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
-                    <svg
-                      className={`w-4 h-4 text-gray-400 transition-transform ${expanded === batch.id ? 'rotate-180' : ''}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-
-                {expanded === batch.id && isPrelock && (() => {
-                  if (!edit) return null
-                  return (
-                    <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-3 flex flex-col gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[11px] font-medium text-gray-500">{t.startDate}</label>
-                          <input
-                            type="date"
-                            min={today}
-                            value={edit.start_date}
-                            onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_date: e.target.value } }))}
-                            className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[11px] font-medium text-gray-500">{t.startTime}</label>
-                          <input
-                            type="time"
-                            value={edit.start_time}
-                            onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_time: e.target.value } }))}
-                            className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-                      {edit.error && <p className="text-xs text-red-600">{edit.error}</p>}
-                      <button
-                        onClick={() => handleActivate(batch.id)}
-                        disabled={edit.activating || !edit.start_date || !edit.start_time}
-                        className="self-start px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                      >
-                        {edit.activating ? t.activating : t.saveAndActivate}
-                      </button>
-                    </div>
-                  )
-                })()}
-
-                {expanded === batch.id && !isPrelock && (
-                  <div className="border-t border-gray-100 px-4 py-3">
-                    {batch.target_levels?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {batch.target_levels.map(l => (
-                          <span key={l} className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">{l}</span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs font-medium text-gray-500 mb-2">{t.sessions}</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {batch.group_slot_sessions
-                        .sort((a, b) => a.session_date.localeCompare(b.session_date))
-                        .map((s, i) => (
-                          <div key={s.id} className="flex items-center gap-2 text-xs text-gray-600">
-                            <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
-                              {i + 1}
-                            </span>
-                            {formatDate(s.session_date)}, {s.start_time.slice(0, 5)}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
+        <div className="flex flex-col gap-5">
+          {groups.map(group => (
+            <div key={`${group.subject}||${group.lang}||${group.levels.sort().join(',')}`} className="flex flex-col gap-2">
+              {/* Group header: Subject · LANG · Level — all inline */}
+              <div className="flex items-center gap-2 px-0.5">
+                <span className="text-sm font-semibold text-gray-900">{group.subject}</span>
+                {group.lang && (
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold ${LANG_COLORS[group.lang] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {LANG_LABELS[group.lang] ?? group.lang}
+                  </span>
+                )}
+                {group.levels.length > 0 && (
+                  <span className="text-xs font-medium text-gray-500">
+                    {group.levels.map(l => gl[l] ?? l).join(', ')}
+                  </span>
                 )}
               </div>
-            )
-          })}
+
+              {/* Batches in this group */}
+              <div className="flex flex-col gap-1.5">
+                {group.batches.map(batch => {
+                  const edit = prelockEdits[batch.id]
+                  const isPrelock = batch.status === 'prelock'
+                  const isExpanded = expanded === batch.id
+
+                  return (
+                    <div key={batch.id} className={`border rounded-xl overflow-hidden ${isPrelock ? 'bg-gray-50 border-dashed border-gray-300' : 'bg-white border-gray-200'}`}>
+                      {/* Row */}
+                      <div
+                        className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isPrelock ? 'hover:bg-gray-100/70' : 'hover:bg-gray-50'}`}
+                        onClick={() => {
+                          const next = expanded === batch.id ? null : batch.id
+                          setExpanded(next)
+                          if (next && isPrelock) initPrelockEdit(batch)
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {isPrelock ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-600 border border-amber-200 flex-shrink-0">
+                              {t.prelock}
+                            </span>
+                          ) : (
+                            batch.status === 'active' && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex-shrink-0">
+                                {t.active}
+                              </span>
+                            )
+                          )}
+                          {batch.status === 'completed' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 flex-shrink-0">
+                              {t.completed}
+                            </span>
+                          )}
+                          {batch.status === 'cancelled' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600 flex-shrink-0">
+                              {t.cancelled}
+                            </span>
+                          )}
+                          <span className="text-sm text-gray-700">
+                            {formatDate(batch.start_date)} · {batch.start_time.slice(0, 5)}
+                          </span>
+                          {isPrelock && (
+                            <span className="text-xs text-gray-400 truncate hidden sm:block">{t.prelockHint}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          {!isPrelock && (
+                            <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
+                          )}
+                          <svg
+                            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Prelock: inline hint on mobile (shown in expand) + edit fields */}
+                      {isExpanded && isPrelock && (() => {
+                        if (!edit) return null
+                        return (
+                          <div className="border-t border-dashed border-gray-200 bg-amber-50/40 px-4 py-3 flex flex-col gap-3">
+                            <p className="text-xs text-amber-700 sm:hidden">{t.prelockHint}</p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[11px] font-medium text-gray-500">{t.startDate}</label>
+                                <input
+                                  type="date"
+                                  min={today}
+                                  value={edit.start_date}
+                                  onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_date: e.target.value } }))}
+                                  className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[11px] font-medium text-gray-500">{t.startTime}</label>
+                                <input
+                                  type="time"
+                                  value={edit.start_time}
+                                  onChange={e => setPrelockEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], start_time: e.target.value } }))}
+                                  className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                            {edit.error && <p className="text-xs text-red-600">{edit.error}</p>}
+                            <button
+                              onClick={() => handleActivate(batch.id)}
+                              disabled={edit.activating || !edit.start_date || !edit.start_time}
+                              className="self-start px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                            >
+                              {edit.activating ? t.activating : t.saveAndActivate}
+                            </button>
+                          </div>
+                        )
+                      })()}
+
+                      {/* Active: sessions list */}
+                      {isExpanded && !isPrelock && (
+                        <div className="border-t border-gray-100 px-4 py-3">
+                          <p className="text-xs font-medium text-gray-500 mb-2">{t.sessions}</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {batch.group_slot_sessions
+                              .sort((a, b) => a.session_date.localeCompare(b.session_date))
+                              .map((s, i) => (
+                                <div key={s.id} className="flex items-center gap-2 text-xs text-gray-600">
+                                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
+                                    {i + 1}
+                                  </span>
+                                  {formatDate(s.session_date)}, {s.start_time.slice(0, 5)}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
