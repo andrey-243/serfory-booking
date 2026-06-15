@@ -35,6 +35,7 @@ const LABELS = {
     batchName: 'Course name',
     subject: 'Subject',
     duration: 'Duration (min)',
+    language: 'Language',
     targetLevels: 'Target levels',
     nbSessions: 'Number of sessions',
     sessions: 'Sessions',
@@ -66,6 +67,7 @@ const LABELS = {
     batchName: 'Название курса',
     subject: 'Предмет',
     duration: 'Длительность (мин)',
+    language: 'Язык',
     targetLevels: 'Целевые уровни',
     nbSessions: 'Количество занятий',
     sessions: 'Занятия',
@@ -97,6 +99,7 @@ const LABELS = {
     batchName: 'Kursuse nimi',
     subject: 'Aine',
     duration: 'Kestus (min)',
+    language: 'Keel',
     targetLevels: 'Sihttasemed',
     nbSessions: 'Tundide arv',
     sessions: 'Tunnid',
@@ -136,6 +139,7 @@ type PremadeBatch = {
   id: string
   name: string
   subject: string
+  teaching_language: string | null
   target_levels: string[]
   duration_min: number
   max_students: number
@@ -201,6 +205,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const [subject, setSubject] = useState(subjects[0] || '')
   const [durationMin, setDurationMin] = useState(60)
   const [targetLevels, setTargetLevels] = useState<string[]>([])
+  const [teachingLanguage, setTeachingLanguage] = useState<string>(teachingLanguages[0] ?? '')
   const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(), emptySession()])
 
   const isLang = LANG_SUBJECTS.includes(subject)
@@ -230,6 +235,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
     setSubject(subjects[0] || '')
     setDurationMin(60)
     setTargetLevels([])
+    setTeachingLanguage(teachingLanguages[0] ?? '')
     setSessions([emptySession(), emptySession()])
     setFormError(null)
   }
@@ -239,6 +245,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
     setSubject(batch.subject)
     setDurationMin(batch.duration_min)
     setTargetLevels(batch.target_levels)
+    setTeachingLanguage(batch.teaching_language ?? teachingLanguages[0] ?? '')
     setSessions(
       batch.premade_sessions
         .slice()
@@ -304,7 +311,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       const res = await fetch('/api/premade-batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacher_id: teacherId, name: name.trim(), subject, target_levels: targetLevels, duration_min: durationMin, sessions }),
+        body: JSON.stringify({ teacher_id: teacherId, name: name.trim(), subject, teaching_language: teachingLanguage, target_levels: targetLevels, duration_min: durationMin, sessions }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -341,9 +348,9 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
 
       {showForm && (
         <div ref={formRef} className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-col gap-4">
-          {/* Row 1: name + subject + duration */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1 col-span-1">
+          {/* Row 1: name + subject + duration + language */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="flex flex-col gap-1 col-span-2">
               <label className="text-xs font-medium text-gray-500">{t.batchName}</label>
               <input
                 type="text"
@@ -380,6 +387,25 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                 onChange={e => setDurationMin(Number(e.target.value))}
                 className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">{t.language}</label>
+              <div className="flex gap-1.5 flex-wrap pt-0.5">
+                {teachingLanguages.map(l => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setTeachingLanguage(l)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      teachingLanguage === l
+                        ? (LANG_COLORS[l] ?? 'bg-blue-500 text-white border-blue-500') + ' border-transparent'
+                        : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {LANG_LABELS[l] ?? l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -505,14 +531,10 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  {teachingLanguages.length > 0 && (
-                    <div className="flex gap-1">
-                      {teachingLanguages.map(l => (
-                        <span key={l} className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${LANG_COLORS[l] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {LANG_LABELS[l] ?? l.toUpperCase()}
-                        </span>
-                      ))}
-                    </div>
+                  {batch.teaching_language && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${LANG_COLORS[batch.teaching_language] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {LANG_LABELS[batch.teaching_language] ?? batch.teaching_language.toUpperCase()}
+                    </span>
                   )}
                   <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
                   <span className="text-xs text-gray-400">{batch.premade_sessions.length} {t.sessions.toLowerCase()}</span>
