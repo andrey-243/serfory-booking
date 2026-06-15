@@ -86,11 +86,35 @@ export async function PATCH(req: NextRequest) {
 
   if (Object.keys(update).length === 0) return NextResponse.json({ ok: true })
 
-  const { error } = await getSupabaseAdmin()
-    .from('teachers')
-    .update(update)
-    .eq('id', id)
+  const supabase = getSupabaseAdmin()
 
+  const { data: teacher } = await supabase.from('teachers').select('name').eq('id', id).single()
+
+  const { error } = await supabase.from('teachers').update(update).eq('id', id)
   if (error) return NextResponse.json({ error: 'Failed to update teacher' }, { status: 500 })
+
+  // TG admin notif (fire-and-forget)
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+  if (adminChatId && teacher?.name) {
+    const changes: string[] = []
+    if (teaching_languages !== undefined) changes.push(`🗣 Languages: ${(teaching_languages as string[]).join(', ') || '—'}`)
+    if (subject_formats !== undefined) {
+      const lines = Object.entries(subject_formats as Record<string, string[]>)
+        .map(([s, fmts]) => `  ${s}: ${fmts.join(', ')}`)
+      changes.push(`📚 Formats:\n${lines.join('\n')}`)
+    }
+    if (subject_levels !== undefined) {
+      const lines = Object.entries(subject_levels as Record<string, string[]>)
+        .map(([s, lvls]) => `  ${s}: ${lvls.join(', ') || '—'}`)
+      changes.push(`🎯 Levels:\n${lines.join('\n')}`)
+    }
+    const msg = [`⚙️ <b>${teacher.name}</b> updated their teaching profile`, '', ...changes].join('\n')
+    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'HTML' }),
+    }).catch(() => {})
+  }
+
   return NextResponse.json({ ok: true })
 }

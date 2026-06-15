@@ -1,28 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifySession } from '@/lib/session'
-import { deleteCalendarEvent } from '@/lib/google-calendar'
+import { deleteCalendarEvent, patchCalendarEventSummary } from '@/lib/google-calendar'
 
-// PATCH /api/premade-batches/[id]  — admin only: update status
+// PATCH /api/premade-batches/[id]
+// Admin: update status
+// Teacher (owner): update session names (session_updates: [{ id, name }])
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession(req.cookies.get('session')?.value ?? '')
-  if (!session || session.role !== 'admin') {
+  if (!session || !['admin', 'teacher'].includes(session.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { id } = await params
   const body = await req.json()
-  const { status } = body
+  const supabase = getSupabaseAdmin()
 
-  if (!status || !['active', 'completed', 'cancelled'].includes(status)) {
-    return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+  // Admin: update batch status
+  if (session.role === 'admin' && body.status) {
+    const { status } = body
+    if (!['active', 'completed', 'cancelled'].includes(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+    }
+    const { error } = await supabase.from('premade_batches').update({ status }).eq('id', id)
+    if (error) return NextResponse.json({ error: 'Failed to update batch' }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 
-  const supabase = getSupabaseAdmin()
-  const { error } = await supabase.from('premade_batches').update({ status }).eq('id', id)
-  if (error) return NextResponse.json({ error: 'Failed to update batch' }, { status: 500 })
+  // Teacher: update session names
+  if (session.role === 'teacher' && body.session_updates) {
+    const updates = body.session_updates as { id: string; name: string }[]
 
-  return NextResponse.json({ ok: true })
+    // Verify ownership
+    const { data: batch } = await supabase
+      .from('premade_batches')
+      .select('teacher_id, name')
+      .eq('id', id)
+      .single()
+    if (!batch || batch.teacher_id !== session.teacherId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Fetch teacher GCal credentials
+    const { data: teacher } = await supabase
+      .from('teachers')
+      .select('google_refresh_token, google_calendar_id')
+      .eq('id', batch.teacher_id)
+      .single()
+
+    for (const u of updates) {
+      if (!u.name.trim()) continue
+      await supabase.from('premade_sessions').update({ name: u.name }).eq('id', u.id)
+
+      // Sync GCal event title if connected
+      if (teacher?.google_refresh_token) {
+        const { data: s } = await supabase
+          .from('premade_sessions')
+          .select('gcal_event_id')
+          .eq('id', u.id)
+          .single()
+        if (s?.gcal_event_id) {
+          try {
+            const summary = `${batch.name} — ${u.name} · Serfory`
+            await patchCalendarEventSummary(
+              teacher.google_refresh_token,
+              teacher.google_calendar_id || 'primary',
+              s.gcal_event_id,
+              summary
+            )
+          } catch { /* Non-blocking */ }
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 }
 
 // DELETE /api/premade-batches/[id]  — admin only: cancel batch + delete GCal events

@@ -294,6 +294,24 @@ export async function deleteCalendarEvent(
   })
 }
 
+export async function patchCalendarEventSummary(
+  refreshToken: string,
+  calendarId: string,
+  eventId: string,
+  summary: string
+): Promise<void> {
+  const { google } = await import('googleapis')
+  const client = await makeOAuthClient()
+  client.setCredentials({ refresh_token: refreshToken })
+  const calendar = google.calendar({ version: 'v3', auth: client })
+  await calendar.events.patch({
+    calendarId: calendarId || 'primary',
+    eventId,
+    sendUpdates: 'none',
+    requestBody: { summary },
+  })
+}
+
 export async function createPremadeSessionEvent(
   refreshToken: string,
   calendarId: string,

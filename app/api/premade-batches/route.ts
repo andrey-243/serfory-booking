@@ -128,5 +128,32 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // TG admin notif (fire-and-forget)
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+  if (adminChatId) {
+    const teacherName = teacher?.name ?? teacher_id
+    const sessionLines = (createdSessions || [])
+      .map((s: { name: string; session_date: string; start_time: string }, i: number) => {
+        const d = new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+        return `  ${i + 1}. ${s.name} — ${d} ${s.start_time.slice(0, 5)}`
+      })
+      .join('\n')
+    const msg = [
+      `📚 <b>New premade course created</b>`,
+      ``,
+      `👩‍🏫 <b>${teacherName}</b>`,
+      `📖 ${name} (${subject})`,
+      `⏱ ${duration_min} min · max ${batch.max_students} students`,
+      ``,
+      `<b>Sessions:</b>`,
+      sessionLines,
+    ].join('\n')
+    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: adminChatId, text: msg, parse_mode: 'HTML' }),
+    }).catch(() => {})
+  }
+
   return NextResponse.json({ batch: { ...batch, sessions: createdSessions } }, { status: 201 })
 }

@@ -55,6 +55,10 @@ const LABELS = {
     addSession: 'Add session',
     removeSession: 'Remove',
     errorDateRange: 'All sessions must be in the same calendar month as the first session.',
+    editNames: 'Edit names',
+    saveNames: 'Save',
+    savingNames: 'Saving…',
+    useTemplate: 'Use as template',
   },
   ru: {
     title: 'Готовые курсы',
@@ -82,6 +86,10 @@ const LABELS = {
     addSession: 'Добавить занятие',
     removeSession: 'Удалить',
     errorDateRange: 'Все занятия должны быть в том же календарном месяце, что и первое.',
+    editNames: 'Редактировать',
+    saveNames: 'Сохранить',
+    savingNames: 'Сохранение…',
+    useTemplate: 'Использовать как шаблон',
   },
   et: {
     title: 'Valmiskursused',
@@ -109,6 +117,10 @@ const LABELS = {
     addSession: 'Lisa tund',
     removeSession: 'Eemalda',
     errorDateRange: 'Kõik tunnid peavad olema esimese tunniga samas kalendrikuus.',
+    editNames: 'Muuda nimesid',
+    saveNames: 'Salvesta',
+    savingNames: 'Salvestamine…',
+    useTemplate: 'Kasuta mallina',
   },
 }
 
@@ -172,6 +184,8 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Session name editing: batchId → { names: Record<sessionId, string>, saving, editMode }
+  const [sessionEdits, setSessionEdits] = useState<Record<string, { names: Record<string, string>; saving: boolean; editMode: boolean }>>({})
 
   const [name, setName] = useState('')
   const [subject, setSubject] = useState(subjects[0] || '')
@@ -210,6 +224,43 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
     setFormError(null)
   }
 
+  function applyTemplate(batch: PremadeBatch) {
+    setName(batch.name)
+    setSubject(batch.subject)
+    setDurationMin(batch.duration_min)
+    setTargetLevels(batch.target_levels)
+    setSessions(
+      batch.premade_sessions
+        .slice()
+        .sort((a, b) => a.session_date.localeCompare(b.session_date))
+        .map(s => ({ name: s.name, session_date: new Date().toISOString().slice(0, 10), start_time: s.start_time }))
+    )
+    setShowForm(true)
+    setFormError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function initSessionEdit(batch: PremadeBatch) {
+    if (sessionEdits[batch.id]) return
+    const names: Record<string, string> = {}
+    for (const s of batch.premade_sessions) names[s.id] = s.name
+    setSessionEdits(prev => ({ ...prev, [batch.id]: { names, saving: false, editMode: false } }))
+  }
+
+  async function saveSessionNames(batchId: string) {
+    const edit = sessionEdits[batchId]
+    if (!edit) return
+    setSessionEdits(prev => ({ ...prev, [batchId]: { ...prev[batchId], saving: true } }))
+    const session_updates = Object.entries(edit.names).map(([id, name]) => ({ id, name }))
+    await fetch(`/api/premade-batches/${batchId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_updates }),
+    })
+    setSessionEdits(prev => ({ ...prev, [batchId]: { ...prev[batchId], saving: false, editMode: false } }))
+    setRefreshKey(k => k + 1)
+  }
+
   useEffect(() => {
     setLoading(true)
     fetch(`/api/premade-batches?teacherId=${teacherId}`)
@@ -224,11 +275,12 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
     for (const s of sessions) {
       if (!s.name.trim() || !s.session_date || !s.start_time) { setFormError(t.errorFields); return }
     }
-    if (sessions.length > 1) {
+    if (sessions.length > 1 && sessions[0].session_date) {
       const first = new Date(sessions[0].session_date + 'T12:00:00Z')
       const refYear = first.getUTCFullYear()
       const refMonth = first.getUTCMonth()
       for (const s of sessions.slice(1)) {
+        if (!s.session_date) continue
         const d = new Date(s.session_date + 'T12:00:00Z')
         if (d.getUTCFullYear() !== refYear || d.getUTCMonth() !== refMonth) {
           setFormError(t.errorDateRange); return
@@ -358,8 +410,8 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                   <input
                     type="date"
                     value={s.session_date}
-                    min={sessions[0]?.session_date || undefined}
-                    max={sessions[0]?.session_date ? lastDayOfMonth(sessions[0].session_date) : undefined}
+                    min={i === 0 ? new Date().toISOString().slice(0, 10) : (sessions[0]?.session_date || undefined)}
+                    max={i === 0 ? undefined : (sessions[0]?.session_date ? lastDayOfMonth(sessions[0].session_date) : undefined)}
                     onChange={e => updateSession(i, 'session_date', e.target.value)}
                     className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -424,7 +476,11 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
             <div key={batch.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div
                 className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
-                onClick={() => setExpanded(expanded === batch.id ? null : batch.id)}
+                onClick={() => {
+                  const next = expanded === batch.id ? null : batch.id
+                  setExpanded(next)
+                  if (next) initSessionEdit(batch)
+                }}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[batch.status]}`}>
@@ -450,23 +506,81 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang }: Pro
                 </div>
               </div>
 
-              {expanded === batch.id && (
-                <div className="border-t border-gray-100 px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    {batch.premade_sessions.map((s, i) => (
-                      <div key={s.id} className="flex items-center gap-3 text-xs text-gray-600">
-                        <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
-                          {i + 1}
-                        </span>
-                        <span className="font-medium text-gray-800 truncate flex-1">{s.name}</span>
-                        <span className="flex-shrink-0">{formatDate(s.session_date)}</span>
-                        <span className="flex-shrink-0">{s.start_time.slice(0, 5)}</span>
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.gcal_event_id ? 'bg-green-400' : 'bg-gray-300'}`} title={s.gcal_event_id ? 'GCal synced' : 'GCal pending'} />
-                      </div>
-                    ))}
+              {expanded === batch.id && (() => {
+                const edit = sessionEdits[batch.id]
+                const inEdit = edit?.editMode ?? false
+                return (
+                  <div className="border-t border-gray-100 px-4 py-3 flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      {batch.premade_sessions
+                        .slice()
+                        .sort((a, b) => a.session_date.localeCompare(b.session_date))
+                        .map((s, i) => (
+                        <div key={s.id} className="flex items-center gap-3 text-xs text-gray-600">
+                          <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
+                            {i + 1}
+                          </span>
+                          {inEdit ? (
+                            <input
+                              type="text"
+                              value={edit?.names[s.id] ?? s.name}
+                              onChange={e => setSessionEdits(prev => ({
+                                ...prev,
+                                [batch.id]: { ...prev[batch.id], names: { ...prev[batch.id].names, [s.id]: e.target.value } }
+                              }))}
+                              className="flex-1 px-2 py-0.5 text-xs text-gray-900 border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          ) : (
+                            <span className="font-medium text-gray-800 truncate flex-1">{s.name}</span>
+                          )}
+                          <span className="flex-shrink-0">{formatDate(s.session_date)}</span>
+                          <span className="flex-shrink-0">{s.start_time.slice(0, 5)}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.gcal_event_id ? 'bg-green-400' : 'bg-gray-300'}`} title={s.gcal_event_id ? 'GCal synced' : 'GCal pending'} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {!inEdit ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              initSessionEdit(batch)
+                              setSessionEdits(prev => ({ ...prev, [batch.id]: { ...(prev[batch.id] ?? { names: Object.fromEntries(batch.premade_sessions.map(s => [s.id, s.name])), saving: false }), editMode: true } }))
+                            }}
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors"
+                          >
+                            {t.editNames}
+                          </button>
+                          <span className="text-gray-200">|</span>
+                          <button
+                            onClick={() => applyTemplate(batch)}
+                            className="text-xs text-gray-400 hover:text-gray-600 font-medium transition-colors"
+                          >
+                            {t.useTemplate}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => saveSessionNames(batch.id)}
+                            disabled={edit?.saving}
+                            className="text-xs text-blue-500 hover:text-blue-700 font-medium disabled:opacity-50 transition-colors"
+                          >
+                            {edit?.saving ? t.savingNames : t.saveNames}
+                          </button>
+                          <span className="text-gray-200">|</span>
+                          <button
+                            onClick={() => setSessionEdits(prev => ({ ...prev, [batch.id]: { ...prev[batch.id], editMode: false } }))}
+                            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            {t.cancel}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           ))}
         </div>
