@@ -302,28 +302,44 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   return (
     <div className="flex flex-col gap-4">
       {/* Confirmation modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
-            <h3 className="text-base font-semibold text-gray-900">{t.confirmTitle}</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">{t.confirmBody}</p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors"
-              >
-                {t.confirmReview}
-              </button>
-              <button
-                onClick={handleCreate}
-                className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                {t.confirmCreate}
-              </button>
+      {showConfirm && (() => {
+        const sessionDates = [0, 7, 14, 21].map(offset => {
+          const d = new Date(formDate + 'T12:00:00Z')
+          d.setUTCDate(d.getUTCDate() + offset)
+          return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+        })
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+              <h3 className="text-base font-semibold text-gray-900">{t.confirmTitle}</h3>
+              <p className="text-sm text-gray-600 leading-relaxed">{t.confirmBody}</p>
+              <div className="bg-gray-50 rounded-xl px-4 py-3 flex flex-col gap-1.5">
+                {sessionDates.map((date, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-[11px] flex-shrink-0">{i + 1}</span>
+                    <span className="text-gray-700">{date}</span>
+                    <span className="text-gray-400">{formTime}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors"
+                >
+                  {t.confirmReview}
+                </button>
+                <button
+                  onClick={handleCreate}
+                  className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  {t.confirmCreate}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-900">{t.title}</h2>

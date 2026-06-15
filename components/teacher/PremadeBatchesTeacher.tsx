@@ -65,6 +65,11 @@ const LABELS = {
     confirmReview: 'Review',
     confirmCreate: 'Confirm & Create',
     maxReached: 'Max 2 active courses per subject. Archive one before creating a new version.',
+    saveAsTemplate: 'Save as template',
+    savedTemplate: 'Saved!',
+    templates: 'Templates',
+    deleteTemplate: 'Delete',
+    applyTemplate: 'Use',
   },
   ru: {
     title: 'Готовые курсы',
@@ -102,6 +107,11 @@ const LABELS = {
     confirmReview: 'Проверить',
     confirmCreate: 'Подтвердить и создать',
     maxReached: 'Макс. 2 активных курса для этого предмета. Архивируйте один перед созданием новой версии.',
+    saveAsTemplate: 'Сохранить как шаблон',
+    savedTemplate: 'Сохранено!',
+    templates: 'Шаблоны',
+    deleteTemplate: 'Удалить',
+    applyTemplate: 'Применить',
   },
   et: {
     title: 'Valmiskursused',
@@ -139,7 +149,23 @@ const LABELS = {
     confirmReview: 'Vaata üle',
     confirmCreate: 'Kinnita ja loo',
     maxReached: 'Maks 2 aktiivset kursust aine kohta. Arhiveeri üks enne uue versiooni loomist.',
+    saveAsTemplate: 'Salvesta mallina',
+    savedTemplate: 'Salvestatud!',
+    templates: 'Mallid',
+    deleteTemplate: 'Kustuta',
+    applyTemplate: 'Kasuta',
   },
+}
+
+type PremadeTemplate = {
+  id: string
+  name: string
+  subject: string
+  teaching_language: string | null
+  target_levels: string[]
+  duration_min: number
+  session_names: string[]
+  session_default_time: string
 }
 
 type PremadeSession = {
@@ -207,8 +233,10 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const gl = GRADE_LABELS[lang]
 
   const [batches, setBatches] = useState<PremadeBatch[]>([])
+  const [templates, setTemplates] = useState<PremadeTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [savingTemplate, setSavingTemplate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -300,12 +328,63 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/premade-batches?teacherId=${teacherId}`)
-      .then(r => r.json())
-      .then(d => setBatches(d.batches || []))
+    Promise.all([
+      fetch(`/api/premade-batches?teacherId=${teacherId}`).then(r => r.json()),
+      fetch(`/api/premade-templates?teacherId=${teacherId}`).then(r => r.json()),
+    ])
+      .then(([batchData, tplData]) => {
+        setBatches(batchData.batches || [])
+        setTemplates(tplData.templates || [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [teacherId, refreshKey])
+
+  async function saveAsTemplate(batch: PremadeBatch) {
+    setSavingTemplate(batch.id)
+    const session_names = batch.premade_sessions
+      .slice()
+      .sort((a, b) => a.session_date.localeCompare(b.session_date))
+      .map(s => s.name)
+    const session_default_time = batch.premade_sessions[0]?.start_time ?? '14:00'
+    const res = await fetch('/api/premade-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: batch.name,
+        subject: batch.subject,
+        teaching_language: batch.teaching_language,
+        target_levels: batch.target_levels,
+        duration_min: batch.duration_min,
+        session_names,
+        session_default_time,
+      }),
+    })
+    if (res.ok) {
+      const { template } = await res.json()
+      setTemplates(prev => [template, ...prev])
+    }
+    setSavingTemplate(null)
+  }
+
+  async function deleteTemplate(id: string) {
+    setTemplates(prev => prev.filter(t => t.id !== id))
+    await fetch(`/api/premade-templates?id=${id}`, { method: 'DELETE' })
+  }
+
+  function applyDbTemplate(tpl: PremadeTemplate) {
+    setName(tpl.name)
+    setSubject(tpl.subject)
+    setDurationMin(tpl.duration_min)
+    setTargetLevels(tpl.target_levels)
+    setLevelMode(tpl.target_levels.some(l => CEFR_LEVELS.includes(l)) ? 'cefr' : 'grade')
+    setTeachingLanguage(tpl.teaching_language ?? teachingLanguages[0] ?? '')
+    const today = new Date().toISOString().slice(0, 10)
+    setSessions(tpl.session_names.map(n => ({ name: n, session_date: today, start_time: tpl.session_default_time.slice(0, 5) })))
+    setShowForm(true)
+    setFormError(null)
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
 
   function handleSubmitClick() {
     if (!name.trim() || !teachingLanguage || targetLevels.length === 0) {
@@ -379,6 +458,29 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                 {t.confirmCreate}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Templates */}
+      {templates.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-gray-400">{t.templates}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {templates.map(tpl => (
+              <div key={tpl.id} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs">
+                {tpl.teaching_language && (
+                  <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${LANG_COLORS[tpl.teaching_language] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {LANG_LABELS[tpl.teaching_language] ?? tpl.teaching_language.toUpperCase()}
+                  </span>
+                )}
+                <span className="text-gray-700 font-medium">{tpl.name}</span>
+                <span className="text-gray-300">·</span>
+                <span className="text-gray-400">{tpl.session_names.length} sessions</span>
+                <button onClick={() => applyDbTemplate(tpl)} className="ml-1 text-blue-500 hover:text-blue-700 font-medium transition-colors">{t.applyTemplate}</button>
+                <button onClick={() => deleteTemplate(tpl.id)} className="text-gray-300 hover:text-red-400 transition-colors ml-0.5">×</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -662,6 +764,14 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                             className="text-xs text-gray-400 hover:text-gray-600 font-medium transition-colors"
                           >
                             {t.useTemplate}
+                          </button>
+                          <span className="text-gray-200">|</span>
+                          <button
+                            onClick={() => saveAsTemplate(batch)}
+                            disabled={savingTemplate === batch.id}
+                            className="text-xs text-gray-400 hover:text-emerald-600 font-medium transition-colors disabled:opacity-50"
+                          >
+                            {savingTemplate === batch.id ? t.savedTemplate : t.saveAsTemplate}
                           </button>
                         </>
                       ) : (
