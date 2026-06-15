@@ -62,22 +62,51 @@ const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { token, format, lessons_count, subject: subjectOverride, learning_lang: learningLangOverride } = body as {
+  const { token, format, lessons_count: lessonsCountRaw, premade_batch_id, subject: subjectOverride, learning_lang: learningLangOverride } = body as {
     token: string
     format: Format
-    lessons_count: LessonsCount
+    lessons_count?: number
+    premade_batch_id?: string
     subject?: string
     learning_lang?: string
   }
 
-  if (!token || !format || !lessons_count) {
+  if (!token || !format) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
   const validFormats: Format[] = ['individual', 'pair', 'group', 'premade']
-  const validLessons: LessonsCount[] = [1, 4, 6, 7, 8, 12]
-  if (!validFormats.includes(format) || !validLessons.includes(lessons_count)) {
-    return NextResponse.json({ error: 'Invalid format or lessons_count' }, { status: 400 })
+  if (!validFormats.includes(format)) {
+    return NextResponse.json({ error: 'Invalid format' }, { status: 400 })
+  }
+  if (format === 'premade' && !premade_batch_id) {
+    return NextResponse.json({ error: 'premade_batch_id required for premade format' }, { status: 400 })
+  }
+  if (format !== 'premade' && !lessonsCountRaw) {
+    return NextResponse.json({ error: 'lessons_count required' }, { status: 400 })
+  }
+  if (format !== 'premade') {
+    const validLessons = [1, 4, 6, 7, 8, 12]
+    if (!validLessons.includes(lessonsCountRaw!)) {
+      return NextResponse.json({ error: 'Invalid lessons_count' }, { status: 400 })
+    }
+  }
+
+  // Resolve premade batch → derive lessons_count from session count
+  let lessons_count: number = lessonsCountRaw ?? 0
+  if (format === 'premade' && premade_batch_id) {
+    const { data: batch } = await getSupabaseAdmin()
+      .from('premade_batches')
+      .select('id, status, premade_sessions(id)')
+      .eq('id', premade_batch_id)
+      .single()
+    if (!batch || batch.status !== 'active') {
+      return NextResponse.json({ error: 'Batch not found or not active' }, { status: 404 })
+    }
+    lessons_count = (batch.premade_sessions as { id: string }[]).length
+    if (lessons_count === 0) {
+      return NextResponse.json({ error: 'Batch has no sessions' }, { status: 400 })
+    }
   }
 
   // Resolve application from token
@@ -174,6 +203,7 @@ export async function POST(req: NextRequest) {
       pdf_url: pdfUrl,
       subject: effectiveSubject,
       learning_lang: effectiveLearningLang,
+      ...(premade_batch_id ? { premade_batch_id } : {}),
     })
     .select('id')
     .single()

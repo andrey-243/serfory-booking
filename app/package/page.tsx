@@ -225,6 +225,12 @@ function PackagePageInner() {
     subject_levels?: Record<string, string[]> | null
     subject_formats?: Record<string, string[]> | null
   }
+  type PremadeSession = { id: string; name: string; session_date: string; start_time: string }
+  type PremadeBatch = {
+    id: string; name: string; subject: string; duration_min: number
+    max_students: number; enrollment_count: number
+    premade_sessions: PremadeSession[]
+  }
   const [teacherCache, setTeacherCache] = useState<TeacherMeta[] | null>(null)
   useEffect(() => {
     fetch('/api/teachers')
@@ -232,6 +238,17 @@ function PackagePageInner() {
       .then(d => setTeacherCache(d.teachers ?? []))
       .catch(() => setTeacherCache([]))
   }, [])
+
+  const [premadeBatches, setPremadeBatches] = useState<PremadeBatch[]>([])
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null)
+  useEffect(() => {
+    setPremadeBatches([])
+    setSelectedBatchId(null)
+    fetch(`/api/premade-batches?subject=${encodeURIComponent(selectedSubject)}`)
+      .then(r => r.json())
+      .then(d => setPremadeBatches(d.batches ?? []))
+      .catch(() => setPremadeBatches([]))
+  }, [selectedSubject])
 
   const [availableFormats, setAvailableFormats] = useState<Format[]>(FORMAT_ORDER)
   useEffect(() => {
@@ -241,8 +258,9 @@ function PackagePageInner() {
       if (!tc.subjects?.includes(selectedSubject)) continue
       for (const f of tc.subject_formats?.[selectedSubject] ?? []) union.add(f)
     }
-    setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : FORMAT_ORDER)
-  }, [selectedSubject, teacherCache])
+    if (premadeBatches.length === 0) union.delete('premade')
+    setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : ['individual'])
+  }, [selectedSubject, teacherCache, premadeBatches])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
@@ -272,9 +290,12 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
+  const selectedBatch = premadeBatches.find(b => b.id === selectedBatchId) ?? null
   const pricePerLesson = BASE_PRICES[format][lessons] ?? 0
   const studentsCount = format === 'pair' ? 2 : format === 'group' ? 5 : 1
-  const total = pricePerLesson * lessons * studentsCount
+  const total = format === 'premade'
+    ? (selectedBatch ? (selectedBatch.premade_sessions.length * 18) : 0)
+    : pricePerLesson * lessons * studentsCount
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
   const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
@@ -322,11 +343,15 @@ function PackagePageInner() {
   }, [selectedSubject, teacherCache])
 
   async function handleConfirm() {
+    if (format === 'premade' && !selectedBatchId) return
     setStatus('sending')
+    const body = format === 'premade'
+      ? { token, format, premade_batch_id: selectedBatchId, subject: selectedSubject, learning_lang: selectedLearningLang }
+      : { token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }
     const res = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }),
+      body: JSON.stringify(body),
     })
     if (res.ok) {
       setStatus('done')
@@ -484,6 +509,33 @@ function PackagePageInner() {
                 ))}
               </div>
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
+              {format === 'premade' ? (
+                <div className="space-y-3">
+                  {premadeBatches.map(batch => {
+                    const sessions = batch.premade_sessions.length
+                    const spotsLeft = batch.max_students - batch.enrollment_count
+                    const firstDate = batch.premade_sessions[0]?.session_date
+                    const lastDate = batch.premade_sessions[batch.premade_sessions.length - 1]?.session_date
+                    const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                    return (
+                      <button key={batch.id} onClick={() => setSelectedBatchId(batch.id)}
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedBatchId === batch.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{sessions} sessions · {batch.duration_min}min</p>
+                            {firstDate && <p className="text-xs text-gray-400 mt-1">{fmtDate(firstDate)}{lastDate && lastDate !== firstDate ? ` → ${fmtDate(lastDate)}` : ''}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-bold text-gray-900 text-base">{sessions * 18}€</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
               <div className={`grid gap-3 ${
                 LESSONS_OPTIONS[format].length <= 2 ? 'grid-cols-2'
                 : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3'
@@ -493,7 +545,6 @@ function PackagePageInner() {
                   const price = BASE_PRICES[format][n] ?? 0
                   const isSelected = lessons === n
                   const isPopular = (format === 'individual' || format === 'pair') && n === 8
-                    || format === 'premade' && n === 6
                   return (
                     <button key={n} onClick={() => setLessons(n)}
                       className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
@@ -503,7 +554,7 @@ function PackagePageInner() {
                       <p className="font-semibold text-gray-900 text-sm">{format === 'group' ? t.weeks(n) : t.lessons(n)}</p>
                       {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
                       <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
-                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' && format !== 'premade' ? ` · ${t.perPerson}` : ''}</p>
+                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
                     </button>
                   )
                 })}
@@ -542,6 +593,7 @@ function PackagePageInner() {
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             {tgEligible && <TgBlock t={t} botUsername={BOT} />}
@@ -566,16 +618,23 @@ function PackagePageInner() {
                   <span className="text-gray-500">{t.format}</span>
                   <span className="font-medium text-gray-800">{FORMAT_INFO[format][uiLang].label}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.package}</span>
-                  <span className="font-medium text-gray-800">{format === 'group' ? t.weeks(lessons) : t.lessons(lessons)}</span>
-                </div>
+                {format === 'premade' ? (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.package}</span>
+                    <span className="font-medium text-gray-800 text-right max-w-[160px] truncate">{selectedBatch ? selectedBatch.name : '—'}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.package}</span>
+                    <span className="font-medium text-gray-800">{format === 'group' ? t.weeks(lessons) : t.lessons(lessons)}</span>
+                  </div>
+                )}
               </div>
               <div className="border-t border-gray-100 pt-3 flex justify-between items-baseline">
                 <span className="text-xs text-gray-500">{t.total}</span>
-                <span className="text-xl font-bold text-gray-900">{total}€</span>
+                <span className="text-xl font-bold text-gray-900">{total > 0 ? `${total}€` : '—'}</span>
               </div>
-              <button onClick={handleConfirm} disabled={status === 'sending'}
+              <button onClick={handleConfirm} disabled={status === 'sending' || (format === 'premade' && !selectedBatchId)}
                 className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors">
                 {status === 'sending' ? t.sending : t.confirm}
               </button>

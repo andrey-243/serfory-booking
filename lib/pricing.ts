@@ -55,11 +55,11 @@ export function getTeacherGrossCost(baseRate: number, format: Format, studentCou
 
 export function getPricePerLesson(
   format: Format,
-  lessons: LessonsCount,
+  lessons: number,
   tier: string = 'baltics'
 ): number {
-  const base = BASE_PRICES[format][lessons] ?? 0
   const multiplier = TIER_MULTIPLIERS[tier as PriceTier] ?? 1.00
+  const base = format === 'premade' ? 18 : (BASE_PRICES[format][lessons as LessonsCount] ?? 0)
   return Math.round(base * multiplier * 100) / 100
 }
 
@@ -69,7 +69,7 @@ export function getStudentsCount(format: Format): number {
 
 export function getTotalAmount(
   format: Format,
-  lessons: LessonsCount,
+  lessons: number,
   tier: string = 'baltics'
 ): number {
   const pricePerLesson = getPricePerLesson(format, lessons, tier)
