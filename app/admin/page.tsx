@@ -437,14 +437,12 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
   studentInvoices?: InvoiceRow[]
 }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const [paidIds, setPaidIds] = useState<Set<string>>(initialPaidIds ?? new Set())
-  const [invoiceSentIds, setInvoiceSentIds] = useState<Set<string>>(initialInvoiceSentIds ?? new Set())
   const [monthOffset, setMonthOffset] = useState(0)
   const [cancelledOpen, setCancelledOpen] = useState(false)
-  const [doneOpen, setDoneOpen] = useState(false)
-  const [invTeacherFilter, setInvTeacherFilter] = useState('all')
-  const [invCourseFilter, setInvCourseFilter] = useState('all')
-  const [invStatusFilter, setInvStatusFilter] = useState<Set<string>>(new Set(['confirmed', 'pending']))
+  const [bookingTeacherFilter, setBookingTeacherFilter] = useState('all')
+  const [bookingCourseFilter, setBookingCourseFilter] = useState('all')
+  const [bookingSort, setBookingSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'asc' })
+  const [invoiceSort, setInvoiceSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'desc' })
 
   const nonCancelled = allBookings.filter(b => b.status !== 'cancelled')
   const cancelledBookings = allBookings.filter(b => b.status === 'cancelled').sort((a, b) => a.date.localeCompare(b.date))
@@ -465,27 +463,56 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
   const panelTeachers = [...new Set(allBookings.map(b => b.teacher))].sort()
   const panelCourses  = [...new Set(allBookings.map(b => b.subject))].sort()
 
-  const isDone = (b: PanelBooking) =>
-    crmPanelBookingStatus(b.status, b.date) === 'provided' && paidIds.has(b.id) && invoiceSentIds.has(b.id)
-
-  const doneBookings = nonCancelled.filter(isDone).sort((a, b) => a.date.localeCompare(b.date))
-
-  const displayedBookings = (selectedMonth
+  const filteredBookings = (selectedMonth
     ? nonCancelled.filter(b => b.date.startsWith(selectedMonth))
     : nonCancelled
   ).filter(b => {
-    if (isDone(b)) return false
-    if (!invStatusFilter.has(b.status)) return false
-    if (invTeacherFilter !== 'all' && b.teacher !== invTeacherFilter) return false
-    if (invCourseFilter !== 'all' && b.subject !== invCourseFilter) return false
+    if (bookingTeacherFilter !== 'all' && b.teacher !== bookingTeacherFilter) return false
+    if (bookingCourseFilter !== 'all' && b.subject !== bookingCourseFilter) return false
     return true
-  }).sort((a, b) => a.date.localeCompare(b.date))
+  })
+
+  const displayedBookings = [...filteredBookings].sort((a, b) => {
+    const d = bookingSort.dir === 'asc' ? 1 : -1
+    switch (bookingSort.col) {
+      case 'date': return d * a.date.localeCompare(b.date)
+      case 'course': return d * a.subject.localeCompare(b.subject)
+      case 'teacher': return d * a.teacher.localeCompare(b.teacher)
+      case 'status': return d * a.status.localeCompare(b.status)
+      case 'amount': return d * ((a.amount ?? 0) - (b.amount ?? 0))
+      default: return 0
+    }
+  })
+
+  const sortedInvoices = [...(studentInvoices ?? [])].sort((a, b) => {
+    const d = invoiceSort.dir === 'asc' ? 1 : -1
+    switch (invoiceSort.col) {
+      case 'date': return d * a.created_at.localeCompare(b.created_at)
+      case 'number': return d * (a.invoice_number - b.invoice_number)
+      case 'format': return d * a.format.localeCompare(b.format)
+      case 'subject': return d * (a.applications?.subject ?? '').localeCompare(b.applications?.subject ?? '')
+      case 'pack': return d * (a.lessons_count - b.lessons_count)
+      case 'amount': return d * (a.total_amount - b.total_amount)
+      case 'status': return d * a.status.localeCompare(b.status)
+      default: return 0
+    }
+  })
+
+  function toggleBookingSort(col: string) {
+    setBookingSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
+  }
+  function toggleInvoiceSort(col: string) {
+    setInvoiceSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' })
+  }
+  function SortIcon({ col, state }: { col: string; state: { col: string; dir: 'asc' | 'desc' } }) {
+    if (state.col !== col) return <span className="ml-0.5 opacity-25">⇕</span>
+    return <span className="ml-0.5 text-blue-500">{state.dir === 'asc' ? '↑' : '↓'}</span>
+  }
 
   function mlFull(key: string) {
     const [y, m] = key.split('-')
     return new Date(+y, +m-1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
   }
-  function togglePaid(id: string) { setPaidIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
 
   function MonthPill({ mk }: { mk: string }) {
     const mbs = byMonth[mk]
@@ -585,110 +612,118 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
         </div>
       </div>
 
+      {/* ── Invoices ── */}
       <div className="bg-white border-t border-gray-100 overflow-hidden">
-        {/* Filter bar */}
-        <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-          {selectedMonth && (
-            <>
-              <span className="text-xs font-medium text-blue-700">{mlFull(selectedMonth)}</span>
-              <button onClick={() => setSelectedMonth(null)} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">×</button>
-              <div className="h-4 w-px bg-gray-200" />
-            </>
-          )}
-          {(['confirmed', 'pending'] as const).map(s => {
-            const on = invStatusFilter.has(s)
-            const col = s === 'confirmed' ? 'bg-green-500 text-white border-green-500' : 'bg-amber-500 text-white border-amber-500'
-            return (
-              <button key={s} onClick={() => setInvStatusFilter(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
-                className={`px-2 py-0.5 rounded-full text-[11px] font-medium border capitalize transition-colors ${on ? col : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}>
-                {s}
-              </button>
-            )
-          })}
-          {panelTeachers.length > 1 && (
-            <select value={invTeacherFilter} onChange={e => setInvTeacherFilter(e.target.value)}
-              className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer">
-              <option value="all">All teachers</option>
-              {panelTeachers.map(t => <option key={t} value={t}>{t.split(' ')[0]}</option>)}
-            </select>
-          )}
-          {panelCourses.length > 1 && (
-            <select value={invCourseFilter} onChange={e => setInvCourseFilter(e.target.value)}
-              className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer">
-              <option value="all">All courses</option>
-              {panelCourses.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
-        </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
-              <th className="text-left px-5 py-2.5 font-medium w-20">Date</th>
-              <th className="text-left px-3 py-2.5 font-medium w-12">Course</th>
-              <th className="text-left px-3 py-2.5 font-medium w-28">Teacher</th>
-              <th className="text-left px-3 py-2.5 font-medium">Status</th>
-              <th className="text-center px-3 py-2.5 font-medium w-16">Invoice</th>
-              <th className="text-center px-3 py-2.5 font-medium w-16">Payment</th>
-              <th className="text-right px-5 py-2.5 font-medium w-20">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayedBookings.map(b => {
-              const bStatus = crmPanelBookingStatus(b.status, b.date)
-              return (
-                <tr key={b.id} className="border-b border-gray-50 last:border-0">
-                  <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(b.date)}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1">
-                      <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
-                        {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
-                      </span>
-                      {grade && <span className="text-[10px] text-gray-400 font-medium">{grade}</span>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
-                  <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
-                  <td className="px-3 py-2 text-center"><CircleToggle active={invoiceSentIds.has(b.id)} onClick={() => { const n = new Set(invoiceSentIds); n.has(b.id) ? n.delete(b.id) : n.add(b.id); setInvoiceSentIds(n) }} /></td>
-                  <td className="px-3 py-2 text-center"><CircleToggle active={paidIds.has(b.id)} onClick={() => togglePaid(b.id)} /></td>
-                  <td className="px-5 py-2 text-right font-medium text-gray-700">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-
-        {doneBookings.length > 0 && (
-          <div className="border-t border-gray-100">
-            <button
-              onClick={() => setDoneOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-5 py-2 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-left"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className={`w-3 h-3 transition-transform ${doneOpen ? 'rotate-90' : ''}`}><path d="M9 18l6-6-6-6"/></svg>
-              <span>{doneBookings.length} done session{doneBookings.length !== 1 ? 's' : ''}</span>
-            </button>
-            {doneOpen && (
-              <table className="w-full text-xs border-t border-gray-50">
-                <tbody>
-                  {doneBookings.map(b => (
-                    <tr key={b.id} className="border-b border-gray-50 last:border-0 opacity-60">
-                      <td className="px-5 py-2 text-gray-500 whitespace-nowrap w-20">{crmFd(b.date)}</td>
-                      <td className="px-3 py-2 w-12">
-                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
-                          {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 w-28">{b.teacher.split(' ')[0]}</td>
-                      <td className="px-3 py-2 text-blue-600 font-medium">Provided</td>
-                      <td className="px-3 py-2 text-center w-16"><CircleToggle active onClick={() => { const n = new Set(invoiceSentIds); n.delete(b.id); setInvoiceSentIds(n) }} /></td>
-                      <td className="px-3 py-2 text-center w-16"><CircleToggle active onClick={() => togglePaid(b.id)} /></td>
-                      <td className="px-5 py-2 text-right font-medium text-gray-700 w-20">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
-                    </tr>
+        {sortedInvoices.length > 0 && (
+          <>
+            <div className="px-5 py-2 flex items-center gap-2 border-b border-gray-100">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoices</span>
+              <span className="text-[10px] text-gray-300">({sortedInvoices.length})</span>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
+                  {[['date','Date'],['number','#'],['format','Format'],['subject','Subject'],['pack','Pack'],['amount','Amount'],['status','Status']].map(([col, label], i) => (
+                    <th key={col} onClick={() => toggleInvoiceSort(col)}
+                      className={`font-medium cursor-pointer select-none hover:text-gray-600 transition-colors py-2.5 ${i === 0 ? 'text-left px-5 w-20' : i === 6 ? 'text-center px-5 w-24' : i === 5 ? 'text-right px-3 w-20' : 'text-left px-3'}`}>
+                      {label}<SortIcon col={col} state={invoiceSort} />
+                    </th>
                   ))}
-                </tbody>
-              </table>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedInvoices.map(inv => {
+                  const fmtColor: Record<string, string> = { individual: 'bg-blue-50 text-blue-600', pair: 'bg-violet-50 text-violet-600', group: 'bg-emerald-50 text-emerald-600', premade: 'bg-amber-50 text-amber-600' }
+                  const subj = inv.applications?.subject ?? '—'
+                  const sc = subjectColorCrm(subj)
+                  const isPaid = inv.status === 'paid'
+                  return (
+                    <tr key={inv.id} className="border-b border-gray-50 last:border-0">
+                      <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(inv.created_at)}</td>
+                      <td className="px-3 py-2 text-gray-400 font-mono">#{String(inv.invoice_number).padStart(3, '0')}</td>
+                      <td className="px-3 py-2"><span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded capitalize ${fmtColor[inv.format] ?? 'bg-gray-100 text-gray-500'}`}>{inv.format}</span></td>
+                      <td className="px-3 py-2"><span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.text}`}>{SUBJECT_ABBR_CRM[subj] ?? subj}</span></td>
+                      <td className="px-3 py-2 text-gray-500">{inv.lessons_count} lesson{inv.lessons_count !== 1 ? 's' : ''}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-700">€{inv.total_amount}</td>
+                      <td className="px-5 py-2 text-center">
+                        <button
+                          disabled={isPaid}
+                          onClick={async () => {
+                            if (isPaid) return
+                            if (!confirm('Mark this invoice as paid?')) return
+                            await fetch(`/api/invoices/${inv.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'paid' }) })
+                            window.location.reload()
+                          }}
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full transition-colors ${isPaid ? 'bg-emerald-50 text-emerald-600 cursor-default' : 'bg-amber-50 text-amber-500 hover:bg-amber-100 cursor-pointer'}`}>
+                          {isPaid ? 'Paid' : 'Sent'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* ── Sessions ── */}
+        <div className={`${sortedInvoices.length > 0 ? 'border-t border-gray-200' : ''}`}>
+          <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sessions</span>
+            {selectedMonth && (
+              <>
+                <div className="h-4 w-px bg-gray-200" />
+                <span className="text-xs font-medium text-blue-700">{mlFull(selectedMonth)}</span>
+                <button onClick={() => setSelectedMonth(null)} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">×</button>
+              </>
+            )}
+            {panelTeachers.length > 1 && (
+              <select value={bookingTeacherFilter} onChange={e => setBookingTeacherFilter(e.target.value)}
+                className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer ml-auto">
+                <option value="all">All teachers</option>
+                {panelTeachers.map(t => <option key={t} value={t}>{t.split(' ')[0]}</option>)}
+              </select>
+            )}
+            {panelCourses.length > 1 && (
+              <select value={bookingCourseFilter} onChange={e => setBookingCourseFilter(e.target.value)}
+                className="text-[11px] border border-gray-200 rounded-full px-2 py-0.5 bg-white text-gray-600 focus:outline-none cursor-pointer">
+                <option value="all">All courses</option>
+                {panelCourses.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             )}
           </div>
-        )}
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
+                {[['date','Date'],['course','Course'],['teacher','Teacher'],['status','Status'],['amount','Amount']].map(([col, label], i) => (
+                  <th key={col} onClick={() => toggleBookingSort(col)}
+                    className={`font-medium cursor-pointer select-none hover:text-gray-600 transition-colors py-2.5 ${i === 0 ? 'text-left px-5 w-20' : i === 4 ? 'text-right px-5 w-20' : 'text-left px-3'}`}>
+                    {label}<SortIcon col={col} state={bookingSort} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {displayedBookings.map(b => {
+                const bStatus = crmPanelBookingStatus(b.status, b.date)
+                return (
+                  <tr key={b.id} className="border-b border-gray-50 last:border-0">
+                    <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(b.date)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span>
+                        {grade && <span className="text-[10px] text-gray-400 font-medium">{grade}</span>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
+                    <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
+                    <td className="px-5 py-2 text-right font-medium text-gray-700">{b.amount ? `€${b.amount}` : <span className="text-gray-300">—</span>}</td>
+                  </tr>
+                )
+              })}
+              {displayedBookings.length === 0 && <tr><td colSpan={5} className="px-5 py-4 text-center text-[11px] text-gray-300 italic">No sessions booked yet.</td></tr>}
+            </tbody>
+          </table>
 
         {cancelledBookings.length > 0 && (
           <div className="border-t border-gray-100">
@@ -705,15 +740,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                   {cancelledBookings.map(b => (
                     <tr key={b.id} className="border-b border-gray-50 last:border-0 opacity-60">
                       <td className="px-5 py-2 text-gray-500 whitespace-nowrap w-20">{crmFd(b.date)}</td>
-                      <td className="px-3 py-2 w-12">
-                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>
-                          {SUBJECT_ABBR_CRM[b.subject] ?? b.subject}
-                        </span>
-                      </td>
+                      <td className="px-3 py-2 w-12"><span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span></td>
                       <td className="px-3 py-2 text-gray-600 w-28">{b.teacher.split(' ')[0]}</td>
                       <td className="px-3 py-2 text-red-400 font-medium">Cancelled</td>
-                      <td className="px-3 py-2 text-center w-16">—</td>
-                      <td className="px-3 py-2 text-center w-16">—</td>
                       <td className="px-5 py-2 text-right w-20 text-gray-300">—</td>
                     </tr>
                   ))}
@@ -722,60 +751,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
             )}
           </div>
         )}
-
-        {/* ── Invoices section ── */}
-        {studentInvoices && studentInvoices.length > 0 && (
-          <div className="border-t border-gray-200 mt-1">
-            <div className="px-5 py-2 flex items-center gap-2">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoices</span>
-              <span className="text-[10px] text-gray-300">({studentInvoices.length})</span>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-100 text-[10px] text-gray-400 uppercase">
-                  <th className="text-left px-5 py-2 font-medium w-20">Date</th>
-                  <th className="text-left px-3 py-2 font-medium w-12">#</th>
-                  <th className="text-left px-3 py-2 font-medium w-24">Format</th>
-                  <th className="text-left px-3 py-2 font-medium">Subject</th>
-                  <th className="text-left px-3 py-2 font-medium w-20">Pack</th>
-                  <th className="text-right px-3 py-2 font-medium w-20">Amount</th>
-                  <th className="text-center px-5 py-2 font-medium w-20">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...studentInvoices].sort((a, b) => b.created_at.localeCompare(a.created_at)).map(inv => {
-                  const fmtColor: Record<string, string> = {
-                    individual: 'bg-blue-50 text-blue-600',
-                    pair: 'bg-violet-50 text-violet-600',
-                    group: 'bg-emerald-50 text-emerald-600',
-                    premade: 'bg-amber-50 text-amber-600',
-                  }
-                  const subj = inv.applications?.subject ?? '—'
-                  const sc = subjectColorCrm(subj)
-                  return (
-                    <tr key={inv.id} className="border-b border-gray-50 last:border-0">
-                      <td className="px-5 py-2 text-gray-500 whitespace-nowrap">{crmFd(inv.created_at)}</td>
-                      <td className="px-3 py-2 text-gray-400 font-mono">#{String(inv.invoice_number).padStart(3, '0')}</td>
-                      <td className="px-3 py-2">
-                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded capitalize ${fmtColor[inv.format] ?? 'bg-gray-100 text-gray-500'}`}>{inv.format}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${sc.bg} ${sc.text}`}>{SUBJECT_ABBR_CRM[subj] ?? subj}</span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-500">{inv.lessons_count} lesson{inv.lessons_count !== 1 ? 's' : ''}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-700">€{inv.total_amount}</td>
-                      <td className="px-5 py-2 text-center">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${inv.status === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-500'}`}>
-                          {inv.status === 'paid' ? 'Paid' : 'Sent'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
       </div>
 
     </div>
