@@ -148,5 +148,19 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', enrollment.id)
 
+  // Invalidate booking_token — group enrollment uses all 4 lessons at once
+  await supabase.from('invoices').update({ booking_token: null }).eq('id', invoice.id)
+
+  // TG admin notif
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+  if (adminChatId) {
+    const msg = `👥 <b>Group enrollment</b>\n\n👤 <b>${app.name}</b>\n📚 ${batch.subject}\n\n<a href="https://booking.serfory.eu/admin">Open admin →</a>`
+    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: Number(adminChatId), text: msg, parse_mode: 'HTML', disable_web_page_preview: true }),
+    }).catch(() => {})
+  }
+
   return NextResponse.json({ enrollment: { id: enrollment.id, gcal_synced: gcalSynced } }, { status: 201 })
 }

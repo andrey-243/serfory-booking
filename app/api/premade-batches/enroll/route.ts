@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   // Check batch exists and has open spots
   const { data: batch } = await supabase
     .from('premade_batches')
-    .select('id, max_students, status, teacher_id, premade_sessions(id, gcal_event_id), premade_enrollments(id, status)')
+    .select('id, name, subject, max_students, status, teacher_id, premade_sessions(id, gcal_event_id), premade_enrollments(id, status)')
     .eq('id', batch_id)
     .single()
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   // Add student as GCal attendee on all sessions (fire-and-forget)
   const { data: application } = await supabase
     .from('applications')
-    .select('email')
+    .select('name, email')
     .eq('id', application_id)
     .single()
 
@@ -86,6 +86,18 @@ export async function POST(req: NextRequest) {
     } else if (lastError) {
       await supabase.from('premade_enrollments').update({ gcal_last_error: lastError, gcal_sync_attempts: 1 }).eq('id', enrollment.id)
     }
+  }
+
+  // TG admin notif
+  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+  if (adminChatId && application?.name) {
+    const batchMeta = batch as { name?: string; subject?: string }
+    const msg = `📖 <b>Premade enrollment</b>\n\n👤 <b>${application.name}</b>\n📚 ${batchMeta.subject ?? ''} · ${batchMeta.name ?? ''}\n\n<a href="https://booking.serfory.eu/admin">Open admin →</a>`
+    fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: Number(adminChatId), text: msg, parse_mode: 'HTML', disable_web_page_preview: true }),
+    }).catch(() => {})
   }
 
   return NextResponse.json({ enrollment }, { status: 201 })

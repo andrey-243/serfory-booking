@@ -58,6 +58,8 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
       .finally(() => setLoading(false))
   }, [subject])
 
+  const [enrolledBatchId, setEnrolledBatchId] = useState<string | null>(null)
+
   async function handleEnroll(batchId: string) {
     setEnrolling(batchId)
     setError(null)
@@ -69,9 +71,14 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
       })
       const data = await res.json()
       if (!res.ok) {
+        if (data.error === 'Already enrolled in this batch') {
+          setEnrolledBatchId(batchId)
+          return
+        }
         setError(data.error || 'Enrollment failed')
         return
       }
+      setEnrolledBatchId(batchId)
       onSuccess()
     } catch {
       setError('Something went wrong')
@@ -160,17 +167,23 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
                   </p>
                 )}
 
-                <button
-                  onClick={() => handleEnroll(batch.id)}
-                  disabled={isFull || enrolling === batch.id}
-                  className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    isFull
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60'
-                  }`}
-                >
-                  {enrolling === batch.id ? 'Enrolling…' : isFull ? 'Full' : 'Join this group'}
-                </button>
+                {enrolledBatchId === batch.id ? (
+                  <div className="w-full py-2.5 rounded-xl text-sm font-medium text-center bg-green-50 text-green-700 border border-green-200">
+                    Enrolled
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleEnroll(batch.id)}
+                    disabled={isFull || enrolling === batch.id}
+                    className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      isFull
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60'
+                    }`}
+                  >
+                    {enrolling === batch.id ? 'Enrolling…' : isFull ? 'Full' : 'Join this group'}
+                  </button>
+                )}
               </div>
             )}
           </div>
