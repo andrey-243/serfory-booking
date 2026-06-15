@@ -263,7 +263,7 @@ export async function GET(req: NextRequest) {
     .from('invoices')
     .select(`
       id, invoice_number, format, lessons_count, students_count,
-      price_per_lesson, total_amount, status, pdf_url, tg_sent_at, created_at,
+      price_per_lesson, total_amount, status, pdf_url, tg_sent_at, created_at, premade_batch_id,
       applications(id, name, email, subject, ref_token, lang, learning_lang, telegram_chat_id, country_code)
     `)
     .order('created_at', { ascending: false })
