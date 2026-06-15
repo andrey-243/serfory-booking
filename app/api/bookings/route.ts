@@ -62,10 +62,6 @@ export async function POST(req: NextRequest) {
         .neq('status', 'cancelled')
 
       if ((count ?? 0) >= inv.lessons_count) {
-        await getSupabaseAdmin()
-          .from('invoices')
-          .update({ booking_token: null })
-          .eq('id', invoice_id)
         return NextResponse.json({ error: 'No lessons remaining on this package' }, { status: 403 })
       }
     }
@@ -129,30 +125,6 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
-  }
-
-  // After booking, check if all lessons for this invoice are consumed → invalidate token
-  if (invoice_id) {
-    const { data: inv } = await getSupabaseAdmin()
-      .from('invoices')
-      .select('lessons_count')
-      .eq('id', invoice_id)
-      .single()
-
-    if (inv) {
-      const { count } = await getSupabaseAdmin()
-        .from('bookings')
-        .select('id', { count: 'exact', head: true })
-        .eq('invoice_id', invoice_id)
-        .neq('status', 'cancelled')
-
-      if ((count ?? 0) >= inv.lessons_count) {
-        await getSupabaseAdmin()
-          .from('invoices')
-          .update({ booking_token: null })
-          .eq('id', invoice_id)
-      }
-    }
   }
 
   return NextResponse.json({ booking: data }, { status: 201 })

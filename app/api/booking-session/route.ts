@@ -32,12 +32,8 @@ export async function GET(req: NextRequest) {
   const lessonsTotal = invoice.lessons_count
   const lessonsRemaining = Math.max(0, lessonsTotal - booked)
 
-  // Invalidate token if all lessons consumed
+  // Return 410 if all lessons consumed — token stays in DB so this page always shows the CTA
   if (lessonsRemaining === 0) {
-    await getSupabaseAdmin()
-      .from('invoices')
-      .update({ booking_token: null })
-      .eq('id', invoice.id)
     const refToken = (app as { ref_token?: string | null }).ref_token ?? null
     return NextResponse.json({ error: 'No lessons remaining on this package', refToken }, { status: 410 })
   }
