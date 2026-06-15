@@ -28,10 +28,10 @@ const GRADE_LABELS: Record<string, Record<string, string>> = {
 
 const T = {
   en: {
-    title: 'Course settings',
-    desc: 'Configure what you offer per subject. Changes apply to the booking page and package selection.',
-    teachingLangs: 'Teaching languages',
-    formats: 'Formats',
+    title: 'My teaching profile',
+    desc: 'Set which subjects you teach, in which languages, at what levels, and in which formats (1-on-1, pair, group, structured course).',
+    teachingLangs: 'Languages I teach in',
+    formats: 'Session formats',
     levels: 'Grades & levels',
     individual: 'Individual',
     alwaysOn: 'always on',
@@ -39,13 +39,13 @@ const T = {
     saving: 'Saving…',
     saved: '✓ Saved',
     langLabels: { en: 'EN', ru: 'RU', et: 'ET', ky: 'KY' },
-    formatLabels: { pair: 'Pair', group: 'Group', premade: 'Premade' },
+    formatLabels: { pair: 'Pair', group: 'Group', premade: 'Structured course' },
   },
   ru: {
-    title: 'Настройка курсов',
-    desc: 'Выберите, что вы предлагаете по каждому предмету. Изменения применяются на странице записи.',
-    teachingLangs: 'Языки обучения',
-    formats: 'Форматы',
+    title: 'Мой профиль преподавателя',
+    desc: 'Укажите, какие предметы вы преподаёте, на каких языках, для каких уровней и в каких форматах (индивидуально, пара, группа, курс).',
+    teachingLangs: 'Языки преподавания',
+    formats: 'Форматы занятий',
     levels: 'Классы и уровни',
     individual: 'Индивидуально',
     alwaysOn: 'всегда',
@@ -56,10 +56,10 @@ const T = {
     formatLabels: { pair: 'Пара', group: 'Группа', premade: 'Курс' },
   },
   et: {
-    title: 'Kursuse seaded',
-    desc: 'Seadke, mida pakute aine kaupa. Muudatused kajastuvad broneerimislehel.',
+    title: 'Minu õpetajaprofiil',
+    desc: 'Määrake, milliseid aineid õpetate, mis keeltes, mis tasemetel ja mis vormingutes (individuaalne, paar, grupp, kursus).',
     teachingLangs: 'Õpetamiskeeled',
-    formats: 'Vormingud',
+    formats: 'Tunni vormingud',
     levels: 'Klassid ja tasemed',
     individual: 'Individuaalne',
     alwaysOn: 'alati',
@@ -112,6 +112,7 @@ export default function CourseSettingsTeacher({
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [expandedSubject, setExpandedSubject] = useState<string | null>(null)
 
   function toggleTeachingLang(l: string) {
     setTeachingLangs(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l])
@@ -185,80 +186,87 @@ export default function CourseSettingsTeacher({
         </div>
       </div>
 
-      {/* Per-subject settings */}
-      <div className="flex flex-col gap-4">
+      {/* Per-subject settings — collapsible */}
+      <div className="flex flex-col gap-2">
         {subjects.map(subject => {
           const isLang = LANG_SUBJECTS.includes(subject)
           const levels = isLang ? [...ALL_GRADES, ...CEFR] : ALL_GRADES
           const fmts = subjectFormats[subject] ?? ['individual']
           const lvls = subjectLevels[subject] ?? []
+          const open = expandedSubject === subject
 
           return (
-            <div key={subject} className="border border-gray-100 rounded-xl p-4 flex flex-col gap-3 bg-gray-50/50">
-              <span className="text-sm font-semibold text-gray-800">{subject}</span>
+            <div key={subject} className="border border-gray-200 rounded-xl overflow-hidden">
+              {/* Header — clickable */}
+              <button
+                type="button"
+                onClick={() => setExpandedSubject(open ? null : subject)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-800">{subject}</span>
+                  <span className="text-xs text-gray-400">
+                    {fmts.filter(f => f !== 'individual').length > 0
+                      ? fmts.map(f => f === 'individual' ? '1:1' : t.formatLabels[f as keyof typeof t.formatLabels]).join(' · ')
+                      : '1:1'}
+                    {lvls.length > 0 && ` · ${lvls.length} levels`}
+                  </span>
+                </div>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-              {/* Formats */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formats}</span>
-                <div className="flex flex-wrap gap-2">
-                  {/* Individual always on */}
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white opacity-60 cursor-not-allowed select-none">
-                    <span className="w-3.5 h-3.5 rounded bg-blue-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                    <span className="text-sm text-gray-600">{t.individual}</span>
-                    <span className="text-[10px] text-gray-400">({t.alwaysOn})</span>
-                  </div>
-                  {FORMATS.map(fmt => {
-                    const on = fmts.includes(fmt)
-                    return (
-                      <button
-                        key={fmt}
-                        type="button"
-                        onClick={() => toggleFormat(subject, fmt)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-                          on
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600'
-                        }`}
-                      >
-                        {on && (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              {open && (
+                <div className="border-t border-gray-100 px-4 py-4 flex flex-col gap-4 bg-gray-50/40">
+                  {/* Formats */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.formats}</span>
+                    <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white opacity-60 cursor-not-allowed select-none">
+                        <span className="w-3.5 h-3.5 rounded bg-blue-500 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
-                        )}
-                        {t.formatLabels[fmt]}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+                        </span>
+                        <span className="text-sm text-gray-600">{t.individual}</span>
+                        <span className="text-[10px] text-gray-400">({t.alwaysOn})</span>
+                      </div>
+                      {FORMATS.map(fmt => {
+                        const on = fmts.includes(fmt)
+                        return (
+                          <button key={fmt} type="button" onClick={() => toggleFormat(subject, fmt)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                              on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600'
+                            }`}>
+                            {on && <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                            {t.formatLabels[fmt]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-              {/* Grades / levels */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.levels}</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {levels.map(level => {
-                    const on = lvls.includes(level)
-                    return (
-                      <button
-                        key={level}
-                        type="button"
-                        onClick={() => toggleLevel(subject, level)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          on
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        {gl[level] ?? level}
-                      </button>
-                    )
-                  })}
+                  {/* Grades / levels */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{t.levels}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {levels.map(level => {
+                        const on = lvls.includes(level)
+                        return (
+                          <button key={level} type="button" onClick={() => toggleLevel(subject, level)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                              on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}>
+                            {gl[level] ?? level}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )
         })}
