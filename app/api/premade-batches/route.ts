@@ -92,6 +92,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Each session needs name, session_date and start_time' }, { status: 400 })
     }
   }
+  const sessionNames = sessions.map((s: { name: string }) => s.name.trim().toLowerCase())
+  if (new Set(sessionNames).size !== sessionNames.length) {
+    return NextResponse.json({ error: 'Session names must be unique within a batch' }, { status: 400 })
+  }
+  const sessionSlots = sessions.map((s: { session_date: string; start_time: string }) => `${s.session_date}T${s.start_time}`)
+  if (new Set(sessionSlots).size !== sessionSlots.length) {
+    return NextResponse.json({ error: 'Two sessions cannot have the same date and time' }, { status: 400 })
+  }
 
   const supabase = getSupabaseAdmin()
   const today = new Date().toISOString().slice(0, 10)

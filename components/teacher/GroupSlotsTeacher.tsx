@@ -155,6 +155,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<('active' | 'completed')[]>(['active'])
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -244,9 +245,10 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
     }
   }
 
-  // Group by subject x lang x level
+  // Group by subject x lang x level (filtered by status)
+  const filteredBatches = batches.filter(b => statusFilter.includes(b.status as 'active' | 'completed'))
   const groupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: Batch[] }>()
-  for (const batch of batches) {
+  for (const batch of filteredBatches) {
     const key = `${batch.subject}||${batch.teaching_language ?? ''}||${[...(batch.target_levels || [])].sort().join(',')}`
     if (!groupMap.has(key)) {
       groupMap.set(key, { subject: batch.subject, lang: batch.teaching_language ?? '', levels: batch.target_levels || [], batches: [] })
@@ -406,6 +408,24 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {!loading && batches.some(b => b.status === 'completed') && (
+        <div className="flex gap-1.5">
+          {(['active', 'completed'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                statusFilter.includes(s)
+                  ? s === 'active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                  : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {s === 'active' ? t.active : t.completed}
+            </button>
+          ))}
         </div>
       )}
 

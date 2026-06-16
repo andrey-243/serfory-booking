@@ -88,6 +88,7 @@ type Booking = {
   telegram_username: string | null
   status: string
   student_response: string | null
+  meet_link: string | null
 }
 
 type AvailabilityRow = {
@@ -95,6 +96,32 @@ type AvailabilityRow = {
   start_time: string
   end_time: string
   enabled: boolean
+}
+
+type GroupBatch = {
+  id: string
+  subject: string
+  teaching_language: string
+  target_levels: string[]
+  start_time: string
+  duration_minutes: number
+  max_students: number
+  status: string
+  enrollment_count: number
+  group_slot_sessions: { id: string; session_date: string; start_time: string }[]
+}
+
+type PremadeBatch = {
+  id: string
+  name: string
+  subject: string
+  teaching_language: string
+  target_levels: string[]
+  duration_min: number
+  max_students: number
+  status: string
+  enrollment_count: number
+  premade_sessions: { id: string; name: string; session_date: string; start_time: string }[]
 }
 
 type User = { email: string; role: string; teacherId: string | null; name: string }
@@ -106,6 +133,8 @@ export default function TeacherPage() {
   const [subjectFormats, setSubjectFormats] = useState<Record<string, string[]>>({})
   const [subjectLevels, setSubjectLevels] = useState<Record<string, string[]>>({})
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [groupBatches, setGroupBatches] = useState<GroupBatch[]>([])
+  const [premadeBatches, setPremadeBatches] = useState<PremadeBatch[]>([])
   const [lang, setLang] = useState<Lang>('en')
   const [nav, setNav] = useState<NavSection>('overview')
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
@@ -113,6 +142,7 @@ export default function TeacherPage() {
   )
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
+  const [overviewOpen, setOverviewOpen] = useState({ oneToOne: true, group: true, premade: true })
 
   const t = T[lang]
 
@@ -147,6 +177,12 @@ export default function TeacherPage() {
           fetch(`/api/bookings?teacherId=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => setBookings(d.bookings || []))
+          fetch(`/api/group-slots?teacherId=${d.user.teacherId}`)
+            .then(r => r.json())
+            .then(d => setGroupBatches(d.batches || []))
+          fetch(`/api/premade-batches?teacherId=${d.user.teacherId}`)
+            .then(r => r.json())
+            .then(d => setPremadeBatches(d.batches || []))
           fetch(`/api/teachers?id=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => {
@@ -190,9 +226,53 @@ export default function TeacherPage() {
     setTimeout(() => setSavedAvail(false), 3000)
   }
 
-  const upcoming = bookings.filter(b => new Date(b.slot_start) >= new Date())
-  const thisWeekCount = upcoming.filter(b => isThisWeek(parseISO(b.slot_start), { weekStartsOn: 1 })).length
+  const now = new Date()
+  const upcoming = bookings.filter(b => new Date(b.slot_start) >= now)
+
+  const upcomingGroupSessions = groupBatches
+    .filter(b => b.status === 'active')
+    .flatMap(b => b.group_slot_sessions
+      .filter(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+      .map(s => ({ ...s, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
+    )
+    .sort((a, c) => a.session_date.localeCompare(c.session_date))
+
+  const upcomingPremadeSessions = premadeBatches
+    .filter(b => b.status === 'active')
+    .flatMap(b => b.premade_sessions
+      .filter(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+      .map(s => ({ ...s, batchName: b.name, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
+    )
+    .sort((a, c) => a.session_date.localeCompare(c.session_date))
+
+  const thisWeek1v1 = upcoming.filter(b => isThisWeek(parseISO(b.slot_start), { weekStartsOn: 1 })).length
+  const thisWeekGroup = upcomingGroupSessions.filter(s => isThisWeek(new Date(`${s.session_date}T${s.start_time}`), { weekStartsOn: 1 })).length
+  const thisWeekPremade = upcomingPremadeSessions.filter(s => isThisWeek(new Date(`${s.session_date}T${s.start_time}`), { weekStartsOn: 1 })).length
+  const thisWeekCount = thisWeek1v1 + thisWeekGroup + thisWeekPremade
+  const totalUpcoming = upcoming.length + upcomingGroupSessions.length + upcomingPremadeSessions.length
   const nextLesson = upcoming[0] ?? null
+
+  // Build grouped views for Overview (same logic as Courses tab)
+  const LANG_LABELS_OV: Record<string, string> = { en: 'EN', ru: 'RU', et: 'ET', ky: 'KY' }
+  const LANG_COLORS_OV: Record<string, string> = {
+    en: 'bg-blue-100 text-blue-700', ru: 'bg-orange-100 text-orange-700',
+    et: 'bg-green-100 text-green-700', ky: 'bg-purple-100 text-purple-700',
+  }
+
+  const overviewGroupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: GroupBatch[] }>()
+  for (const b of groupBatches.filter(bt => bt.status === 'active')) {
+    const key = `${b.subject}||${b.teaching_language ?? ''}||${[...(b.target_levels || [])].sort().join(',')}`
+    if (!overviewGroupMap.has(key)) overviewGroupMap.set(key, { subject: b.subject, lang: b.teaching_language ?? '', levels: b.target_levels || [], batches: [] })
+    overviewGroupMap.get(key)!.batches.push(b)
+  }
+  const overviewGroups = [...overviewGroupMap.values()]
+
+  const overviewPremadeMap = new Map<string, { subject: string; batches: PremadeBatch[] }>()
+  for (const b of premadeBatches.filter(bt => bt.status === 'active')) {
+    if (!overviewPremadeMap.has(b.subject)) overviewPremadeMap.set(b.subject, { subject: b.subject, batches: [] })
+    overviewPremadeMap.get(b.subject)!.batches.push(b)
+  }
+  const overviewPremadeGroups = [...overviewPremadeMap.values()]
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) ?? '?'
 
@@ -232,9 +312,9 @@ export default function TeacherPage() {
               }`}>
               <span className="shrink-0">{item.icon}</span>
               {item.label}
-              {item.id === 'overview' && upcoming.length > 0 && (
+              {item.id === 'overview' && totalUpcoming > 0 && (
                 <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${nav === 'overview' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                  {upcoming.length}
+                  {totalUpcoming}
                 </span>
               )}
             </button>
@@ -281,6 +361,7 @@ export default function TeacherPage() {
           {/* Overview */}
           {nav === 'overview' && (
             <div className="space-y-5 max-w-3xl">
+              {/* Stat cards */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{t.nextLesson}</p>
@@ -290,6 +371,13 @@ export default function TeacherPage() {
                       <p className="text-xs text-gray-400 mt-0.5">
                         {nextLesson.subject} · {format(parseISO(nextLesson.slot_start), t.dateFormat, { locale: t.locale })}
                       </p>
+                      {nextLesson.meet_link && (
+                        <a href={nextLesson.meet_link} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-2 py-0.5 hover:bg-blue-50 transition-colors">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                          Google Meet
+                        </a>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-gray-400">{t.noNext}</p>
@@ -298,13 +386,136 @@ export default function TeacherPage() {
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{t.thisWeek}</p>
                   <p className="text-2xl font-bold text-blue-600">{thisWeekCount}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{t.upcoming(upcoming.length).replace(`(${upcoming.length})`, '').trim()}</p>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {thisWeek1v1 > 0 && <span className="text-[11px] text-gray-500">1:1 <span className="font-semibold text-gray-700">{thisWeek1v1}</span></span>}
+                    {thisWeekGroup > 0 && <span className="text-[11px] text-gray-500">Group <span className="font-semibold text-emerald-600">{thisWeekGroup}</span></span>}
+                    {thisWeekPremade > 0 && <span className="text-[11px] text-gray-500">Premade <span className="font-semibold text-violet-600">{thisWeekPremade}</span></span>}
+                    {thisWeekCount === 0 && <span className="text-xs text-gray-400">{t.upcoming(0).replace('(0)', '').trim()}</span>}
+                  </div>
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <h3 className="font-semibold text-gray-800 mb-4 text-sm">{t.upcoming(upcoming.length)}</h3>
-                <UpcomingList bookings={upcoming} t={t} onUpdateTg={handleUpdateTgUsername} />
-              </div>
+
+              {/* 1:1 section */}
+              {upcoming.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setOverviewOpen(p => ({ ...p, oneToOne: !p.oneToOne }))}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <h3 className="font-semibold text-gray-800 text-sm">1:1 · {t.upcoming(upcoming.length)}</h3>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${overviewOpen.oneToOne ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  {overviewOpen.oneToOne && (
+                    <div className="px-5 pb-4 border-t border-gray-50">
+                      <div className="pt-3">
+                        <UpcomingList bookings={upcoming} t={t} onUpdateTg={handleUpdateTgUsername} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Group section */}
+              {overviewGroups.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setOverviewOpen(p => ({ ...p, group: !p.group }))}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <h3 className="font-semibold text-gray-800 text-sm">Group · {t.upcoming(upcomingGroupSessions.length)}</h3>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${overviewOpen.group ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  {overviewOpen.group && (
+                    <div className="border-t border-gray-50 px-5 py-4 flex flex-col gap-5">
+                      {overviewGroups.map(group => (
+                        <div key={`${group.subject}||${group.lang}||${group.levels.sort().join(',')}`} className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${SUBJECT_COLORS[group.subject] ?? 'bg-gray-100 text-gray-600'}`}>{group.subject}</span>
+                            {group.lang && <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold ${LANG_COLORS_OV[group.lang] ?? 'bg-gray-100 text-gray-500'}`}>{LANG_LABELS_OV[group.lang] ?? group.lang}</span>}
+                            {group.levels.length > 0 && <span className="text-xs font-medium text-gray-500">{group.levels.join(', ')}</span>}
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            {group.batches.map(batch => {
+                              const sorted = [...batch.group_slot_sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
+                              const nextSession = sorted.find(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+                              const displaySession = nextSession ?? sorted[sorted.length - 1]
+                              const isPast = !nextSession
+                              return (
+                                <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Active</span>
+                                    {displaySession && (
+                                      <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                        {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-gray-500 font-medium">{batch.enrollment_count}/{batch.max_students}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Premade section */}
+              {overviewPremadeGroups.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setOverviewOpen(p => ({ ...p, premade: !p.premade }))}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <h3 className="font-semibold text-gray-800 text-sm">Premade · {overviewPremadeGroups.reduce((n, g) => n + g.batches.length, 0)} active</h3>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${overviewOpen.premade ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  {overviewOpen.premade && (
+                    <div className="border-t border-gray-50 px-5 py-4 flex flex-col gap-5">
+                      {overviewPremadeGroups.map(group => (
+                        <div key={group.subject} className="flex flex-col gap-2">
+                          <span className={`self-start text-[11px] px-1.5 py-0.5 rounded font-medium ${SUBJECT_COLORS[group.subject] ?? 'bg-gray-100 text-gray-600'}`}>{group.subject}</span>
+                          <div className="flex flex-col gap-1.5">
+                            {group.batches.map(batch => {
+                              const sorted = [...batch.premade_sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
+                              const nextSession = sorted.find(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+                              const displaySession = nextSession ?? sorted[sorted.length - 1]
+                              const isPast = !nextSession
+                              return (
+                                <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-sm font-medium text-gray-800 truncate">{batch.name}</span>
+                                    {displaySession && (
+                                      <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
+                                        {displaySession.name} · {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-gray-500 font-medium shrink-0 ml-2">{batch.enrollment_count}/{batch.max_students}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {totalUpcoming === 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-sm text-gray-400">{t.empty}</p>
+                </div>
+              )}
             </div>
           )}
 

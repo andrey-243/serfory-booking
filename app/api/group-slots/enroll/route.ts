@@ -114,22 +114,24 @@ export async function POST(req: NextRequest) {
   let gcalLastError: string | null = null
 
   if (teacher?.google_refresh_token && sessions?.length) {
-    const results = await Promise.allSettled(
-      sessions
-        .filter(s => s.gcal_event_id)
-        .map(s => addAttendeeToEvent(
+    const sessionsWithEvent = sessions.filter(s => s.gcal_event_id)
+    if (sessionsWithEvent.length === 0) {
+      gcalLastError = 'No GCal event IDs on sessions'
+    } else {
+      const results = await Promise.allSettled(
+        sessionsWithEvent.map(s => addAttendeeToEvent(
           teacher.google_refresh_token!,
           teacher.google_calendar_id || 'primary',
           s.gcal_event_id!,
           app.email
         ))
-    )
-
-    const failed = results.find(r => r.status === 'rejected')
-    if (!failed) {
-      gcalSynced = true
-    } else {
-      gcalLastError = (failed as PromiseRejectedResult).reason?.message ?? 'GCal sync failed'
+      )
+      const failed = results.find(r => r.status === 'rejected')
+      if (!failed) {
+        gcalSynced = true
+      } else {
+        gcalLastError = (failed as PromiseRejectedResult).reason?.message ?? 'GCal sync failed'
+      }
     }
   } else if (!teacher?.google_refresh_token) {
     // No token yet — will be retried by cron

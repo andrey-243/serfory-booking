@@ -89,7 +89,6 @@ export async function POST(req: NextRequest) {
           start: slot_start,
           end: slot_end,
           description,
-          teacherEmail: teacher.email,
           studentEmail: student_email,
         }
       )
@@ -109,6 +108,7 @@ export async function POST(req: NextRequest) {
       student_email,
       student_phone,
       contact_pref,
+      status: 'confirmed',
       is_minor: false,
       parent_name: null,
       parent_contact: null,

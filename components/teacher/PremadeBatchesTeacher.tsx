@@ -227,8 +227,14 @@ function lastDayOfMonth(firstDate: string): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
 }
 
-function emptySession(): SessionDraft {
-  return { name: '', session_date: new Date().toISOString().slice(0, 10), start_time: '14:00' }
+function dateOffset(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function emptySession(dayOffset = 0): SessionDraft {
+  return { name: '', session_date: dateOffset(dayOffset), start_time: '14:00' }
 }
 
 export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teachingLanguages = [], subjectFormats = {} }: Props) {
@@ -245,6 +251,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<('active' | 'completed')[]>(['active'])
   const formRef = useRef<HTMLDivElement>(null)
   // Session name editing: batchId → { names: Record<sessionId, string>, saving, editMode }
   const [sessionEdits, setSessionEdits] = useState<Record<string, { names: Record<string, string>; saving: boolean; editMode: boolean }>>({})
@@ -255,7 +262,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   const [targetLevels, setTargetLevels] = useState<string[]>([])
   const [levelMode, setLevelMode] = useState<'grade' | 'cefr'>('grade')
   const [teachingLanguage, setTeachingLanguage] = useState<string>(teachingLanguages[0] ?? '')
-  const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(), emptySession()])
+  const [sessions, setSessions] = useState<SessionDraft[]>([emptySession(0), emptySession(1)])
 
   const isLang = LANG_SUBJECTS.includes(subject)
   const availableLevels = isLang ? (levelMode === 'cefr' ? CEFR_LEVELS : ALL_GRADES) : ALL_GRADES
@@ -269,7 +276,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
   }
 
   function addSession() {
-    setSessions(prev => [...prev, emptySession()])
+    setSessions(prev => [...prev, emptySession(prev.length)])
   }
 
   function removeSession(i: number) {
@@ -285,7 +292,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
     setTargetLevels([])
     setLevelMode('grade')
     setTeachingLanguage(teachingLanguages[0] ?? '')
-    setSessions([emptySession(), emptySession()])
+    setSessions([emptySession(0), emptySession(1)])
     setFormError(null)
   }
 
@@ -299,7 +306,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       batch.premade_sessions
         .slice()
         .sort((a, b) => a.session_date.localeCompare(b.session_date))
-        .map(s => ({ name: s.name, session_date: new Date().toISOString().slice(0, 10), start_time: s.start_time }))
+        .map((s, i) => ({ name: s.name, session_date: dateOffset(i), start_time: s.start_time }))
     )
     setShowForm(true)
     setFormError(null)
@@ -380,8 +387,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
     setTargetLevels(tpl.target_levels)
     setLevelMode(tpl.target_levels.some(l => CEFR_LEVELS.includes(l)) ? 'cefr' : 'grade')
     setTeachingLanguage(tpl.teaching_language ?? teachingLanguages[0] ?? '')
-    const today = new Date().toISOString().slice(0, 10)
-    setSessions(tpl.session_names.map(n => ({ name: n, session_date: today, start_time: tpl.session_default_time.slice(0, 5) })))
+    setSessions(tpl.session_names.map((n, i) => ({ name: n, session_date: dateOffset(i), start_time: tpl.session_default_time.slice(0, 5) })))
     setShowForm(true)
     setFormError(null)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -439,8 +445,10 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
     }
   }
 
-  const activeBatches = batches.filter(b => b.status === 'active')
-  const pastBatches = batches.filter(b => b.status !== 'active')
+  const hasCompleted = batches.some(b => b.status === 'completed')
+  const filteredForDisplay = batches.filter(b => statusFilter.includes(b.status as 'active' | 'completed'))
+  const activeBatches = filteredForDisplay.filter(b => b.status === 'active')
+  const pastBatches = filteredForDisplay.filter(b => b.status !== 'active')
 
   // Group by subject × lang × level
   const groupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: PremadeBatch[] }>()
@@ -694,6 +702,24 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
               {t.cancel}
             </button>
           </div>
+        </div>
+      )}
+
+      {!loading && hasCompleted && (
+        <div className="flex gap-1.5">
+          {(['active', 'completed'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                statusFilter.includes(s)
+                  ? s === 'active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                  : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {s === 'active' ? t.active : t.completed}
+            </button>
+          ))}
         </div>
       )}
 
