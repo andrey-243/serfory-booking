@@ -5,6 +5,26 @@ import { createPremadeSessionEvent } from '@/lib/google-calendar'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
 
+// Convert a local date+time in the given IANA timezone to a UTC ISO string.
+function localToUtc(dateStr: string, timeStr: string, tz: string): string {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hour, minute] = timeStr.split(':').map(Number)
+    const refUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0)
+    const formatter = new Intl.DateTimeFormat('en', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    const parts = formatter.formatToParts(new Date(refUtcMs))
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '0'
+    const tzH = get('hour') === '24' ? 0 : Number(get('hour'))
+    const tzMs = Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day')), tzH, Number(get('minute')), 0)
+    return new Date(refUtcMs - (tzMs - refUtcMs)).toISOString()
+  } catch {
+    return new Date(`${dateStr}T${timeStr}:00Z`).toISOString()
+  }
+}
+
 // GET /api/premade-batches?all=true        → admin view (all batches, teacher info joined)
 // GET /api/premade-batches?teacherId=<id>  → teacher dashboard
 // GET /api/premade-batches?subject=<s>     → student booking (active only)
@@ -76,7 +96,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { teacher_id, name, subject, teaching_language, target_levels = [], duration_min = 60, sessions } = body
+  const { teacher_id, name, subject, teaching_language, target_levels = [], duration_min = 60, sessions, timezone = 'UTC' } = body
 
   if (!teacher_id || !name || !subject || !teaching_language || !sessions?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -165,6 +185,7 @@ export async function POST(req: NextRequest) {
     name: s.name,
     session_date: s.session_date,
     start_time: s.start_time,
+    session_start_utc: localToUtc(s.session_date, s.start_time.slice(0, 5), timezone),
   }))
 
   const { data: createdSessions, error: sessErr } = await supabase
@@ -187,6 +208,7 @@ export async function POST(req: NextRequest) {
   if (teacher?.google_refresh_token) {
     for (const s of createdSessions || []) {
       try {
+        const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
         const eventId = await createPremadeSessionEvent(
           teacher.google_refresh_token,
           teacher.google_calendar_id || 'primary',
@@ -195,8 +217,7 @@ export async function POST(req: NextRequest) {
             sessionName: s.name,
             subject,
             teacherName: teacher.name,
-            sessionDate: s.session_date,
-            startTime: s.start_time,
+            sessionStartUtc,
             durationMinutes: duration_min,
             sessionId: s.id,
           }

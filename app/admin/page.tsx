@@ -22,10 +22,11 @@ type Booking = {
   parent_pref: string | null
   telegram_username: string | null
   status: string
+  cancelled_by: 'teacher' | 'admin' | 'student' | null
   amount: number | null
   invoice_id: string | null
-  student_response: string | null
-  teacher_response: string | null
+  student_status: string | null
+  teacher_status: string | null
   teachers: { name: string } | null
 }
 
@@ -61,7 +62,8 @@ type PanelBooking = {
   date: string
   subject: string
   teacher: string
-  status: 'confirmed' | 'pending' | 'cancelled'
+  status: 'active' | 'cancelled' | 'completed'
+  cancelled_by: 'teacher' | 'admin' | 'student' | null
   amount: number
   invoice_id: string | null
   invoice_status: 'sent' | 'paid' | null
@@ -96,6 +98,7 @@ type GroupSession = {
   id: string
   session_date: string
   start_time: string
+  session_start_utc: string | null
   gcal_event_id: string | null
 }
 type EnrolledStudent = {
@@ -126,6 +129,7 @@ type PremadeSession = {
   name: string
   session_date: string
   start_time: string
+  session_start_utc: string | null
   gcal_event_id: string | null
 }
 type AdminPremadeBatch = {
@@ -321,8 +325,9 @@ function subjectColorCrm(subject: string) {
 }
 function crmPanelBookingStatus(status: string, date: string): string {
   if (status === 'cancelled') return 'cancelled'
-  if (status === 'confirmed' && new Date(date) < new Date()) return 'provided'
-  if (status === 'confirmed') return 'confirmed'
+  if (status === 'active' && new Date(date) < new Date()) return 'provided'
+  if (status === 'active') return 'confirmed'
+  if (status === 'completed') return 'provided'
   return 'pending'
 }
 function crmStatusColor(s: string): string {
@@ -351,6 +356,20 @@ function crmFd(iso: string): string {
 function fmtDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+function getBrowserTz(): string { return Intl.DateTimeFormat().resolvedOptions().timeZone }
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+function fmtSessionUtc(utcIso: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const d = new Date(utcIso)
+  return {
+    date: d.toLocaleDateString('en-GB', { timeZone: tz, day: 'numeric', month: 'short' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, tz),
+  }
 }
 function crmInitials(name: string): string {
   const parts = name.trim().split(' ')
@@ -878,7 +897,7 @@ export default function AdminPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(true)
 
-  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['pending', 'confirmed', 'active']))
+  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set(['active']))
   const [filterCourses, setFilterCourses] = useState<Set<string>>(new Set())
   const [filterTeachers, setFilterTeachers] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<'none' | 'teacher' | 'subject'>('none')
@@ -1134,7 +1153,7 @@ export default function AdminPage() {
           total: 0,
           combos: [],
           tgSynced: syncMap[b.student_email] ?? false,
-          gcalResponse: latestBooking.get(b.student_email)?.student_response ?? null,
+          gcalResponse: latestBooking.get(b.student_email)?.student_status ?? null,
           learningLang: langMap[b.student_email] ?? null,
           communicationLang: commLangMap[b.student_email] ?? null,
           grade: gradeMap[b.student_email] ?? null,
@@ -1289,16 +1308,6 @@ export default function AdminPage() {
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="flex gap-1.5 flex-wrap items-center">
                   <span className="text-[10px] font-semibold text-gray-400 uppercase self-center mr-0.5">Statut</span>
-                  {(['pending', 'confirmed'] as const).map(s => {
-                    const on = filterStatuses.has(s)
-                    return (
-                      <button key={s} onClick={() => setFilterStatuses(prev => { const n = new Set(prev); on ? n.delete(s) : n.add(s); return n })}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
-                        {t.status[s]}
-                      </button>
-                    )
-                  })}
-                  <div className="h-4 w-px bg-gray-200" />
                   {(['active', 'completed'] as const).map(s => {
                     const on = filterStatuses.has(s)
                     const color = s === 'active' ? 'bg-emerald-500 border-emerald-500' : 'bg-sky-500 border-sky-500'
@@ -1423,13 +1432,17 @@ export default function AdminPage() {
                             {/* Sessions — horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => {
-                                const isPast = s.session_date < new Date().toISOString().slice(0, 10)
+                                const isPast = s.session_start_utc
+                                  ? new Date(s.session_start_utc) < new Date()
+                                  : s.session_date < new Date().toISOString().slice(0, 10)
+                                const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc) : null
                                 return (
                                   <span key={s.id} className={`flex items-center gap-1 text-[11px] whitespace-nowrap border rounded-md px-2 py-0.5 ${isPast ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                                     <span className={`font-mono text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-300'}`}>{i + 1}</span>
-                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmtDate(s.session_date)}</span>
+                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt ? fmt.date : fmtDate(s.session_date)}</span>
                                     <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
-                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{s.start_time.slice(0, 5)}</span>
+                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{fmt ? fmt.time : s.start_time.slice(0, 5)}</span>
+                                    {fmt && <span className={`text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-400'}`}>{fmt.tzAbbr}</span>}
                                     {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
                                   </span>
                                 )
@@ -1523,15 +1536,19 @@ export default function AdminPage() {
                             {/* Sessions — horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => {
-                                const isPast = s.session_date < new Date().toISOString().slice(0, 10)
+                                const isPast = s.session_start_utc
+                                  ? new Date(s.session_start_utc) < new Date()
+                                  : s.session_date < new Date().toISOString().slice(0, 10)
+                                const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc) : null
                                 return (
                                   <span key={s.id} className={`flex items-center gap-1 text-[11px] whitespace-nowrap border rounded-md px-2 py-0.5 ${isPast ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                                     <span className={`font-mono text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-300'}`}>{i + 1}</span>
                                     <span className={`font-medium max-w-[70px] truncate ${isPast ? 'text-emerald-600' : 'text-gray-500'}`}>{s.name}</span>
                                     <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
-                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmtDate(s.session_date)}</span>
+                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt ? fmt.date : fmtDate(s.session_date)}</span>
                                     <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
-                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{s.start_time.slice(0, 5)}</span>
+                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{fmt ? fmt.time : s.start_time.slice(0, 5)}</span>
+                                    {fmt && <span className={`text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-400'}`}>{fmt.tzAbbr}</span>}
                                     {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
                                   </span>
                                 )
@@ -1658,34 +1675,32 @@ export default function AdminPage() {
                                 </td>
                                 <td className="px-4 py-3 align-middle">
                                   <div className="flex flex-col gap-1.5">
-                                    {b.status === 'pending' && (
-                                      <span className="text-[11px] font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full w-fit">
-                                        {lang === 'fr' ? 'En attente' : 'Pending'}
+                                    {b.status === 'active' && (
+                                      <span className="text-[11px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full w-fit">
+                                        {lang === 'fr' ? 'Actif' : 'Active'}
                                       </span>
                                     )}
-                                    {b.status === 'confirmed' && (
-                                      <span className="text-[11px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full w-fit">
-                                        {lang === 'fr' ? 'Confirmé' : 'Confirmed'}
+                                    {b.status === 'completed' && (
+                                      <span className="text-[11px] font-medium text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-full w-fit">
+                                        {lang === 'fr' ? 'Terminé' : 'Completed'}
                                       </span>
                                     )}
                                     {b.status === 'cancelled' && (
                                       <span className="text-[11px] font-medium text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full w-fit">
-                                        {lang === 'fr' ? 'Annulé' : 'Cancelled'}
+                                        {b.cancelled_by === 'teacher'
+                                          ? (lang === 'fr' ? 'Annulé · prof' : 'Cancelled · teacher')
+                                          : b.cancelled_by === 'admin'
+                                          ? (lang === 'fr' ? 'Annulé · admin' : 'Cancelled · admin')
+                                          : b.cancelled_by === 'student'
+                                          ? (lang === 'fr' ? 'Annulé · élève' : 'Cancelled · student')
+                                          : (lang === 'fr' ? 'Annulé' : 'Cancelled')}
                                       </span>
                                     )}
-                                    {b.teacher_response === 'declined' && (
+                                    {b.teacher_status === 'cancelled' && b.status !== 'cancelled' && (
                                       <span className="flex items-center gap-1 text-[11px] font-medium text-red-500 w-fit" title={lang === 'fr' ? 'Prof a refusé' : 'Teacher declined'}>
                                         <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                           <path d="M12 5v7" />
                                           <circle cx="12" cy="17" r="1.2" fill="currentColor" stroke="none" />
-                                        </svg>
-                                        {lang === 'fr' ? 'Prof' : 'Teacher'}
-                                      </span>
-                                    )}
-                                    {b.teacher_response === 'accepted' && (
-                                      <span className="flex items-center gap-1 text-[11px] font-medium text-green-600 w-fit" title={lang === 'fr' ? 'Prof a confirmé' : 'Teacher confirmed'}>
-                                        <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M5 13l4 4L19 7" />
                                         </svg>
                                         {lang === 'fr' ? 'Prof' : 'Teacher'}
                                       </span>
@@ -2151,7 +2166,8 @@ export default function AdminPage() {
                 date: b.slot_start,
                 subject: b.subject,
                 teacher: b.teachers?.name ?? '—',
-                status: b.status as 'confirmed' | 'pending' | 'cancelled',
+                status: b.status as 'active' | 'cancelled' | 'completed',
+                cancelled_by: b.cancelled_by ?? null,
                 amount: b.amount ?? 0,
                 invoice_id: b.invoice_id ?? null,
                 invoice_status: invStatus,

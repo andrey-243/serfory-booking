@@ -53,14 +53,29 @@ export function getTeacherGrossCost(baseRate: number, format: Format, studentCou
   return Math.round(net * EMTA * 100) / 100
 }
 
+const LESSONS_ORDER: Record<Format, LessonsCount[]> = {
+  individual: [1, 4, 8, 12],
+  pair:       [1, 4, 8],
+  group:      [4],
+  premade:    [6, 7],
+}
+
 export function getPricePerLesson(
   format: Format,
   lessons: number,
   tier: string = 'baltics'
 ): number {
   const multiplier = TIER_MULTIPLIERS[tier as PriceTier] ?? 1.00
-  const base = format === 'premade' ? 18 : (BASE_PRICES[format][lessons as LessonsCount] ?? 0)
-  return Math.ceil(base * multiplier)
+  if (format === 'premade') return Math.ceil(18 * multiplier)
+  const opts = LESSONS_ORDER[format]
+  let prevPrice = Infinity
+  for (const n of opts) {
+    const raw = Math.ceil((BASE_PRICES[format][n] ?? 0) * multiplier)
+    const price = Math.max(Math.min(raw, prevPrice - 1), 1)
+    if (n === lessons) return price
+    prevPrice = price
+  }
+  return Math.ceil((BASE_PRICES[format][lessons as LessonsCount] ?? 0) * multiplier)
 }
 
 export function getStudentsCount(format: Format): number {
@@ -79,6 +94,3 @@ export function getTotalAmount(
 
 export const DISPLAY_PRICES = BASE_PRICES
 export const FORMAT_OPTIONS: Format[] = ['individual', 'pair', 'group', 'premade']
-export const DISCOUNTS: Partial<Record<LessonsCount, string>> = {
-  1: '', 4: '-5%', 6: '', 7: '', 8: '-10%', 12: '-15%',
-}

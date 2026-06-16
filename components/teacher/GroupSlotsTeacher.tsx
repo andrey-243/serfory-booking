@@ -35,7 +35,7 @@ const LANG_COLORS: Record<string, string> = {
   ky: 'bg-purple-100 text-purple-700',
 }
 
-type Session = { id: string; session_date: string; start_time: string }
+type Session = { id: string; session_date: string; start_time: string; session_start_utc: string | null }
 
 type Batch = {
   id: string
@@ -138,6 +138,27 @@ const LABELS = {
   },
 }
 
+// Browser timezone (computed once at module level — stable per tab)
+function getBrowserTz(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+
+function formatSessionUtc(utcIso: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const date = new Date(utcIso)
+  return {
+    date: date.toLocaleDateString('en-GB', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(date, tz),
+  }
+}
+
+// Fallback for sessions without session_start_utc (legacy)
 function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-GB', {
     weekday: 'short', month: 'short', day: 'numeric',
@@ -223,6 +244,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
           target_levels: formLevels,
           start_date: formDate,
           start_time: formTime,
+          timezone: getBrowserTz(),
         }),
       })
       const data = await res.json()
@@ -263,6 +285,8 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   return (
     <div className="flex flex-col gap-4">
       {showConfirm && (() => {
+        const browserTz = getBrowserTz()
+        const tzAbbr = getTzAbbr(new Date(), browserTz)
         const sessionDates = [0, 7, 14, 21].map(offset => {
           const d = new Date(formDate + 'T12:00:00Z')
           d.setUTCDate(d.getUTCDate() + offset)
@@ -278,7 +302,8 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                   <div key={i} className="flex items-center gap-3 text-sm">
                     <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-[11px] flex-shrink-0">{i + 1}</span>
                     <span className="text-gray-700">{date}</span>
-                    <span className="text-gray-400">{formTime}</span>
+                    <span className="text-gray-500">{formTime}</span>
+                    <span className="text-xs text-gray-400">{tzAbbr}</span>
                   </div>
                 ))}
               </div>
@@ -476,9 +501,22 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                             {t.cancelled}
                           </span>
                         )}
-                        <span className="text-sm text-gray-700">
-                          {formatDate(batch.start_date)} · {batch.start_time.slice(0, 5)}
-                        </span>
+                        {(() => {
+                          const firstUtc = batch.group_slot_sessions[0]?.session_start_utc
+                          if (firstUtc) {
+                            const { date, time, tzAbbr } = formatSessionUtc(firstUtc)
+                            return (
+                              <span className="text-sm text-gray-700">
+                                {date} · {time} <span className="text-[11px] text-gray-400">{tzAbbr}</span>
+                              </span>
+                            )
+                          }
+                          return (
+                            <span className="text-sm text-gray-700">
+                              {formatDate(batch.start_date)} · {batch.start_time.slice(0, 5)}
+                            </span>
+                          )
+                        })()}
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <span className="text-xs text-gray-400">{t.spots(batch.enrollment_count, batch.max_students)}</span>
@@ -502,7 +540,10 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                                 <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
                                   {i + 1}
                                 </span>
-                                {formatDate(s.session_date)}, {s.start_time.slice(0, 5)}
+                                {s.session_start_utc ? (() => {
+                                  const { date, time, tzAbbr } = formatSessionUtc(s.session_start_utc)
+                                  return <>{date}, {time} <span className="text-gray-400">{tzAbbr}</span></>
+                                })() : <>{formatDate(s.session_date)}, {s.start_time.slice(0, 5)}</>}
                               </div>
                             ))}
                         </div>

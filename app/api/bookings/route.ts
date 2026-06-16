@@ -108,7 +108,8 @@ export async function POST(req: NextRequest) {
       student_email,
       student_phone,
       contact_pref,
-      status: 'confirmed',
+      status: 'active',
+      teacher_status: 'confirmed',
       is_minor: false,
       parent_name: null,
       parent_contact: null,
@@ -145,7 +146,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  if (!['pending', 'confirmed', 'cancelled'].includes(status)) {
+  if (!['active', 'cancelled', 'completed'].includes(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
   }
 
@@ -157,7 +158,7 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await getSupabaseAdmin()
     .from('bookings')
-    .update({ status })
+    .update({ status, ...(status === 'cancelled' ? { cancelled_by: 'admin' } : {}) })
     .eq('id', id)
 
   if (error) {

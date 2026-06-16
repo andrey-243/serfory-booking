@@ -60,8 +60,13 @@ export type Booking = {
   is_minor: boolean
   parent_name: string | null
   parent_contact: string | null
-  status: 'pending' | 'confirmed' | 'cancelled'
+  status: 'active' | 'cancelled' | 'completed'
+  teacher_status: 'pending' | 'confirmed' | 'cancelled'
+  student_status: 'pending' | 'confirmed' | 'cancelled'
+  cancelled_by: 'teacher' | 'admin' | 'student' | null
   google_event_id: string | null
+  meet_link: string | null
+  invoice_id: string | null
   amount: number | null
   created_at: string
 }

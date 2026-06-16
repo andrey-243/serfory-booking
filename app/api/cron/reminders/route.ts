@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const { data: upcoming } = await getSupabaseAdmin()
     .from('bookings')
     .select('id, student_name, student_email, subject, slot_start, meet_link, teachers(name)')
-    .eq('status', 'confirmed')
+    .eq('status', 'active')
     .gte('slot_start', from)
     .lte('slot_start', to)
 

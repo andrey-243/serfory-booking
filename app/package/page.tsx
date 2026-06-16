@@ -39,7 +39,7 @@ const BASE_PRICES: Record<Format, Partial<Record<LessonsCount, number>>> = {
   premade:    { 6: 18, 7: 18 },
 }
 
-const DISCOUNTS: Partial<Record<LessonsCount, string>> = { 1: '', 4: '-5%', 6: '', 7: '', 8: '-10%', 12: '-15%' }
+
 const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
   individual: [1, 4, 8, 12],
   pair: [1, 4, 8],
@@ -115,6 +115,11 @@ const T = {
     weeks: (n: number) => `${n} weeks`,
     yourOrder: 'Your order',
     invoiceNote: 'Invoice sent to your email',
+    availableSessions: 'Available sessions',
+    spotsLeft: (n: number) => n === 1 ? '1 spot left' : `${n} spots left`,
+    sessions: 'sessions',
+    minAbbr: 'min',
+    vsIndividual: 'vs individual',
   },
   et: {
     loading: 'Laadimine...',
@@ -154,6 +159,11 @@ const T = {
     weeks: (n: number) => `${n} nädalat`,
     yourOrder: 'Sinu tellimus',
     invoiceNote: 'Arve saadetakse e-postile',
+    availableSessions: 'Saadaolevad sessioonid',
+    spotsLeft: (n: number) => n === 1 ? '1 koht vaba' : `${n} kohta vaba`,
+    sessions: 'sessiooni',
+    minAbbr: 'min',
+    vsIndividual: 'vs individuaalne',
   },
   ru: {
     loading: 'Загрузка...',
@@ -193,6 +203,11 @@ const T = {
     weeks: (n: number) => `${n} недель`,
     yourOrder: 'Ваш заказ',
     invoiceNote: 'Счёт будет отправлен на email',
+    availableSessions: 'Доступные занятия',
+    spotsLeft: (n: number) => `Мест: ${n}`,
+    sessions: 'занятий',
+    minAbbr: 'мин',
+    vsIndividual: 'vs индивидуально',
   },
 }
 
@@ -207,6 +222,21 @@ export default function PackagePage() {
       <PackagePageInner />
     </Suspense>
   )
+}
+
+function getBrowserTz(): string { return Intl.DateTimeFormat().resolvedOptions().timeZone }
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+function fmtSessionUtc(utcIso: string, locale: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const d = new Date(utcIso)
+  return {
+    date: d.toLocaleDateString(locale, { timeZone: tz, day: 'numeric', month: 'short' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, tz),
+  }
 }
 
 function PackagePageInner() {
@@ -234,7 +264,7 @@ function PackagePageInner() {
     subject_levels?: Record<string, string[]> | null
     subject_formats?: Record<string, string[]> | null
   }
-  type PremadeSession = { id: string; name: string; session_date: string; start_time: string }
+  type PremadeSession = { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null }
   type PremadeBatch = {
     id: string; teacher_id: string; name: string; subject: string; duration_min: number
     teaching_language: string | null
@@ -260,7 +290,7 @@ function PackagePageInner() {
       .catch(() => setPremadeBatches([]))
   }, [selectedSubject])
 
-  type GroupSession = { id: string; session_date: string; start_time: string }
+  type GroupSession = { id: string; session_date: string; start_time: string; session_start_utc: string | null }
   type GroupBatch = {
     id: string; teacher_id: string; subject: string; teaching_language: string
     day_of_week: number; start_time: string; duration_minutes: number
@@ -350,8 +380,20 @@ function PackagePageInner() {
   const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
   const tierMultiplier = appData?.tierMultiplier ?? 1.0
   const applyTier = (base: number) => Math.ceil(base * tierMultiplier)
-  const pricePerLesson = applyTier(BASE_PRICES[format][lessons] ?? 0)
-  // Each student pays their own invoice (×1), regardless of format
+
+  const getPackPrices = (fmt: Format): number[] =>
+    LESSONS_OPTIONS[fmt].reduce((acc, n, i) => {
+      const raw = applyTier(BASE_PRICES[fmt][n] ?? 0)
+      const price = i === 0 ? raw : Math.min(raw, acc[i - 1] - 1)
+      return [...acc, Math.max(price, 1)]
+    }, [] as number[])
+
+  const pricePerLesson = (() => {
+    const prices = getPackPrices(format)
+    const idx = LESSONS_OPTIONS[format].indexOf(lessons)
+    return idx >= 0 ? prices[idx] : applyTier(BASE_PRICES[format][lessons] ?? 0)
+  })()
+
   const total = format === 'premade'
     ? (selectedBatch ? applyTier(selectedBatch.premade_sessions.length * 18) : 0)
     : pricePerLesson * lessons
@@ -574,20 +616,20 @@ function PackagePageInner() {
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
               <div className={`grid gap-3 grid-cols-${availableFormats.length}`}>
                 {(() => {
-                  const price1on1 = applyTier(BASE_PRICES['individual'][1] ?? 0)
+                  const indivPack1 = getPackPrices('individual')[0]
                   return FORMAT_ORDER.filter(f => availableFormats.includes(f)).map(f => {
-                    const fPrice = f === 'group' ? applyTier(BASE_PRICES['group'][4] ?? 0)
-                      : f === 'premade' ? applyTier(18)
-                      : price1on1
-                    const discountVs1on1 = f !== 'individual' && price1on1 > 0
-                      ? Math.round((1 - fPrice / price1on1) * 100)
+                    const fPrice = f === 'group' ? getPackPrices('group')[0]
+                      : f === 'premade' ? getPackPrices('premade')[0]
+                      : indivPack1
+                    const discountVs1on1 = f !== 'individual' && indivPack1 > 0
+                      ? Math.round((1 - fPrice / indivPack1) * 100)
                       : 0
                     return (
                       <button key={f} onClick={() => setFormat(f)}
                         className={`p-4 rounded-xl border-2 text-left transition-all ${format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                         <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
                         <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
-                        {discountVs1on1 > 0 && <p className="text-xs text-green-600 font-semibold mt-1">-{discountVs1on1}% vs 1:1</p>}
+                        {discountVs1on1 > 0 && <p className="text-xs text-green-600 font-semibold mt-1">-{discountVs1on1}% {t.vsIndividual}</p>}
                       </button>
                     )
                   })
@@ -606,16 +648,22 @@ function PackagePageInner() {
                         <div className="flex justify-between items-start gap-4">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} sessions · {batch.duration_min}min{teacherName ? ` · ${teacherName}` : ''}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} {t.sessions} · {batch.duration_min}{t.minAbbr}{teacherName ? ` · ${teacherName}` : ''}</p>
                             <div className="mt-2 space-y-0.5">
-                              {batch.premade_sessions.map((s, i) => (
-                                <p key={s.id} className="text-xs text-gray-400">{i + 1}. {s.name} · {fmtDate(s.session_date)} {s.start_time.slice(0, 5)}</p>
-                              ))}
+                              {batch.premade_sessions.map((s, i) => {
+                                const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
+                                const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale) : null
+                                return (
+                                  <p key={s.id} className="text-xs text-gray-400">
+                                    {i + 1}. {s.name} · {fmt ? <>{fmt.date} {fmt.time} <span className="text-gray-300">{fmt.tzAbbr}</span></> : <>{fmtDate(s.session_date)} {s.start_time.slice(0, 5)}</>}
+                                  </p>
+                                )
+                              })}
                             </div>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="font-bold text-gray-900 text-base">{applyTier(batch.premade_sessions.length * 18)}€</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{t.spotsLeft(spotsLeft)}</p>
                           </div>
                         </div>
                       </button>
@@ -674,7 +722,7 @@ function PackagePageInner() {
                 {/* Available sessions — right column */}
                 {filteredGroupBatches.length > 0 && (
                   <div className="flex-1 min-w-0 space-y-2">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Available sessions</p>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.availableSessions}</p>
                     {filteredGroupBatches.map(b => {
                       const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                       const spotsLeft = b.max_students - b.enrollment_count
@@ -683,17 +731,30 @@ function PackagePageInner() {
                         <div key={b.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50 text-sm">
                           <div className="flex justify-between items-start gap-3">
                             <div className="min-w-0">
-                              <p className="font-medium text-gray-800 text-sm">
-                                {DAYS[uiLang][b.day_of_week]} · {b.start_time.slice(0, 5)} · {b.duration_minutes}min
-                              </p>
+                              {(() => {
+                                const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
+                                const firstUtc = b.group_slot_sessions[0]?.session_start_utc
+                                const fmt = firstUtc ? fmtSessionUtc(firstUtc, locale) : null
+                                return (
+                                  <p className="font-medium text-gray-800 text-sm">
+                                    {DAYS[uiLang][b.day_of_week]} · {fmt ? <>{fmt.time} <span className="text-gray-400 font-normal text-xs">{fmt.tzAbbr}</span></> : b.start_time.slice(0, 5)} · {b.duration_minutes}{t.minAbbr}
+                                  </p>
+                                )
+                              })()}
                               {teacherName && <p className="text-xs text-blue-500 font-medium mt-0.5">{teacherName}</p>}
                               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                                {b.group_slot_sessions.map(s => (
-                                  <span key={s.id} className="text-xs text-gray-400">{fmtDate(s.session_date)}</span>
-                                ))}
+                                {b.group_slot_sessions.map(s => {
+                                  const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
+                                  const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale) : null
+                                  return (
+                                    <span key={s.id} className="text-xs text-gray-400">
+                                      {fmt ? <>{fmt.date} {fmt.time} <span className="text-gray-300">{fmt.tzAbbr}</span></> : fmtDate(s.session_date)}
+                                    </span>
+                                  )
+                                })}
                               </div>
                             </div>
-                            <p className="text-xs text-gray-400 shrink-0">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
+                            <p className="text-xs text-gray-400 shrink-0">{t.spotsLeft(spotsLeft)}</p>
                           </div>
                         </div>
                       )
@@ -708,9 +769,10 @@ function PackagePageInner() {
                 : 'grid-cols-4'
               }`}>
                 {(() => {
-                  const price1 = applyTier(BASE_PRICES[format][1] ?? 0)
-                  return LESSONS_OPTIONS[format].map(n => {
-                    const price = applyTier(BASE_PRICES[format][n] ?? 0)
+                  const packPrices = getPackPrices(format)
+                  const price1 = packPrices[0]
+                  return LESSONS_OPTIONS[format].map((n, i) => {
+                    const price = packPrices[i]
                     const isSelected = lessons === n
                     const isPopular = format === 'individual' && n === 8
                     const discount = format === 'individual' && price1 > 0 && price < price1

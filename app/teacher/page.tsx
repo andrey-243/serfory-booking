@@ -87,7 +87,7 @@ type Booking = {
   contact_pref: string
   telegram_username: string | null
   status: string
-  student_response: string | null
+  student_status: string | null
   meet_link: string | null
 }
 
@@ -108,7 +108,7 @@ type GroupBatch = {
   max_students: number
   status: string
   enrollment_count: number
-  group_slot_sessions: { id: string; session_date: string; start_time: string }[]
+  group_slot_sessions: { id: string; session_date: string; start_time: string; session_start_utc: string | null }[]
 }
 
 type PremadeBatch = {
@@ -121,7 +121,32 @@ type PremadeBatch = {
   max_students: number
   status: string
   enrollment_count: number
-  premade_sessions: { id: string; name: string; session_date: string; start_time: string }[]
+  premade_sessions: { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null }[]
+}
+
+function getBrowserTz(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+
+function formatSessionUtc(utcIso: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const d = new Date(utcIso)
+  return {
+    date: d.toLocaleDateString('en-GB', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, tz),
+  }
+}
+
+function sessionDate(s: { session_date: string; start_time: string; session_start_utc: string | null }): Date {
+  return s.session_start_utc
+    ? new Date(s.session_start_utc)
+    : new Date(`${s.session_date}T${s.start_time}`)
 }
 
 type User = { email: string; role: string; teacherId: string | null; name: string }
@@ -219,7 +244,7 @@ export default function TeacherPage() {
     await fetch('/api/availability', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teacher_id: user.teacherId, availability: rows }),
+      body: JSON.stringify({ teacher_id: user.teacherId, availability: rows, timezone: getBrowserTz() }),
     })
     setSavingAvail(false)
     setSavedAvail(true)
@@ -227,27 +252,27 @@ export default function TeacherPage() {
   }
 
   const now = new Date()
-  const upcoming = bookings.filter(b => new Date(b.slot_start) >= now)
+  const upcoming = bookings.filter(b => new Date(b.slot_start) >= now && b.status !== 'cancelled')
 
   const upcomingGroupSessions = groupBatches
     .filter(b => b.status === 'active')
     .flatMap(b => b.group_slot_sessions
-      .filter(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+      .filter(s => sessionDate(s) >= now)
       .map(s => ({ ...s, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
     )
-    .sort((a, c) => a.session_date.localeCompare(c.session_date))
+    .sort((a, c) => sessionDate(a).getTime() - sessionDate(c).getTime())
 
   const upcomingPremadeSessions = premadeBatches
     .filter(b => b.status === 'active')
     .flatMap(b => b.premade_sessions
-      .filter(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+      .filter(s => sessionDate(s) >= now)
       .map(s => ({ ...s, batchName: b.name, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
     )
-    .sort((a, c) => a.session_date.localeCompare(c.session_date))
+    .sort((a, c) => sessionDate(a).getTime() - sessionDate(c).getTime())
 
   const thisWeek1v1 = upcoming.filter(b => isThisWeek(parseISO(b.slot_start), { weekStartsOn: 1 })).length
-  const thisWeekGroup = upcomingGroupSessions.filter(s => isThisWeek(new Date(`${s.session_date}T${s.start_time}`), { weekStartsOn: 1 })).length
-  const thisWeekPremade = upcomingPremadeSessions.filter(s => isThisWeek(new Date(`${s.session_date}T${s.start_time}`), { weekStartsOn: 1 })).length
+  const thisWeekGroup = upcomingGroupSessions.filter(s => isThisWeek(sessionDate(s), { weekStartsOn: 1 })).length
+  const thisWeekPremade = upcomingPremadeSessions.filter(s => isThisWeek(sessionDate(s), { weekStartsOn: 1 })).length
   const thisWeekCount = thisWeek1v1 + thisWeekGroup + thisWeekPremade
   const totalUpcoming = upcoming.length + upcomingGroupSessions.length + upcomingPremadeSessions.length
   const nextLesson = upcoming[0] ?? null
@@ -440,19 +465,29 @@ export default function TeacherPage() {
                           </div>
                           <div className="flex flex-col gap-1.5">
                             {group.batches.map(batch => {
-                              const sorted = [...batch.group_slot_sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
-                              const nextSession = sorted.find(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+                              const sorted = [...batch.group_slot_sessions].sort((a, b) => sessionDate(a).getTime() - sessionDate(b).getTime())
+                              const nextSession = sorted.find(s => sessionDate(s) >= now)
                               const displaySession = nextSession ?? sorted[sorted.length - 1]
                               const isPast = !nextSession
                               return (
                                 <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
                                   <div className="flex items-center gap-2">
                                     <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Active</span>
-                                    {displaySession && (
-                                      <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
-                                        {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
-                                      </span>
-                                    )}
+                                    {displaySession && (() => {
+                                      if (displaySession.session_start_utc) {
+                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc)
+                                        return (
+                                          <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                            {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                          </span>
+                                        )
+                                      }
+                                      return (
+                                        <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                          {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
+                                        </span>
+                                      )
+                                    })()}
                                   </div>
                                   <span className="text-xs text-gray-500 font-medium">{batch.enrollment_count}/{batch.max_students}</span>
                                 </div>
@@ -485,19 +520,29 @@ export default function TeacherPage() {
                           <span className={`self-start text-[11px] px-1.5 py-0.5 rounded font-medium ${SUBJECT_COLORS[group.subject] ?? 'bg-gray-100 text-gray-600'}`}>{group.subject}</span>
                           <div className="flex flex-col gap-1.5">
                             {group.batches.map(batch => {
-                              const sorted = [...batch.premade_sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
-                              const nextSession = sorted.find(s => new Date(`${s.session_date}T${s.start_time}`) >= now)
+                              const sorted = [...batch.premade_sessions].sort((a, b) => sessionDate(a).getTime() - sessionDate(b).getTime())
+                              const nextSession = sorted.find(s => sessionDate(s) >= now)
                               const displaySession = nextSession ?? sorted[sorted.length - 1]
                               const isPast = !nextSession
                               return (
                                 <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className="text-sm font-medium text-gray-800 truncate">{batch.name}</span>
-                                    {displaySession && (
-                                      <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
-                                        {displaySession.name} · {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
-                                      </span>
-                                    )}
+                                    {displaySession && (() => {
+                                      if (displaySession.session_start_utc) {
+                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc)
+                                        return (
+                                          <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
+                                            {displaySession.name} · {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                          </span>
+                                        )
+                                      }
+                                      return (
+                                        <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
+                                          {displaySession.name} · {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
+                                        </span>
+                                      )
+                                    })()}
                                   </div>
                                   <span className="text-xs text-gray-500 font-medium shrink-0 ml-2">{batch.enrollment_count}/{batch.max_students}</span>
                                 </div>
@@ -620,7 +665,7 @@ function UpcomingList({ bookings, t, onUpdateTg }: UpcomingListProps) {
           <div>
             <p className="text-sm font-medium text-gray-900">{b.student_name}</p>
             <p className="text-xs text-gray-400 mt-0.5">
-              {b.subject} · {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })}
+              {b.subject} · {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })} <span className="text-gray-300">{getTzAbbr(new Date(b.slot_start), getBrowserTz())}</span>
             </p>
             {b.contact_pref === 'telegram' && (
               <div className="flex items-center gap-1.5 mt-1.5">
@@ -641,9 +686,9 @@ function UpcomingList({ bookings, t, onUpdateTg }: UpcomingListProps) {
             )}
           </div>
           <div className="flex items-center shrink-0">
-            {b.student_response === 'accepted' ? (
+            {b.student_status === 'confirmed' ? (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-600">✓</span>
-            ) : b.student_response === 'declined' ? (
+            ) : b.student_status === 'cancelled' ? (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">✗</span>
             ) : (
               <span className="text-xs text-gray-300">—</span>

@@ -2,25 +2,6 @@ import type { TeacherAvailability } from '@/lib/supabase'
 
 const SLOT_DURATION_MS = 60 * 60 * 1000
 
-// All teachers are based in Estonia — session times are always entered in Europe/Tallinn local time.
-const TEACHER_TIMEZONE = 'Europe/Tallinn'
-
-// Build a local datetime string (YYYY-MM-DDTHH:MM:00) offset by N minutes, without UTC conversion.
-function localAddMinutes(dateStr: string, timeStr: string, minutes: number): string {
-  const [h, m] = timeStr.split(':').map(Number)
-  const total = h * 60 + m + minutes
-  const dayOverflow = Math.floor(total / (24 * 60))
-  const hh = Math.floor((total % (24 * 60)) / 60)
-  const mm = total % 60
-  let endDate = dateStr
-  if (dayOverflow > 0) {
-    const d = new Date(dateStr + 'T12:00:00Z')
-    d.setUTCDate(d.getUTCDate() + dayOverflow)
-    endDate = d.toISOString().slice(0, 10)
-  }
-  return `${endDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`
-}
-
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/google/callback`
 
 async function makeOAuthClient() {
@@ -263,13 +244,12 @@ export async function addAttendeeToEvent(
 export async function createGroupSessionEvent(
   refreshToken: string,
   calendarId: string,
-  { subject, teacherName, sessionDate, startTime, durationMinutes, sessionId }: {
+  { subject, teacherName, sessionStartUtc, durationMinutes, sessionId }: {
     subject: string
     teacherName: string
-    sessionDate: string   // YYYY-MM-DD
-    startTime: string     // HH:MM
+    sessionStartUtc: string  // ISO UTC
     durationMinutes: number
-    sessionId: string     // used as idempotency key
+    sessionId: string
   }
 ): Promise<string | null> {
   const { google } = await import('googleapis')
@@ -277,8 +257,7 @@ export async function createGroupSessionEvent(
   client.setCredentials({ refresh_token: refreshToken })
   const calendar = google.calendar({ version: 'v3', auth: client })
 
-  const startLocal = `${sessionDate}T${startTime.slice(0, 5)}:00`
-  const endLocal = localAddMinutes(sessionDate, startTime.slice(0, 5), durationMinutes)
+  const endUtc = new Date(new Date(sessionStartUtc).getTime() + durationMinutes * 60000).toISOString()
 
   const res = await calendar.events.insert({
     calendarId: calendarId || 'primary',
@@ -287,8 +266,8 @@ export async function createGroupSessionEvent(
     requestBody: {
       summary: `${subject} group · Serfory`,
       description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Group lesson`,
-      start: { dateTime: startLocal, timeZone: TEACHER_TIMEZONE },
-      end: { dateTime: endLocal, timeZone: TEACHER_TIMEZONE },
+      start: { dateTime: sessionStartUtc },
+      end: { dateTime: endUtc },
       conferenceData: { createRequest: { requestId: `group-${sessionId}` } },
     },
   })
@@ -334,13 +313,12 @@ export async function patchCalendarEventSummary(
 export async function createPremadeSessionEvent(
   refreshToken: string,
   calendarId: string,
-  { batchName, sessionName, subject, teacherName, sessionDate, startTime, durationMinutes, sessionId }: {
+  { batchName, sessionName, subject, teacherName, sessionStartUtc, durationMinutes, sessionId }: {
     batchName: string
     sessionName: string
     subject: string
     teacherName: string
-    sessionDate: string   // YYYY-MM-DD
-    startTime: string     // HH:MM
+    sessionStartUtc: string  // ISO UTC
     durationMinutes: number
     sessionId: string
   }
@@ -350,8 +328,7 @@ export async function createPremadeSessionEvent(
   client.setCredentials({ refresh_token: refreshToken })
   const calendar = google.calendar({ version: 'v3', auth: client })
 
-  const startLocal = `${sessionDate}T${startTime.slice(0, 5)}:00`
-  const endLocal = localAddMinutes(sessionDate, startTime.slice(0, 5), durationMinutes)
+  const endUtc = new Date(new Date(sessionStartUtc).getTime() + durationMinutes * 60000).toISOString()
 
   const res = await calendar.events.insert({
     calendarId: calendarId || 'primary',
@@ -360,8 +337,8 @@ export async function createPremadeSessionEvent(
     requestBody: {
       summary: `${batchName} — ${sessionName} · Serfory`,
       description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Premade course\n📖 ${sessionName}`,
-      start: { dateTime: startLocal, timeZone: TEACHER_TIMEZONE },
-      end: { dateTime: endLocal, timeZone: TEACHER_TIMEZONE },
+      start: { dateTime: sessionStartUtc },
+      end: { dateTime: endUtc },
       conferenceData: { createRequest: { requestId: `premade-${sessionId}` } },
     },
   })

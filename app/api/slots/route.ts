@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   // Fetch group sessions (active) in the week window
   const { data: groupSessions } = await supabase
     .from('group_slot_sessions')
-    .select('session_date, start_time, group_slot_batches!inner(teacher_id, status, duration_minutes)')
+    .select('session_date, start_time, session_start_utc, group_slot_batches!inner(teacher_id, status, duration_minutes)')
     .eq('group_slot_batches.teacher_id', teacherId)
     .eq('group_slot_batches.status', 'active')
     .gte('session_date', weekStartStr)
@@ -50,14 +50,14 @@ export async function GET(req: NextRequest) {
   // Fetch premade sessions (active batches) in the week window
   const { data: premadeSessions } = await supabase
     .from('premade_sessions')
-    .select('session_date, start_time, premade_batches!inner(teacher_id, status, duration_min)')
+    .select('session_date, start_time, session_start_utc, premade_batches!inner(teacher_id, status, duration_min)')
     .eq('premade_batches.teacher_id', teacherId)
     .eq('premade_batches.status', 'active')
     .gte('session_date', weekStartStr)
     .lt('session_date', weekEndStr)
 
   // Build busy intervals from group + premade sessions
-  type SessionRow = { session_date: string; start_time: string }
+  type SessionRow = { session_date: string; start_time: string; session_start_utc: string | null }
   type GroupRow = SessionRow & { group_slot_batches: { duration_minutes: number } | null }
   type PremadeRow = SessionRow & { premade_batches: { duration_min: number } | null }
 
@@ -67,20 +67,20 @@ export async function GET(req: NextRequest) {
     const batch = s.group_slot_batches
     if (!batch) continue
     const durationMs = (batch.duration_minutes ?? 60) * 60 * 1000
-    const [h, m] = s.start_time.split(':').map(Number)
-    const start = new Date(s.session_date + 'T00:00:00Z')
-    start.setUTCHours(h, m, 0, 0)
-    extraBusy.push({ start: start.getTime(), end: start.getTime() + durationMs })
+    const startMs = s.session_start_utc
+      ? new Date(s.session_start_utc).getTime()
+      : (() => { const [h, m] = s.start_time.split(':').map(Number); const d = new Date(s.session_date + 'T00:00:00Z'); d.setUTCHours(h, m, 0, 0); return d.getTime() })()
+    extraBusy.push({ start: startMs, end: startMs + durationMs })
   }
 
   for (const s of ((premadeSessions ?? []) as unknown as PremadeRow[])) {
     const batch = s.premade_batches
     if (!batch) continue
     const durationMs = (batch.duration_min ?? 60) * 60 * 1000
-    const [h, m] = s.start_time.split(':').map(Number)
-    const start = new Date(s.session_date + 'T00:00:00Z')
-    start.setUTCHours(h, m, 0, 0)
-    extraBusy.push({ start: start.getTime(), end: start.getTime() + durationMs })
+    const startMs = s.session_start_utc
+      ? new Date(s.session_start_utc).getTime()
+      : (() => { const [h, m] = s.start_time.split(':').map(Number); const d = new Date(s.session_date + 'T00:00:00Z'); d.setUTCHours(h, m, 0, 0); return d.getTime() })()
+    extraBusy.push({ start: startMs, end: startMs + durationMs })
   }
 
   function filterBusy(slots: { start: string; end: string }[]) {

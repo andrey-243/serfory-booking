@@ -8,6 +8,7 @@ type Session = {
   id: string
   session_date: string
   start_time: string
+  session_start_utc: string | null
 }
 
 type Batch = {
@@ -39,6 +40,22 @@ function formatDate(dateStr: string, lang: string): string {
 
 function formatTime(timeStr: string): string {
   return timeStr.slice(0, 5)
+}
+
+function getBrowserTz(): string { return Intl.DateTimeFormat().resolvedOptions().timeZone }
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+function formatSessionUtc(utcIso: string, lang: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const d = new Date(utcIso)
+  const locale = lang === 'et' ? 'et-EE' : lang === 'ru' ? 'ru-RU' : 'en-GB'
+  return {
+    date: d.toLocaleDateString(locale, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, tz),
+  }
 }
 
 export default function GroupBatchView({ subject, refToken, prefill, onSuccess }: Props) {
@@ -116,7 +133,13 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
         const spotsLeft = batch.max_students - batch.enrollment_count
         const isFull = spotsLeft <= 0
         const isExpanded = expanded === batch.id
-        const sessions = batch.group_slot_sessions.sort((a, b) => a.session_date.localeCompare(b.session_date))
+        const sessions = batch.group_slot_sessions.slice().sort((a, b) => {
+          const aT = a.session_start_utc ? new Date(a.session_start_utc).getTime() : new Date(a.session_date).getTime()
+          const bT = b.session_start_utc ? new Date(b.session_start_utc).getTime() : new Date(b.session_date).getTime()
+          return aT - bT
+        })
+        const firstSession = sessions[0]
+        const firstFmt = firstSession?.session_start_utc ? formatSessionUtc(firstSession.session_start_utc, lang) : null
 
         return (
           <div
@@ -137,7 +160,10 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
                   </span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  {formatDate(batch.start_date, lang)} · {formatTime(batch.start_time)} · 4 weeks
+                  {firstFmt
+                    ? <>{firstFmt.date} · {firstFmt.time} <span className="text-gray-400">{firstFmt.tzAbbr}</span> · 4 weeks</>
+                    : <>{formatDate(batch.start_date, lang)} · {formatTime(batch.start_time)} · 4 weeks</>
+                  }
                 </p>
               </div>
               <svg
@@ -151,14 +177,20 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess }
             {isExpanded && (
               <div className="border-t border-gray-100 px-4 pb-4 pt-3 flex flex-col gap-3">
                 <div className="grid grid-cols-2 gap-1.5">
-                  {sessions.map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-2 text-xs text-gray-600">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
-                        {i + 1}
-                      </span>
-                      {formatDate(s.session_date, lang)}, {formatTime(s.start_time)}
-                    </div>
-                  ))}
+                  {sessions.map((s, i) => {
+                    const fmt = s.session_start_utc ? formatSessionUtc(s.session_start_utc, lang) : null
+                    return (
+                      <div key={s.id} className="flex items-center gap-2 text-xs text-gray-600">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-medium text-[10px] flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        {fmt
+                          ? <>{fmt.date}, {fmt.time} <span className="text-gray-400">{fmt.tzAbbr}</span></>
+                          : <>{formatDate(s.session_date, lang)}, {formatTime(s.start_time)}</>
+                        }
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {prefill && (

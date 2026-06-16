@@ -176,6 +176,7 @@ type PremadeSession = {
   name: string
   session_date: string
   start_time: string
+  session_start_utc: string | null
   gcal_event_id: string | null
 }
 
@@ -216,6 +217,26 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-600',
 }
 
+function getBrowserTz(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+function getTzAbbr(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+    .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
+}
+
+function formatSessionUtc(utcIso: string): { date: string; time: string; tzAbbr: string } {
+  const tz = getBrowserTz()
+  const date = new Date(utcIso)
+  return {
+    date: date.toLocaleDateString('en-GB', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(date, tz),
+  }
+}
+
+// Fallback for sessions without session_start_utc (legacy)
 function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-GB', {
     weekday: 'short', month: 'short', day: 'numeric',
@@ -423,7 +444,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       const res = await fetch('/api/premade-batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacher_id: teacherId, name: name.trim(), subject, teaching_language: teachingLanguage, target_levels: targetLevels, duration_min: durationMin, sessions }),
+        body: JSON.stringify({ teacher_id: teacherId, name: name.trim(), subject, teaching_language: teachingLanguage, target_levels: targetLevels, duration_min: durationMin, sessions, timezone: getBrowserTz() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -470,14 +491,19 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
             <h3 className="text-base font-semibold text-gray-900">{t.confirmTitle}</h3>
             <p className="text-sm text-gray-600 leading-relaxed">{t.confirmBody}</p>
             <div className="bg-gray-50 rounded-xl px-4 py-3 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-              {sessions.map((s, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm">
-                  <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-[11px] flex-shrink-0">{i + 1}</span>
-                  <span className="text-gray-700 font-medium truncate flex-1">{s.name || `Session ${i + 1}`}</span>
-                  <span className="text-gray-500 flex-shrink-0">{s.session_date ? new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}</span>
-                  <span className="text-gray-400 flex-shrink-0">{s.start_time}</span>
-                </div>
-              ))}
+              {(() => {
+                const browserTz = getBrowserTz()
+                const tzAbbr = getTzAbbr(new Date(), browserTz)
+                return sessions.map((s, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-[11px] flex-shrink-0">{i + 1}</span>
+                    <span className="text-gray-700 font-medium truncate flex-1">{s.name || `Session ${i + 1}`}</span>
+                    <span className="text-gray-500 flex-shrink-0">{s.session_date ? new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}</span>
+                    <span className="text-gray-500 flex-shrink-0">{s.start_time}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{tzAbbr}</span>
+                  </div>
+                ))
+              })()}
             </div>
             <div className="flex gap-2 justify-end">
               <button
@@ -804,8 +830,20 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                           ) : (
                             <span className="font-medium text-gray-800 truncate flex-1">{s.name}</span>
                           )}
-                          <span className="flex-shrink-0">{formatDate(s.session_date)}</span>
-                          <span className="flex-shrink-0">{s.start_time.slice(0, 5)}</span>
+                          {s.session_start_utc ? (() => {
+                            const { date, time, tzAbbr } = formatSessionUtc(s.session_start_utc)
+                            return (
+                              <>
+                                <span className="flex-shrink-0">{date}</span>
+                                <span className="flex-shrink-0">{time} <span className="text-gray-400">{tzAbbr}</span></span>
+                              </>
+                            )
+                          })() : (
+                            <>
+                              <span className="flex-shrink-0">{formatDate(s.session_date)}</span>
+                              <span className="flex-shrink-0">{s.start_time.slice(0, 5)}</span>
+                            </>
+                          )}
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.gcal_event_id ? 'bg-green-400' : 'bg-gray-300'}`} title={s.gcal_event_id ? 'GCal synced' : 'GCal pending'} />
                         </div>
                       ))}

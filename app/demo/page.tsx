@@ -140,10 +140,10 @@ const DB_AVAIL = [
 ]
 
 const DB_UPCOMING = [
-  { id: '1', student: 'Masha Petrova',   subject: 'English',  date: 'Mon 23 Jun', time: '10:00', status: 'confirmed', tg: '@masha_p' },
-  { id: '2', student: 'Andrei Sokolov',  subject: 'Estonian', date: 'Tue 24 Jun', time: '14:00', status: 'pending',   tg: null },
-  { id: '3', student: 'Liisa Tamm',      subject: 'Estonian', date: 'Wed 25 Jun', time: '11:00', status: 'confirmed', tg: '@liisa_t' },
-  { id: '4', student: 'Viktor Nõmm',     subject: 'English',  date: 'Thu 26 Jun', time: '16:00', status: 'confirmed', tg: null },
+  { id: '1', student: 'Masha Petrova',   subject: 'English',  date: 'Mon 23 Jun', time: '10:00', status: 'active', tg: '@masha_p' },
+  { id: '2', student: 'Andrei Sokolov',  subject: 'Estonian', date: 'Tue 24 Jun', time: '14:00', status: 'active',  tg: null },
+  { id: '3', student: 'Liisa Tamm',      subject: 'Estonian', date: 'Wed 25 Jun', time: '11:00', status: 'active', tg: '@liisa_t' },
+  { id: '4', student: 'Viktor Nõmm',     subject: 'English',  date: 'Thu 26 Jun', time: '16:00', status: 'active', tg: null },
 ]
 
 const DB_GROUPS = [
@@ -162,11 +162,9 @@ const SUBJECT_PILL_COLORS: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    confirmed: 'bg-green-100 text-green-700',
-    pending:   'bg-yellow-100 text-yellow-700',
+    active:    'bg-green-100 text-green-700',
+    completed: 'bg-sky-100 text-sky-700',
     cancelled: 'bg-red-100 text-red-600',
-    active:    'bg-blue-100 text-blue-700',
-    completed: 'bg-gray-100 text-gray-500',
   }
   return <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${styles[status] ?? 'bg-gray-100 text-gray-500'}`}>{status}</span>
 }
@@ -232,9 +230,6 @@ function DUpcomingList({ limit }: { limit?: number }) {
             <StatusBadge status={b.status} />
             {b.status !== 'cancelled' && (
               <div className="flex gap-1">
-                {b.status === 'pending' && (
-                  <button className="w-6 h-6 flex items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200 text-xs font-bold">✓</button>
-                )}
                 <button className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-400 border border-red-200 text-xs font-bold">✕</button>
               </div>
             )}

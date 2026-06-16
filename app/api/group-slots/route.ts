@@ -10,6 +10,27 @@ function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Convert a local date+time in the given IANA timezone to a UTC ISO string.
+function localToUtc(dateStr: string, timeStr: string, tz: string): string {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hour, minute] = timeStr.split(':').map(Number)
+    const refUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0)
+    const formatter = new Intl.DateTimeFormat('en', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    const parts = formatter.formatToParts(new Date(refUtcMs))
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '0'
+    const tzH = get('hour') === '24' ? 0 : Number(get('hour'))
+    const tzMs = Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day')), tzH, Number(get('minute')), 0)
+    return new Date(refUtcMs - (tzMs - refUtcMs)).toISOString()
+  } catch {
+    // Fallback: treat as UTC (unknown timezone)
+    return new Date(`${dateStr}T${timeStr}:00Z`).toISOString()
+  }
+}
+
 // GET /api/group-slots
 // ?all=true                     → admin view (all batches, teacher info joined)
 // ?teacherId=<id>&subject=<s>  → teacher dashboard (their batches)
@@ -94,7 +115,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { teacher_id, subject, teaching_language, target_levels, start_date, start_time, duration_minutes = 60, max_students = 6 } = body
+  const { teacher_id, subject, teaching_language, target_levels, start_date, start_time, duration_minutes = 60, max_students = 6, timezone = 'UTC' } = body
 
   if (!teacher_id || !subject || !start_date || !start_time || !teaching_language || !target_levels?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -169,7 +190,9 @@ export async function POST(req: NextRequest) {
   const sessions = [0, 7, 14, 21].map(offset => {
     const d = new Date(startDateObj)
     d.setUTCDate(d.getUTCDate() + offset)
-    return { batch_id: batch.id, session_date: toDateStr(d), start_time }
+    const session_date = toDateStr(d)
+    const session_start_utc = localToUtc(session_date, start_time.slice(0, 5), timezone)
+    return { batch_id: batch.id, session_date, start_time, session_start_utc }
   })
 
   const { data: createdSessions, error: sessErr } = await supabase
@@ -193,10 +216,11 @@ export async function POST(req: NextRequest) {
   if (teacher?.google_refresh_token) {
     for (const s of createdSessions || []) {
       try {
+        const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
         const eventId = await createGroupSessionEvent(
           teacher.google_refresh_token,
           teacher.google_calendar_id || 'primary',
-          { subject, teacherName: teacher.name, sessionDate: s.session_date, startTime: s.start_time, durationMinutes: duration_minutes, sessionId: s.id }
+          { subject, teacherName: teacher.name, sessionStartUtc, durationMinutes: duration_minutes, sessionId: s.id }
         )
         if (eventId) {
           await supabase.from('group_slot_sessions').update({ gcal_event_id: eventId }).eq('id', s.id)
