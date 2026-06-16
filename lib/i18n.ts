@@ -40,6 +40,7 @@ export const translations = {
     },
     form: {
       courseWith: 'Lesson with',
+      course: 'Course',
       fullName: 'Full name',
       email: 'Email',
       phone: 'Phone',
@@ -109,6 +110,7 @@ export const translations = {
     },
     form: {
       courseWith: 'Tund koos',
+      course: 'Kursus',
       fullName: 'Täisnimi',
       email: 'E-post',
       phone: 'Telefon',
@@ -178,6 +180,7 @@ export const translations = {
     },
     form: {
       courseWith: 'Урок с',
+      course: 'Курс',
       fullName: 'Полное имя',
       email: 'Email',
       phone: 'Телефон',

@@ -66,7 +66,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Batch is full' }, { status: 422 })
   }
 
-  // Check duplicate enrollment
+  // Check invoice not already used for another enrollment (prevents re-enrollment after "book another")
+  const { count: invoiceUsed } = await supabase
+    .from('group_slot_enrollments')
+    .select('*', { count: 'exact', head: true })
+    .eq('invoice_id', invoice.id)
+    .eq('status', 'active')
+
+  if ((invoiceUsed ?? 0) > 0) {
+    return NextResponse.json({ error: 'Already enrolled via this invoice' }, { status: 422 })
+  }
+
+  // Check duplicate enrollment in this specific batch
   const { count: existing } = await supabase
     .from('group_slot_enrollments')
     .select('*', { count: 'exact', head: true })

@@ -96,11 +96,37 @@ export async function GET(req: NextRequest) {
   if (error || !data) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
   if (data.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
-  const { data: existing } = await getSupabaseAdmin()
+  const { data: invoiceRows } = await getSupabaseAdmin()
     .from('invoices')
-    .select('id, status')
+    .select('id, invoice_number, format, subject, lessons_count, total_amount, status, created_at, booking_token')
     .eq('application_id', data.id)
-    .single()
+    .order('created_at', { ascending: false })
+
+  const hasPendingInvoice = (invoiceRows ?? []).some(i => i.status === 'sent')
+
+  const invoices = await Promise.all((invoiceRows ?? []).map(async (inv) => {
+    let lessonsUsed: number | null = null
+    if (inv.status === 'paid' && (inv.format === 'individual' || inv.format === 'pair')) {
+      const { count } = await getSupabaseAdmin()
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('invoice_id', inv.id)
+        .neq('status', 'cancelled')
+      lessonsUsed = count ?? 0
+    }
+    return {
+      id: inv.id,
+      invoice_number: inv.invoice_number,
+      format: inv.format as string,
+      subject: (inv as { subject?: string | null }).subject ?? null,
+      lessons_count: inv.lessons_count,
+      total_amount: inv.total_amount,
+      status: inv.status as 'sent' | 'paid',
+      created_at: inv.created_at as string,
+      lessonsUsed,
+      hasBookingToken: !!(inv as { booking_token?: string | null }).booking_token,
+    }
+  }))
 
   const tier = (data as { price_tier?: string | null }).price_tier || 'baltics'
 
@@ -113,8 +139,9 @@ export async function GET(req: NextRequest) {
     country_code: (data as { country_code?: string | null }).country_code ?? null,
     hasTgChatId: !!(data as { telegram_chat_id?: number | null }).telegram_chat_id,
     telegram_username: (data as { telegram_username?: string | null }).telegram_username ?? null,
-    invoiceAlreadySent: !!existing,
-    invoicePaid: existing?.status === 'paid',
+    invoiceAlreadySent: hasPendingInvoice,
+    invoicePaid: (invoiceRows ?? []).some(i => i.status === 'paid'),
+    invoices,
     tierMultiplier: TIER_MULTIPLIERS[tier] ?? 1.00,
   })
 }

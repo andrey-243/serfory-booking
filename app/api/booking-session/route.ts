@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     invoiceId: invoice.id,
+    applicationId: app.id,
     lessonsRemaining,
     lessonsTotal,
     format: invoice.format,

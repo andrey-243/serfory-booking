@@ -60,13 +60,119 @@ const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string
   `,
 }
 
+function paymentDeadlineLabel(sessionDate: string, sessionTime: string, lang: string): string {
+  const [hourStr] = sessionTime.split(':')
+  const hour = parseInt(hourStr, 10)
+  const locale = lang === 'et' ? 'et-EE' : lang === 'ru' ? 'ru-RU' : 'en-GB'
+  const fmtOpts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+
+  if (hour >= 17) {
+    const d = new Date(sessionDate + 'T12:00:00Z')
+    const dateStr = d.toLocaleDateString(locale, fmtOpts)
+    if (lang === 'et') return `enne ${dateStr} hommikut`
+    if (lang === 'ru') return `до утра ${dateStr}`
+    return `by the morning of ${dateStr}`
+  } else {
+    const d = new Date(sessionDate + 'T12:00:00Z')
+    d.setDate(d.getDate() - 1)
+    const dateStr = d.toLocaleDateString(locale, fmtOpts)
+    if (lang === 'et') return `enne ${dateStr} lõppu`
+    if (lang === 'ru') return `до конца дня ${dateStr}`
+    return `by end of day ${dateStr}`
+  }
+}
+
+async function buildBatchSuggestionsBlock(subject: string, learningLang: string, lang: string): Promise<string> {
+  const today = new Date().toISOString().split('T')[0]
+
+  const [{ data: groupBatches }, { data: premadeBatches }] = await Promise.all([
+    getSupabaseAdmin()
+      .from('group_slot_batches')
+      .select('id, day_of_week, start_time, duration_minutes, group_slot_sessions(session_date, start_time, session_start_utc)')
+      .eq('subject', subject)
+      .eq('teaching_language', learningLang)
+      .eq('status', 'active'),
+    getSupabaseAdmin()
+      .from('premade_batches')
+      .select('id, name, premade_sessions(session_date, start_time, session_start_utc)')
+      .eq('subject', subject)
+      .eq('teaching_language', learningLang)
+      .eq('status', 'active'),
+  ])
+
+  type Suggestion = { name: string; firstDate: string; firstTime: string }
+  const suggestions: Suggestion[] = []
+
+  for (const b of groupBatches ?? []) {
+    const sessions = (b.group_slot_sessions as { session_date: string; start_time: string }[])
+      .filter(s => s.session_date >= today)
+      .sort((a, z) => a.session_date.localeCompare(z.session_date))
+    if (sessions.length === 0) continue
+    const locale = lang === 'et' ? 'et-EE' : lang === 'ru' ? 'ru-RU' : 'en-GB'
+    const DAYS: Record<string, string[]> = {
+      en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      et: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
+      ru: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+    }
+    const day = DAYS[lang]?.[b.day_of_week] ?? b.day_of_week
+    const fmtDate = new Date(sessions[0].session_date + 'T12:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+    suggestions.push({
+      name: `${subject} Group · ${day} ${sessions[0].start_time.slice(0, 5)} (${lang === 'ru' ? 'с' : lang === 'et' ? 'alates' : 'from'} ${fmtDate})`,
+      firstDate: sessions[0].session_date,
+      firstTime: sessions[0].start_time,
+    })
+  }
+
+  for (const b of premadeBatches ?? []) {
+    const sessions = (b.premade_sessions as { session_date: string; start_time: string }[])
+      .filter(s => s.session_date >= today)
+      .sort((a, z) => a.session_date.localeCompare(z.session_date))
+    if (sessions.length === 0) continue
+    suggestions.push({
+      name: b.name,
+      firstDate: sessions[0].session_date,
+      firstTime: sessions[0].start_time,
+    })
+  }
+
+  suggestions.sort((a, z) => a.firstDate.localeCompare(z.firstDate))
+  const top3 = suggestions.slice(0, 3)
+  if (top3.length === 0) return ''
+
+  const headers: Record<string, string> = {
+    en: 'Want to join a group or structured course?',
+    et: 'Soovid liituda grupi- või struktureeritud kursusega?',
+    ru: 'Хотите присоединиться к групповому или структурированному курсу?',
+  }
+  const payBy: Record<string, string> = {
+    en: 'Pay before',
+    et: 'Maksa enne',
+    ru: 'Оплатите до',
+  }
+
+  const rows = top3.map(s => {
+    const deadline = paymentDeadlineLabel(s.firstDate, s.firstTime, lang)
+    return `
+      <tr>
+        <td style="padding:5px 12px 5px 0;font-size:13px;color:#1e1e2e;vertical-align:top">${s.name}</td>
+        <td style="padding:5px 0;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top">${payBy[lang] ?? payBy.en}: <strong>${deadline}</strong></td>
+      </tr>`
+  }).join('')
+
+  return `
+    <div style="margin:20px 0 16px;padding:14px 16px;background:#f8fafc;border-radius:10px;border:1px solid #e5e7eb">
+      <p style="font-size:12px;font-weight:600;color:#374151;margin:0 0 10px">${headers[lang] ?? headers.en}</p>
+      <table style="border-collapse:collapse;width:100%">${rows}</table>
+    </div>
+  `
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { token, format, lessons_count: lessonsCountRaw, premade_batch_id, subject: subjectOverride, learning_lang: learningLangOverride } = body as {
+  const { token, format, lessons_count: lessonsCountRaw, subject: subjectOverride, learning_lang: learningLangOverride } = body as {
     token: string
     format: Format
     lessons_count?: number
-    premade_batch_id?: string
     subject?: string
     learning_lang?: string
   }
@@ -79,35 +185,15 @@ export async function POST(req: NextRequest) {
   if (!validFormats.includes(format)) {
     return NextResponse.json({ error: 'Invalid format' }, { status: 400 })
   }
-  if (format === 'premade' && !premade_batch_id) {
-    return NextResponse.json({ error: 'premade_batch_id required for premade format' }, { status: 400 })
-  }
-  if (format !== 'premade' && !lessonsCountRaw) {
+  if (!lessonsCountRaw) {
     return NextResponse.json({ error: 'lessons_count required' }, { status: 400 })
   }
-  if (format !== 'premade') {
-    const validLessons = [1, 4, 6, 7, 8, 12]
-    if (!validLessons.includes(lessonsCountRaw!)) {
-      return NextResponse.json({ error: 'Invalid lessons_count' }, { status: 400 })
-    }
+  const validLessons = [1, 4, 6, 7, 8, 12]
+  if (!validLessons.includes(lessonsCountRaw)) {
+    return NextResponse.json({ error: 'Invalid lessons_count' }, { status: 400 })
   }
 
-  // Resolve premade batch → derive lessons_count from session count
-  let lessons_count: number = lessonsCountRaw ?? 0
-  if (format === 'premade' && premade_batch_id) {
-    const { data: batch } = await getSupabaseAdmin()
-      .from('premade_batches')
-      .select('id, status, premade_sessions(id)')
-      .eq('id', premade_batch_id)
-      .single()
-    if (!batch || batch.status !== 'active') {
-      return NextResponse.json({ error: 'Batch not found or not active' }, { status: 404 })
-    }
-    lessons_count = (batch.premade_sessions as { id: string }[]).length
-    if (lessons_count === 0) {
-      return NextResponse.json({ error: 'Batch has no sessions' }, { status: 400 })
-    }
-  }
+  const lessons_count: number = lessonsCountRaw
 
   // Resolve application from token
   const { data: app, error: appErr } = await getSupabaseAdmin()
@@ -203,7 +289,6 @@ export async function POST(req: NextRequest) {
       pdf_url: pdfUrl,
       subject: effectiveSubject,
       learning_lang: effectiveLearningLang,
-      ...(premade_batch_id ? { premade_batch_id } : {}),
     })
     .select('id')
     .single()
@@ -220,9 +305,16 @@ export async function POST(req: NextRequest) {
   const botBlock = tgEligible && !hasChatId
     ? botCtaStudentBlock(lang, `https://t.me/${BOT}?start=s_${app.id}`)
     : ''
+
+  // Batch suggestions block — only for group/premade formats
+  let batchBlock = ''
+  if (format === 'group' || format === 'premade') {
+    batchBlock = await buildBatchSuggestionsBlock(effectiveSubject, effectiveLearningLang ?? '', lang)
+  }
+
   const html = rawHtml.replace(
     '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
-    `${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
+    `${batchBlock}${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
   )
 
   await transporter.sendMail({

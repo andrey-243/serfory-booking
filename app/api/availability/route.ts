@@ -25,10 +25,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { teacher_id, availability } = body
+  const { teacher_id, availability, timezone } = body
 
   if (!teacher_id || !Array.isArray(availability)) {
     return NextResponse.json({ error: 'teacher_id and availability[] are required' }, { status: 400 })
+  }
+
+  if (timezone) {
+    await getSupabaseAdmin()
+      .from('teachers')
+      .update({ timezone })
+      .eq('id', teacher_id)
   }
 
   // Remplace toutes les dispos du prof d'un coup

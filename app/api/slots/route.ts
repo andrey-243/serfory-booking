@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { data: teacher, error } = await supabase
     .from('teachers')
-    .select('google_refresh_token, google_calendar_id')
+    .select('google_refresh_token, google_calendar_id, timezone')
     .eq('id', teacherId)
     .single()
 
@@ -92,8 +92,10 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  const tz = teacher.timezone ?? null
+
   if (!teacher.google_refresh_token) {
-    const slots = getAvailableSlotsNoCalendar(weekStartDate, availabilities ?? [])
+    const slots = getAvailableSlotsNoCalendar(weekStartDate, availabilities ?? [], tz)
     return NextResponse.json({ slots: filterBusy(slots) })
   }
 
@@ -102,7 +104,8 @@ export async function GET(req: NextRequest) {
       teacher.google_refresh_token,
       teacher.google_calendar_id || 'primary',
       weekStartDate,
-      availabilities ?? []
+      availabilities ?? [],
+      tz
     )
     return NextResponse.json({ slots: filterBusy(slots) })
   } catch {

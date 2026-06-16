@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { batch_id, application_id, invoice_id } = body
 
-  if (!batch_id || !application_id) {
+  if (!batch_id || !application_id || !invoice_id) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -30,7 +30,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Batch is full' }, { status: 422 })
   }
 
-  // Check not already enrolled
+  // Check invoice not already used for a premade enrollment
+  const { count: invoiceUsed } = await supabase
+    .from('premade_enrollments')
+    .select('*', { count: 'exact', head: true })
+    .eq('invoice_id', invoice_id)
+    .eq('status', 'active')
+
+  if ((invoiceUsed ?? 0) > 0) {
+    return NextResponse.json({ error: 'Already enrolled via this invoice' }, { status: 422 })
+  }
+
+  // Check not already enrolled in this batch
   const { data: existing } = await supabase
     .from('premade_enrollments')
     .select('id')
@@ -87,6 +98,9 @@ export async function POST(req: NextRequest) {
       await supabase.from('premade_enrollments').update({ gcal_last_error: lastError, gcal_sync_attempts: 1 }).eq('id', enrollment.id)
     }
   }
+
+  // Invalidate booking_token — premade enrollment uses all lessons at once
+  await supabase.from('invoices').update({ booking_token: null }).eq('id', invoice_id)
 
   // TG admin notif
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID

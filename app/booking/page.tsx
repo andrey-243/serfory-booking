@@ -8,7 +8,9 @@ import TeacherCard from '@/components/booking/TeacherCard'
 import WeekView from '@/components/booking/WeekView'
 import BookingForm from '@/components/booking/BookingForm'
 import GroupBatchView from '@/components/booking/GroupBatchView'
+import PremadeBatchView from '@/components/booking/PremadeBatchView'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import TimezoneSelect from '@/components/TimezoneSelect'
 import { LanguageProvider, useLang } from '@/lib/language-context'
 import { Teacher } from '@/lib/supabase'
 import { CalendarSlot } from '@/lib/google-calendar'
@@ -23,7 +25,7 @@ export type ApplicationPrefill = {
   learning_lang?: string | null
 }
 
-type BookingFormat = 'individual' | 'pair' | 'group' | null
+type BookingFormat = 'individual' | 'pair' | 'group' | 'premade' | null
 
 type TeacherSlots = { teacher: Teacher; slots: CalendarSlot[] }
 
@@ -67,6 +69,8 @@ function BookingPageInner() {
   const [sessionInvalid, setSessionInvalid] = useState(false)
   const [sessionRefToken, setSessionRefToken] = useState<string | null>(null)
   const [sessionAppRefToken, setSessionAppRefToken] = useState<string | null>(null)
+  const [sessionApplicationId, setSessionApplicationId] = useState<string | null>(null)
+  const [selectedTz, setSelectedTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone)
 
   // Session flow: ?session=<booking_token>
   useEffect(() => {
@@ -80,6 +84,7 @@ function BookingPageInner() {
           return
         }
         setInvoiceId(d.invoiceId)
+        if (d.applicationId) setSessionApplicationId(d.applicationId)
         setLessonsRemaining(d.lessonsRemaining)
         setLessonsTotal(d.lessonsTotal)
         if (d.format) setBookingFormat(d.format)
@@ -232,18 +237,30 @@ function BookingPageInner() {
   }
 
   if (booked) {
+    const isGroupOrPremade = bookingFormat === 'group' || bookingFormat === 'premade'
     return (
       <main className="min-h-screen bg-[#EEF2FF] flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow">
           <div className="text-4xl mb-4">✓</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.booking.confirmed}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.booking.confirmedDesc}</p>
-          <button
-            onClick={() => { setBooked(false); setSelectedSlot(null); setSelectedTeacher(null) }}
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600"
-          >
-            {t.booking.bookAnother}
-          </button>
+          {isGroupOrPremade ? (
+            (sessionAppRefToken || ref) && (
+              <a
+                href={`/package?token=${sessionAppRefToken ?? ref}`}
+                className="inline-block px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                {t.booking.buyNewPackage}
+              </a>
+            )
+          ) : (
+            <button
+              onClick={() => { setBooked(false); setSelectedSlot(null); setSelectedTeacher(null) }}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600"
+            >
+              {t.booking.bookAnother}
+            </button>
+          )}
         </div>
       </main>
     )
@@ -335,6 +352,8 @@ function BookingPageInner() {
               </>
             )}
           </div>}
+
+          <TimezoneSelect value={selectedTz} onChange={setSelectedTz} />
         </div>
 
         {/* Grade mismatch info — shown when student's grade isn't covered by any teacher */}
@@ -352,6 +371,17 @@ function BookingPageInner() {
             refToken={ref ?? sessionAppRefToken ?? ''}
             prefill={prefill ?? undefined}
             onSuccess={() => setBooked(true)}
+            timezone={selectedTz}
+          />
+        ) : bookingFormat === 'premade' && sessionApplicationId && invoiceId ? (
+          <PremadeBatchView
+            subject={selectedCourse}
+            teachingLang={prefill?.learning_lang ?? null}
+            applicationId={sessionApplicationId}
+            invoiceId={invoiceId}
+            prefill={prefill ?? undefined}
+            onSuccess={() => setBooked(true)}
+            timezone={selectedTz}
           />
         ) : (
           <div className="flex gap-5 items-stretch" style={{ height: 'calc(100vh - 220px)', minHeight: '560px' }}>
@@ -381,8 +411,8 @@ function BookingPageInner() {
                       if (lessonsRemaining !== null) setLessonsRemaining(r => r !== null ? Math.max(0, r - 1) : null)
                     }}
                     onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
+                    onNoLessons={() => setSessionInvalid(true)}
                     prefill={prefill ?? undefined}
-                    adjustedPrice={(selectedTeacher as Teacher & { adjusted_price?: number }).adjusted_price}
                     refToken={ref ?? undefined}
                     invoiceId={invoiceId ?? undefined}
                   />
@@ -428,6 +458,7 @@ function BookingPageInner() {
                   weekStart={weekStart}
                   onPrevWeek={() => setWeekStart(w => subDays(w, 7))}
                   onNextWeek={() => setWeekStart(w => addDays(w, 7))}
+                  timezone={selectedTz}
                 />
               )}
             </div>

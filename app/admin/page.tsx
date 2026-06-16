@@ -925,7 +925,7 @@ export default function AdminPage() {
   const [invFilterFormat, setInvFilterFormat] = useState<string>('all')
   const [invFilterSubject, setInvFilterSubject] = useState<string>('all')
   const [invFilterPack, setInvFilterPack] = useState<string>('all')
-  const [invFilterStatus, setInvFilterStatus] = useState<string>('all')
+  const [paidSectionOpen, setPaidSectionOpen] = useState(false)
 
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -1237,7 +1237,6 @@ export default function AdminPage() {
     if (invFilterFormat !== 'all') result = result.filter(i => i.format === invFilterFormat)
     if (invFilterSubject !== 'all') result = result.filter(i => i.applications?.subject === invFilterSubject)
     if (invFilterPack !== 'all') result = result.filter(i => String(i.lessons_count) === invFilterPack)
-    if (invFilterStatus !== 'all') result = result.filter(i => i.status === invFilterStatus)
     const d = invSort.dir === 'asc' ? 1 : -1
     return result.sort((a, b) => {
       switch (invSort.col) {
@@ -1248,11 +1247,10 @@ export default function AdminPage() {
         case 'format': return d * a.format.localeCompare(b.format)
         case 'pack': return d * (a.lessons_count - b.lessons_count)
         case 'amount': return d * (a.total_amount - b.total_amount)
-        case 'status': return d * a.status.localeCompare(b.status)
         default: return 0
       }
     })
-  }, [invoices, invSort, invFilterFormat, invFilterSubject, invFilterPack, invFilterStatus])
+  }, [invoices, invSort, invFilterFormat, invFilterSubject, invFilterPack])
 
   function toggleInvSort(col: string) {
     setInvSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' })
@@ -1807,20 +1805,6 @@ export default function AdminPage() {
                     })}
                   </div>
                 )}
-                <div className="h-4 w-px bg-gray-200" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-semibold text-gray-400 uppercase">{lang === 'fr' ? 'Statut' : 'Status'}</span>
-                  {(['all', 'sent', 'paid'] as const).map(s => {
-                    const on = invFilterStatus === s
-                    const label = s === 'all' ? 'All' : s === 'paid' ? (lang === 'fr' ? 'Payé' : 'Paid') : (lang === 'fr' ? 'En attente' : 'Pending')
-                    return (
-                      <button key={s} onClick={() => setInvFilterStatus(s)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? (s === 'paid' ? 'bg-green-500 text-white border-green-500' : s === 'sent' ? 'bg-amber-400 text-white border-amber-400' : 'bg-blue-500 text-white border-blue-500') : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
                 {filteredSortedInvoices.length !== invoices.length && (
                   <span className="text-xs text-gray-400">{filteredSortedInvoices.length} / {invoices.length}</span>
                 )}
@@ -1835,20 +1819,22 @@ export default function AdminPage() {
                 {lang === 'fr' ? 'Aucune facture.' : 'No invoices yet.'}
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
+              (() => {
+                const pendingInvs = filteredSortedInvoices.filter(i => i.status !== 'paid')
+                const paidInvs = filteredSortedInvoices.filter(i => i.status === 'paid')
+                const invColumns = ([
+                  { col: 'date', label: lang === 'fr' ? 'Date' : 'Date', align: 'left' },
+                  { col: 'number', label: lang === 'fr' ? 'N°' : 'No.', align: 'left' },
+                  { col: 'student', label: lang === 'fr' ? 'Élève' : 'Student', align: 'left' },
+                  { col: 'subject', label: lang === 'fr' ? 'Matière' : 'Subject', align: 'left' },
+                  { col: 'format', label: 'Format', align: 'left' },
+                  { col: 'pack', label: 'Pack', align: 'left' },
+                  { col: 'amount', label: lang === 'fr' ? 'Montant' : 'Amount', align: 'right' },
+                ] as { col: string; label: string; align: string }[])
+                const InvThead = () => (
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                      {([
-                        { col: 'date', label: lang === 'fr' ? 'Date' : 'Date', align: 'left' },
-                        { col: 'number', label: lang === 'fr' ? 'N°' : 'No.', align: 'left' },
-                        { col: 'student', label: lang === 'fr' ? 'Élève' : 'Student', align: 'left' },
-                        { col: 'subject', label: lang === 'fr' ? 'Matière' : 'Subject', align: 'left' },
-                        { col: 'format', label: 'Format', align: 'left' },
-                        { col: 'pack', label: 'Pack', align: 'left' },
-                        { col: 'amount', label: lang === 'fr' ? 'Montant' : 'Amount', align: 'right' },
-                        { col: 'status', label: lang === 'fr' ? 'Statut' : 'Status', align: 'left' },
-                      ] as { col: string; label: string; align: string }[]).map(({ col, label, align }) => (
+                      {invColumns.map(({ col, label, align }) => (
                         <th key={col} onClick={() => toggleInvSort(col)}
                           className={`text-${align} px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap`}>
                           {label}<InvSortIcon col={col} />
@@ -1857,93 +1843,124 @@ export default function AdminPage() {
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
-                  <tbody>
-                    {filteredSortedInvoices.map(inv => {
-                      const app = inv.applications
-                      const isPaid = inv.status === 'paid'
-                      return (
-                        <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                            {new Date(inv.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-500 font-mono">
-                            #{String(inv.invoice_number).padStart(3, '0')}
-                          </td>
-                          <td className="px-4 py-3">
-                            {app?.email ? (
-                              <button
-                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors text-left"
-                                onClick={() => setStatsModal(app.email)}
-                              >
-                                {app.name}
-                              </button>
-                            ) : (
-                              <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
-                            )}
-                            <p className="text-xs text-gray-400">{app?.email ?? ''}</p>
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{app?.subject ?? '—'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              inv.format === 'individual' ? 'bg-blue-50 text-blue-700' :
-                              inv.format === 'pair' ? 'bg-purple-50 text-purple-700' :
-                              inv.format === 'premade' ? 'bg-violet-50 text-violet-700' :
-                              'bg-green-50 text-green-700'
-                            }`}>
-                              {inv.format === 'individual' ? (lang === 'fr' ? 'Individuel' : 'Individual') :
-                               inv.format === 'pair' ? (lang === 'fr' ? 'Duo' : 'Pair') :
-                               inv.format === 'premade' ? 'Premade' :
-                               (lang === 'fr' ? 'Groupe' : 'Group')}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-600">
-                            {inv.lessons_count} {lang === 'fr' ? 'cours' : 'lessons'}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                            {inv.total_amount}€
-                          </td>
-                          <td className="px-4 py-3">
-                            {isPaid ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
-                                {lang === 'fr' ? 'Payé' : 'Paid'}
-                              </span>
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
-                                {lang === 'fr' ? 'En attente' : 'Pending'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {inv.pdf_url && (
-                                <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-blue-500 hover:text-blue-700 font-medium">
-                                  PDF
-                                </a>
-                              )}
-                              {!isPaid && (
-                                <button
-                                  onClick={async () => {
-                                    if (!confirm(lang === 'fr' ? 'Confirmer la réception du paiement ?' : 'Confirm payment received?')) return
-                                    const res = await fetch(`/api/invoices/${inv.id}`, {
-                                      method: 'PATCH',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ status: 'paid' }),
-                                    })
-                                    if (res.ok) setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'paid' } : i))
-                                  }}
-                                  className="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
-                                  {lang === 'fr' ? 'Paiement reçu' : 'Mark paid'}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                )
+                const renderInvRow = (inv: typeof filteredSortedInvoices[number]) => {
+                  const app = inv.applications
+                  const isPaid = inv.status === 'paid'
+                  return (
+                    <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {new Date(inv.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 font-mono">
+                        #{String(inv.invoice_number).padStart(3, '0')}
+                      </td>
+                      <td className="px-4 py-3">
+                        {app?.email ? (
+                          <button
+                            className="font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors text-left"
+                            onClick={() => setStatsModal(app.email)}
+                          >
+                            {app.name}
+                          </button>
+                        ) : (
+                          <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
+                        )}
+                        <p className="text-xs text-gray-400">{app?.email ?? ''}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{app?.subject ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          inv.format === 'individual' ? 'bg-blue-50 text-blue-700' :
+                          inv.format === 'pair' ? 'bg-purple-50 text-purple-700' :
+                          inv.format === 'premade' ? 'bg-violet-50 text-violet-700' :
+                          'bg-green-50 text-green-700'
+                        }`}>
+                          {inv.format === 'individual' ? (lang === 'fr' ? 'Individuel' : 'Individual') :
+                           inv.format === 'pair' ? (lang === 'fr' ? 'Duo' : 'Pair') :
+                           inv.format === 'premade' ? 'Premade' :
+                           (lang === 'fr' ? 'Groupe' : 'Group')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {inv.lessons_count} {lang === 'fr' ? 'cours' : 'lessons'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                        {inv.total_amount}€
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {inv.pdf_url && (
+                            <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:text-blue-700 font-medium">
+                              PDF
+                            </a>
+                          )}
+                          {!isPaid && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(lang === 'fr' ? 'Confirmer la réception du paiement ?' : 'Confirm payment received?')) return
+                                const res = await fetch(`/api/invoices/${inv.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ status: 'paid' }),
+                                })
+                                if (res.ok) setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'paid' } : i))
+                              }}
+                              className="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
+                              {lang === 'fr' ? 'Paiement reçu' : 'Mark paid'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                return (
+                  <div className="space-y-3">
+                    {/* Pending — open by default */}
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
+                          {lang === 'fr' ? 'En attente' : 'Pending'}
+                        </span>
+                        <span className="text-xs text-gray-400">{pendingInvs.length}</span>
+                      </div>
+                      {pendingInvs.length === 0 ? (
+                        <p className="px-4 py-3 text-sm text-gray-400">
+                          {lang === 'fr' ? 'Aucune facture en attente.' : 'No pending invoices.'}
+                        </p>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <InvThead />
+                          <tbody>{pendingInvs.map(renderInvRow)}</tbody>
+                        </table>
+                      )}
+                    </div>
+                    {/* Paid — closed by default */}
+                    {paidInvs.length > 0 && (
+                      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <button
+                          onClick={() => setPaidSectionOpen(o => !o)}
+                          className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">
+                            {lang === 'fr' ? 'Payé' : 'Paid'}
+                          </span>
+                          <span className="text-xs text-gray-400">{paidInvs.length}</span>
+                          <span className="ml-auto text-gray-400 text-xs">{paidSectionOpen ? '▲' : '▼'}</span>
+                        </button>
+                        {paidSectionOpen && (
+                          <table className="w-full text-sm border-t border-gray-100">
+                            <InvThead />
+                            <tbody>{paidInvs.map(renderInvRow)}</tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()
             )}
           </div>
         )}

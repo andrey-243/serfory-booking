@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import TimezoneSelect from '@/components/TimezoneSelect'
 
 type Format = 'individual' | 'pair' | 'group' | 'premade'
 type LessonsCount = 1 | 4 | 6 | 7 | 8 | 12
@@ -108,6 +109,11 @@ const T = {
     tgDesc: 'Receive lesson reminders and messages from your teacher directly on Telegram.',
     tgCta: 'Connect to bot',
     invoicePending: 'You have a pending invoice. You can still select a new package.',
+    yourPackages: 'Your packages',
+    lessonsToBook: (n: number) => n === 1 ? '1 lesson to book' : `${n} lessons to book`,
+    readyToEnroll: 'Ready to enroll',
+    invoicePendingLabel: 'Invoice pending',
+    availableCourses: 'Available courses',
     comingSoon: 'Coming soon',
     interested: "I'm interested",
     interestedSent: 'Noted! We\'ll let you know.',
@@ -152,6 +158,11 @@ const T = {
     tgDesc: 'Tunnimuistutused ja õpetaja sõnumid otse Telegrami.',
     tgCta: 'Ühenda botiga',
     invoicePending: 'Sul on ootel arve. Saad siiski uue paketi valida.',
+    yourPackages: 'Sinu paketid',
+    lessonsToBook: (n: number) => n === 1 ? '1 tund broneerida' : `${n} tundi broneerida`,
+    readyToEnroll: 'Valmis registreeruma',
+    invoicePendingLabel: 'Arve ootel',
+    availableCourses: 'Saadaolevad kursused',
     comingSoon: 'Tulemas',
     interested: 'Olen huvitatud',
     interestedSent: 'Märgitud! Anname teada.',
@@ -196,6 +207,11 @@ const T = {
     tgDesc: 'Напоминания об уроках и сообщения от учителя прямо в Telegram.',
     tgCta: 'Подключить бота',
     invoicePending: 'У вас есть неоплаченный счёт. Вы всё равно можете выбрать новый пакет.',
+    yourPackages: 'Ваши пакеты',
+    lessonsToBook: (n: number) => n === 1 ? '1 урок к бронированию' : `${n} уроков к бронированию`,
+    readyToEnroll: 'Готово к записи',
+    invoicePendingLabel: 'Счёт не оплачен',
+    availableCourses: 'Доступные курсы',
     comingSoon: 'Скоро',
     interested: 'Интересует',
     interestedSent: 'Записали! Сообщим вам.',
@@ -229,13 +245,13 @@ function getTzAbbr(date: Date, tz: string): string {
   return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
     .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
 }
-function fmtSessionUtc(utcIso: string, locale: string): { date: string; time: string; tzAbbr: string } {
-  const tz = getBrowserTz()
+function fmtSessionUtc(utcIso: string, locale: string, tz?: string): { date: string; time: string; tzAbbr: string } {
+  const zone = tz ?? getBrowserTz()
   const d = new Date(utcIso)
   return {
-    date: d.toLocaleDateString(locale, { timeZone: tz, day: 'numeric', month: 'short' }),
-    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
-    tzAbbr: getTzAbbr(d, tz),
+    date: d.toLocaleDateString(locale, { timeZone: zone, day: 'numeric', month: 'short' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, zone),
   }
 }
 
@@ -243,14 +259,22 @@ function PackagePageInner() {
   const params = useSearchParams()
   const token = params.get('token') ?? ''
 
+  type InvoiceInfo = {
+    id: string; invoice_number: number; format: string; subject: string | null
+    lessons_count: number; total_amount: number; status: 'sent' | 'paid'
+    created_at: string; lessonsUsed: number | null; hasBookingToken: boolean
+  }
+
   const [appData, setAppData] = useState<{
     name: string; subject: string; grade: string | null; lang: Lang
     learning_lang: string | null; country_code: string | null
     hasTgChatId: boolean; telegram_username: string | null
     tierMultiplier: number
   } | null>(null)
+  const [invoiceList, setInvoiceList] = useState<InvoiceInfo[]>([])
   const [status, setStatus] = useState<'loading' | 'invalid' | 'alreadySent' | 'paid' | 'ready' | 'sending' | 'done'>('loading')
   const [uiLang, setUiLang] = useState<Lang>('en')
+  const [selectedTz, setSelectedTz] = useState<string>(() => getBrowserTz())
 
   const [selectedSubject, setSelectedSubject] = useState<Subject>('Russian')
   const [selectedLearningLang, setSelectedLearningLang] = useState<TeachingLang>('en')
@@ -280,10 +304,8 @@ function PackagePageInner() {
   }, [])
 
   const [premadeBatches, setPremadeBatches] = useState<PremadeBatch[]>([])
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null)
   useEffect(() => {
     setPremadeBatches([])
-    setSelectedBatchId(null)
     fetch(`/api/premade-batches?subject=${encodeURIComponent(selectedSubject)}`)
       .then(r => r.json())
       .then(d => setPremadeBatches(d.batches ?? []))
@@ -362,6 +384,7 @@ function PackagePageInner() {
         if (d.grade && (GRADE_KEYS_PKG as readonly string[]).includes(d.grade)) setSelectedGrade(d.grade)
         if (d.telegram_username) setTgUsernameInput(d.telegram_username)
         if (d.invoiceAlreadySent && !d.invoicePaid) setHasPendingInvoice(true)
+        if (d.invoices) setInvoiceList(d.invoices)
         setStatus('ready')
       })
       .catch(() => setStatus('invalid'))
@@ -377,7 +400,7 @@ function PackagePageInner() {
     ? groupBatches.filter(b => teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang))
     : groupBatches
 
-  const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
+ ?? null
   const tierMultiplier = appData?.tierMultiplier ?? 1.0
   const applyTier = (base: number) => Math.ceil(base * tierMultiplier)
 
@@ -394,9 +417,7 @@ function PackagePageInner() {
     return idx >= 0 ? prices[idx] : applyTier(BASE_PRICES[format][lessons] ?? 0)
   })()
 
-  const total = format === 'premade'
-    ? (selectedBatch ? applyTier(selectedBatch.premade_sessions.length * 18) : 0)
-    : pricePerLesson * lessons
+  const total = pricePerLesson * lessons
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
   const tgEligible = appData ? (isTgEligible(appData.country_code, selectedLearningLang) || uiLang === 'ru') : false
@@ -405,13 +426,6 @@ function PackagePageInner() {
   useEffect(() => {
     if (!availableFormats.includes(format)) setFormat('individual')
   }, [availableFormats])
-
-  // Reset selected batch if it's no longer in filteredPremadeBatches
-  useEffect(() => {
-    if (selectedBatchId && !filteredPremadeBatches.find(b => b.id === selectedBatchId)) {
-      setSelectedBatchId(null)
-    }
-  }, [filteredPremadeBatches])
 
   // Reset lessons when format changes (e.g. premade only has 6/7)
   useEffect(() => {
@@ -447,11 +461,8 @@ function PackagePageInner() {
   }, [teacherCache])
 
   async function handleConfirm() {
-    if (format === 'premade' && !selectedBatchId) return
     setStatus('sending')
-    const body = format === 'premade'
-      ? { token, format, premade_batch_id: selectedBatchId, subject: selectedSubject, learning_lang: selectedLearningLang }
-      : { token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }
+    const body = { token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }
     const res = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -503,16 +514,60 @@ function PackagePageInner() {
   )
 
   return (
-    <PageShell uiLang={uiLang} onLangChange={handleLangChange}>
+    <PageShell uiLang={uiLang} onLangChange={handleLangChange} timezone={selectedTz} onTimezoneChange={setSelectedTz}>
       <div className="w-full">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.title(appData!.name)}</h1>
         <p className="text-gray-500 mb-6 text-sm">{t.subtitle}</p>
 
-        {hasPendingInvoice && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 text-sm text-amber-800">
-            {t.invoicePending}
-          </div>
-        )}
+        {(() => {
+          const useful = invoiceList.filter(inv => {
+            if (inv.status === 'sent') return true
+            if (inv.format === 'individual' || inv.format === 'pair') return (inv.lessonsUsed ?? 0) < inv.lessons_count
+            return inv.hasBookingToken
+          })
+          if (useful.length === 0) return null
+          return (
+            <div className="mb-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.yourPackages}</p>
+              <div className="space-y-2">
+                {useful.map(inv => {
+                  const remaining = inv.status === 'paid' && (inv.format === 'individual' || inv.format === 'pair')
+                    ? inv.lessons_count - (inv.lessonsUsed ?? 0)
+                    : null
+                  const fmtInfo = FORMAT_INFO[inv.format as Format]
+                  const formatLabel = fmtInfo ? fmtInfo[uiLang].label : inv.format
+                  const subjectLabel = inv.subject ? (t.courseLabels[inv.subject] ?? inv.subject) : (t.courseLabels[selectedSubject] ?? selectedSubject)
+                  const dateStr = new Date(inv.created_at).toLocaleDateString(
+                    uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB',
+                    { day: 'numeric', month: 'short' }
+                  )
+                  return (
+                    <div key={inv.id} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {inv.status === 'paid' ? (
+                          <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                            {remaining !== null ? t.lessonsToBook(remaining) : t.readyToEnroll}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            {t.invoicePendingLabel}
+                          </span>
+                        )}
+                        <span className="text-sm text-gray-700 truncate">
+                          {(inv.format === 'group' || inv.format === 'premade' || inv.status === 'sent') && `${subjectLabel} · `}{formatLabel}
+                          {inv.status === 'sent' && ` · ${inv.total_amount}€`}
+                        </span>
+                      </div>
+                      {inv.status === 'sent' && (
+                        <span className="text-xs text-gray-400 shrink-0">#{inv.invoice_number} · {dateStr}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         <div className="flex gap-6 items-start">
           {/* Left panel */}
@@ -638,13 +693,13 @@ function PackagePageInner() {
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
               {format === 'premade' ? (
                 <div className="space-y-3">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.availableCourses}</p>
                   {filteredPremadeBatches.map(batch => {
                     const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                     const spotsLeft = batch.max_students - batch.enrollment_count
                     const teacherName = teacherCache?.find(tc => tc.id === batch.teacher_id)?.name
                     return (
-                      <button key={batch.id} onClick={() => setSelectedBatchId(batch.id)}
-                        className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedBatchId === batch.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                      <div key={batch.id} className="w-full p-4 rounded-xl border border-gray-100 bg-gray-50 text-left">
                         <div className="flex justify-between items-start gap-4">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
@@ -652,7 +707,7 @@ function PackagePageInner() {
                             <div className="mt-2 space-y-0.5">
                               {batch.premade_sessions.map((s, i) => {
                                 const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
-                                const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale) : null
+                                const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale, selectedTz) : null
                                 return (
                                   <p key={s.id} className="text-xs text-gray-400">
                                     {i + 1}. {s.name} · {fmt ? <>{fmt.date} {fmt.time} <span className="text-gray-300">{fmt.tzAbbr}</span></> : <>{fmtDate(s.session_date)} {s.start_time.slice(0, 5)}</>}
@@ -666,7 +721,7 @@ function PackagePageInner() {
                             <p className="text-[10px] text-gray-400 mt-0.5">{t.spotsLeft(spotsLeft)}</p>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -734,7 +789,7 @@ function PackagePageInner() {
                               {(() => {
                                 const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
                                 const firstUtc = b.group_slot_sessions[0]?.session_start_utc
-                                const fmt = firstUtc ? fmtSessionUtc(firstUtc, locale) : null
+                                const fmt = firstUtc ? fmtSessionUtc(firstUtc, locale, selectedTz) : null
                                 return (
                                   <p className="font-medium text-gray-800 text-sm">
                                     {DAYS[uiLang][b.day_of_week]} · {fmt ? <>{fmt.time} <span className="text-gray-400 font-normal text-xs">{fmt.tzAbbr}</span></> : b.start_time.slice(0, 5)} · {b.duration_minutes}{t.minAbbr}
@@ -745,7 +800,7 @@ function PackagePageInner() {
                               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                                 {b.group_slot_sessions.map(s => {
                                   const locale = uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB'
-                                  const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale) : null
+                                  const fmt = s.session_start_utc ? fmtSessionUtc(s.session_start_utc, locale, selectedTz) : null
                                   return (
                                     <span key={s.id} className="text-xs text-gray-400">
                                       {fmt ? <>{fmt.date} {fmt.time} <span className="text-gray-300">{fmt.tzAbbr}</span></> : fmtDate(s.session_date)}
@@ -796,11 +851,10 @@ function PackagePageInner() {
               )}
             </div>
 
-            {tgEligible && <TgBlock t={t} botUsername={BOT} />}
           </div>
 
           {/* Right sidebar — sticky order summary */}
-          <div className="w-72 shrink-0 sticky top-8">
+          <div className="w-72 shrink-0 sticky top-8 space-y-3">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 space-y-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.yourOrder}</p>
               <div className="space-y-2 text-sm">
@@ -818,23 +872,16 @@ function PackagePageInner() {
                   <span className="text-gray-500">{t.format}</span>
                   <span className="font-medium text-gray-800">{FORMAT_INFO[format][uiLang].label}</span>
                 </div>
-                {format === 'premade' ? (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{t.package}</span>
-                    <span className="font-medium text-gray-800 text-right max-w-[160px] truncate">{selectedBatch ? selectedBatch.name : '—'}</span>
-                  </div>
-                ) : (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{t.package}</span>
-                    <span className="font-medium text-gray-800">{format === 'group' ? t.weeks(lessons) : t.lessons(lessons)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.package}</span>
+                  <span className="font-medium text-gray-800">{format === 'group' ? t.weeks(lessons) : t.lessons(lessons)}</span>
+                </div>
               </div>
               <div className="border-t border-gray-100 pt-3 flex justify-between items-baseline">
                 <span className="text-xs text-gray-500">{t.total}</span>
                 <span className="text-xl font-bold text-gray-900">{total > 0 ? `${total}€` : '—'}</span>
               </div>
-              <button onClick={handleConfirm} disabled={status === 'sending' || !selectedGrade || (format === 'premade' && !selectedBatchId)}
+              <button onClick={handleConfirm} disabled={status === 'sending' || !selectedGrade}
                 className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors">
                 {status === 'sending' ? t.sending : t.confirm}
               </button>
@@ -846,6 +893,7 @@ function PackagePageInner() {
                 <p className="text-[10px] text-gray-400 leading-snug">{t.personalLink}</p>
               </div>
             </div>
+            {tgEligible && <TgBlock t={t} botUsername={BOT} />}
           </div>
         </div>
       </div>
@@ -895,10 +943,12 @@ function LangSwitcher({ current, onChange }: { current: Lang; onChange: (l: Lang
   )
 }
 
-function PageShell({ children, uiLang, onLangChange }: {
+function PageShell({ children, uiLang, onLangChange, timezone, onTimezoneChange }: {
   children: React.ReactNode
   uiLang: Lang
   onLangChange: (l: Lang) => void
+  timezone?: string
+  onTimezoneChange?: (tz: string) => void
 }) {
   return (
     <div className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
@@ -908,7 +958,14 @@ function PageShell({ children, uiLang, onLangChange }: {
             <Image src="/logo.png" alt="Serfory" width={32} height={32} className="rounded-lg" />
             <span className="text-lg font-bold text-blue-600">Serfory</span>
           </a>
-          <LangSwitcher current={uiLang} onChange={onLangChange} />
+          <div className="flex items-center gap-3">
+            {timezone && onTimezoneChange && (
+              <div className="bg-white border border-gray-200 rounded-lg px-2.5 py-1">
+                <TimezoneSelect value={timezone} onChange={onTimezoneChange} />
+              </div>
+            )}
+            <LangSwitcher current={uiLang} onChange={onLangChange} />
+          </div>
         </div>
         {children}
       </div>

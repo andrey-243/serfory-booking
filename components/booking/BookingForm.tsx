@@ -173,8 +173,8 @@ type Props = {
   subject: string
   onSuccess: () => void
   onCancel: () => void
+  onNoLessons?: () => void
   prefill?: ApplicationPrefill
-  adjustedPrice?: number
   refToken?: string
   invoiceId?: string
 }
@@ -186,9 +186,10 @@ type FormData = {
   contact_pref: string
 }
 
-export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice, refToken, invoiceId }: Props) {
+export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, onNoLessons, prefill, refToken, invoiceId }: Props) {
   const { t, lang } = useLang()
   const ft = t.form
+  const [selectedSubject, setSelectedSubject] = useState(subject)
   const [form, setForm] = useState<FormData>(() => ({
     student_name: prefill?.name ?? '',
     student_email: prefill?.email ?? '',
@@ -226,7 +227,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teacher_id: teacher.id,
-          subject,
+          subject: selectedSubject,
           slot_start: slot.start,
           slot_end: slot.end,
           student_name: form.student_name,
@@ -240,10 +241,11 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
       if (!res.ok) {
         const data = await res.json()
-        const msg = data.error === 'No lessons remaining on this package'
-          ? ft.noLessonsError
-          : (data.error || 'Error')
-        throw new Error(msg)
+        if (data.error === 'No lessons remaining on this package') {
+          onNoLessons?.()
+          return
+        }
+        throw new Error(data.error || 'Error')
       }
 
       onSuccess()
@@ -267,17 +269,21 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         <p className="text-xs text-gray-500 mt-0.5">
           {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
         </p>
-        {adjustedPrice != null && (
-          <div className="mt-2 inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {adjustedPrice}€/h
-          </div>
-        )}
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-3">
+        <Field label={ft.course} required>
+          <select
+            value={selectedSubject}
+            onChange={e => setSelectedSubject(e.target.value)}
+            className={inputClass}
+          >
+            {teacher.subjects.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </Field>
+
         <Field label={ft.fullName} required error={fieldErrors.student_name}>
           <input
             type="text"

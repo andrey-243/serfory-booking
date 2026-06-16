@@ -6,6 +6,7 @@ import { enUS, ru as ruLocale, et as etLocale } from 'date-fns/locale'
 import GroupSlotsTeacher from '@/components/teacher/GroupSlotsTeacher'
 import PremadeBatchesTeacher from '@/components/teacher/PremadeBatchesTeacher'
 import CourseSettingsTeacher from '@/components/teacher/CourseSettingsTeacher'
+import TimezoneSelect from '@/components/TimezoneSelect'
 
 type Lang = 'en' | 'ru' | 'et'
 type NavSection = 'overview' | 'courses' | 'settings'
@@ -133,13 +134,13 @@ function getTzAbbr(date: Date, tz: string): string {
     .formatToParts(date).find(p => p.type === 'timeZoneName')?.value ?? tz
 }
 
-function formatSessionUtc(utcIso: string): { date: string; time: string; tzAbbr: string } {
-  const tz = getBrowserTz()
+function formatSessionUtc(utcIso: string, tz?: string): { date: string; time: string; tzAbbr: string } {
+  const zone = tz ?? getBrowserTz()
   const d = new Date(utcIso)
   return {
-    date: d.toLocaleDateString('en-GB', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }),
-    time: d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }),
-    tzAbbr: getTzAbbr(d, tz),
+    date: d.toLocaleDateString('en-GB', { timeZone: zone, weekday: 'short', month: 'short', day: 'numeric' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }),
+    tzAbbr: getTzAbbr(d, zone),
   }
 }
 
@@ -161,6 +162,7 @@ export default function TeacherPage() {
   const [groupBatches, setGroupBatches] = useState<GroupBatch[]>([])
   const [premadeBatches, setPremadeBatches] = useState<PremadeBatch[]>([])
   const [lang, setLang] = useState<Lang>('en')
+  const [selectedTz, setSelectedTz] = useState<string>(() => getBrowserTz())
   const [nav, setNav] = useState<NavSection>('overview')
   const [availability, setAvailability] = useState<AvailabilityRow[]>(
     Array.from({ length: 7 }, (_, i) => ({ day_of_week: i, start_time: '08:00', end_time: '20:00', enabled: i >= 1 && i <= 5 }))
@@ -244,7 +246,7 @@ export default function TeacherPage() {
     await fetch('/api/availability', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teacher_id: user.teacherId, availability: rows, timezone: getBrowserTz() }),
+      body: JSON.stringify({ teacher_id: user.teacherId, availability: rows, timezone: selectedTz }),
     })
     setSavingAvail(false)
     setSavedAvail(true)
@@ -370,13 +372,16 @@ export default function TeacherPage() {
         {/* Top bar */}
         <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-100 sticky top-0 z-10">
           <h2 className="font-semibold text-gray-900">{NAV_ITEMS.find(n => n.id === nav)?.label}</h2>
-          <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs font-semibold shadow-sm">
-            {(['en', 'ru', 'et'] as Lang[]).map(l => (
-              <button key={l} onClick={() => setLang(l)}
-                className={`px-3 py-1.5 uppercase transition-colors ${lang === l ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
-                {l}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <TimezoneSelect value={selectedTz} onChange={setSelectedTz} />
+            <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs font-semibold shadow-sm">
+              {(['en', 'ru', 'et'] as Lang[]).map(l => (
+                <button key={l} onClick={() => setLang(l)}
+                  className={`px-3 py-1.5 uppercase transition-colors ${lang === l ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -435,7 +440,7 @@ export default function TeacherPage() {
                   {overviewOpen.oneToOne && (
                     <div className="px-5 pb-4 border-t border-gray-50">
                       <div className="pt-3">
-                        <UpcomingList bookings={upcoming} t={t} onUpdateTg={handleUpdateTgUsername} />
+                        <UpcomingList bookings={upcoming} t={t} onUpdateTg={handleUpdateTgUsername} timezone={selectedTz} />
                       </div>
                     </div>
                   )}
@@ -475,7 +480,7 @@ export default function TeacherPage() {
                                     <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Active</span>
                                     {displaySession && (() => {
                                       if (displaySession.session_start_utc) {
-                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc)
+                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
                                         return (
                                           <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
                                             {date} {time} <span className="text-gray-400">{tzAbbr}</span>
@@ -530,7 +535,7 @@ export default function TeacherPage() {
                                     <span className="text-sm font-medium text-gray-800 truncate">{batch.name}</span>
                                     {displaySession && (() => {
                                       if (displaySession.session_start_utc) {
-                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc)
+                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
                                         return (
                                           <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
                                             {displaySession.name} · {date} {time} <span className="text-gray-400">{tzAbbr}</span>
@@ -654,18 +659,24 @@ type UpcomingListProps = {
   bookings: Booking[]
   t: typeof T['en']
   onUpdateTg: (id: string, username: string) => void
+  timezone?: string
 }
 
-function UpcomingList({ bookings, t, onUpdateTg }: UpcomingListProps) {
+function UpcomingList({ bookings, t, onUpdateTg, timezone }: UpcomingListProps) {
+  const tz = timezone ?? getBrowserTz()
   if (bookings.length === 0) return <p className="text-sm text-gray-400">{t.empty}</p>
   return (
     <ul className="divide-y divide-gray-100">
-      {bookings.map(b => (
+      {bookings.map(b => {
+        const d = new Date(b.slot_start)
+        const timeStr = d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
+        const dateStr = d.toLocaleDateString('en-GB', { timeZone: tz, day: 'numeric', month: 'short' })
+        return (
         <li key={b.id} className="flex items-center justify-between py-3">
           <div>
             <p className="text-sm font-medium text-gray-900">{b.student_name}</p>
             <p className="text-xs text-gray-400 mt-0.5">
-              {b.subject} · {format(parseISO(b.slot_start), t.dateFormat, { locale: t.locale })} <span className="text-gray-300">{getTzAbbr(new Date(b.slot_start), getBrowserTz())}</span>
+              {b.subject} · {dateStr} · {timeStr} <span className="text-gray-300">{getTzAbbr(d, tz)}</span>
             </p>
             {b.contact_pref === 'telegram' && (
               <div className="flex items-center gap-1.5 mt-1.5">
@@ -695,7 +706,7 @@ function UpcomingList({ bookings, t, onUpdateTg }: UpcomingListProps) {
             )}
           </div>
         </li>
-      ))}
+      )})}
     </ul>
   )
 }

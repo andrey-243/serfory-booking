@@ -2,6 +2,37 @@ import type { TeacherAvailability } from '@/lib/supabase'
 
 const SLOT_DURATION_MS = 60 * 60 * 1000
 
+function localToUtc(dateStr: string, timeStr: string, tz: string): string {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hour, minute] = timeStr.split(':').map(Number)
+    const refUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0)
+    const formatter = new Intl.DateTimeFormat('en', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    const parts = formatter.formatToParts(new Date(refUtcMs))
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '0'
+    const tzH = get('hour') === '24' ? 0 : Number(get('hour'))
+    const tzMs = Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day')), tzH, Number(get('minute')), 0)
+    return new Date(refUtcMs - (tzMs - refUtcMs)).toISOString()
+  } catch {
+    return new Date(`${dateStr}T${timeStr}:00Z`).toISOString()
+  }
+}
+
+function windowBoundsUtc(day: Date, timeStr: string, teacherTimezone: string | null | undefined): Date {
+  if (teacherTimezone) {
+    const dayStr = day.toISOString().slice(0, 10)
+    const t = timeStr.slice(0, 5)
+    return new Date(localToUtc(dayStr, t, teacherTimezone))
+  }
+  const [h, m] = timeStr.split(':').map(Number)
+  const d = new Date(day)
+  d.setUTCHours(h, m, 0, 0)
+  return d
+}
+
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/google/callback`
 
 async function makeOAuthClient() {
@@ -54,7 +85,8 @@ export async function getAvailableSlots(
   refreshToken: string,
   calendarId: string,
   weekStart: Date,
-  availabilities: TeacherAvailability[]
+  availabilities: TeacherAvailability[],
+  teacherTimezone?: string | null
 ): Promise<CalendarSlot[]> {
   const { google } = await import('googleapis')
   const client = await makeOAuthClient()
@@ -91,13 +123,8 @@ export async function getAvailableSlots(
       : [{ start_time: '08:00:00', end_time: '20:00:00' }]
 
     for (const window of windows) {
-      const [startH, startM] = window.start_time.split(':').map(Number)
-      const [endH, endM] = window.end_time.split(':').map(Number)
-
-      const windowStart = new Date(day)
-      windowStart.setHours(startH, startM, 0, 0)
-      const windowEnd = new Date(day)
-      windowEnd.setHours(endH, endM, 0, 0)
+      const windowStart = windowBoundsUtc(day, window.start_time, teacherTimezone)
+      const windowEnd = windowBoundsUtc(day, window.end_time, teacherTimezone)
 
       let cursor = windowStart.getTime()
       while (cursor + SLOT_DURATION_MS <= windowEnd.getTime()) {
@@ -120,7 +147,8 @@ export async function getAvailableSlots(
 // Blank calendar fallback: generate slots from availability only, no busy intervals
 export function getAvailableSlotsNoCalendar(
   weekStart: Date,
-  availabilities: TeacherAvailability[]
+  availabilities: TeacherAvailability[],
+  teacherTimezone?: string | null
 ): CalendarSlot[] {
   const slots: CalendarSlot[] = []
   for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
@@ -131,12 +159,8 @@ export function getAvailableSlotsNoCalendar(
       ? availabilities.filter(a => a.day_of_week === dayOfWeek)
       : [{ start_time: '08:00:00', end_time: '20:00:00' }]
     for (const window of windows) {
-      const [startH, startM] = window.start_time.split(':').map(Number)
-      const [endH, endM] = window.end_time.split(':').map(Number)
-      const windowStart = new Date(day)
-      windowStart.setHours(startH, startM, 0, 0)
-      const windowEnd = new Date(day)
-      windowEnd.setHours(endH, endM, 0, 0)
+      const windowStart = windowBoundsUtc(day, window.start_time, teacherTimezone)
+      const windowEnd = windowBoundsUtc(day, window.end_time, teacherTimezone)
       let cursor = windowStart.getTime()
       while (cursor + SLOT_DURATION_MS <= windowEnd.getTime()) {
         slots.push({ start: new Date(cursor).toISOString(), end: new Date(cursor + SLOT_DURATION_MS).toISOString() })
