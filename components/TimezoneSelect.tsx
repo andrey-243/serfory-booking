@@ -46,6 +46,23 @@ export function buildTzOptions() {
   })).sort((a, b) => a.offsetMin - b.offsetMin)
 }
 
+function GlobeIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="w-3 h-3 text-gray-400 flex-shrink-0 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
 type Props = {
   value: string
   onChange: (tz: string) => void
@@ -54,23 +71,24 @@ type Props = {
 
 export default function TimezoneSelect({ value, onChange, className = '' }: Props) {
   const options = buildTzOptions()
-  const currentOffset = getOffsetMinutes(value)
-  const currentLabel = formatOffset(currentOffset)
+  const currentOption = options.find(o => o.iana === value)
+  const currentLabel = currentOption?.label ?? formatOffset(getOffsetMinutes(value))
 
   return (
-    <div className={`relative inline-flex items-center gap-1.5 ${className}`}>
-      <span className="text-gray-400 text-xs">🌐</span>
+    <div className={`relative inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer ${className}`}>
+      <GlobeIcon />
+      <span className="text-xs text-gray-600 whitespace-nowrap pointer-events-none">{currentLabel}</span>
+      <ChevronIcon />
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="text-xs text-gray-600 bg-transparent border-none outline-none cursor-pointer pr-4 appearance-none"
-        style={{ backgroundImage: 'none' }}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        aria-label="Timezone"
       >
         {options.map(o => (
           <option key={o.iana} value={o.iana}>{o.label}</option>
         ))}
       </select>
-      <span className="text-[10px] font-medium text-blue-500 pointer-events-none">{currentLabel}</span>
     </div>
   )
 }

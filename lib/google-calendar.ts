@@ -118,9 +118,7 @@ export async function getAvailableSlots(
     day.setDate(day.getDate() + dayOffset)
     const dayOfWeek = day.getDay()
 
-    const windows = availabilities.length > 0
-      ? availabilities.filter(a => a.day_of_week === dayOfWeek)
-      : [{ start_time: '08:00:00', end_time: '20:00:00' }]
+    const windows = availabilities.filter(a => a.day_of_week === dayOfWeek)
 
     for (const window of windows) {
       const windowStart = windowBoundsUtc(day, window.start_time, teacherTimezone)
@@ -155,9 +153,7 @@ export function getAvailableSlotsNoCalendar(
     const day = new Date(weekStart)
     day.setDate(day.getDate() + dayOffset)
     const dayOfWeek = day.getDay()
-    const windows = availabilities.length > 0
-      ? availabilities.filter(a => a.day_of_week === dayOfWeek)
-      : [{ start_time: '08:00:00', end_time: '20:00:00' }]
+    const windows = availabilities.filter(a => a.day_of_week === dayOfWeek)
     for (const window of windows) {
       const windowStart = windowBoundsUtc(day, window.start_time, teacherTimezone)
       const windowEnd = windowBoundsUtc(day, window.end_time, teacherTimezone)

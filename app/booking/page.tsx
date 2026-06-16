@@ -409,11 +409,12 @@ function BookingPageInner() {
                 <>
                   <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} subject={selectedCourse} />
                   {lessonsRemaining !== null && (
-                    <div className={`px-3 py-1.5 rounded-xl text-xs font-medium text-center border ${
+                    <div className={`px-3 py-1.5 rounded-xl text-xs font-medium text-center border flex items-center justify-center gap-2 ${
                       lessonsRemaining === 0
                         ? 'bg-red-50 border-red-200 text-red-600'
                         : 'bg-blue-50 border-blue-100 text-blue-600'
                     }`}>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">{selectedCourse}</span>
                       {t.booking.lessonsRemainingBadge(lessonsRemaining, lessonsTotal ?? 0)}
                     </div>
                   )}
