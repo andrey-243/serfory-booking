@@ -685,6 +685,7 @@ export default function TeacherPage() {
                     initialSubjectFormats={subjectFormats}
                     initialSubjectLevels={subjectLevels}
                     lang={lang}
+                    canToggleIndividual={user.email === 'kseniakivonen@gmail.com'}
                     onSaved={() => reloadTeacherData(user.teacherId!)}
                   />
                 </div>
