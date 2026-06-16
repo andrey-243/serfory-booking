@@ -6,7 +6,7 @@ const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz']
 const ALL_GRADES = ['kindergarten', '1', '2', '3-4', '5-6', '7-8', '9', '10-12']
 const CEFR = ['A1', 'A2', 'B1', 'B2']
 const ALL_TEACHING_LANGS = ['en', 'ru', 'et', 'ky']
-const FORMATS = ['pair', 'group', 'premade'] as const
+const FORMATS = ['group', 'premade'] as const
 
 const GRADE_LABELS: Record<string, Record<string, string>> = {
   en: {

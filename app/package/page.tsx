@@ -46,7 +46,7 @@ const LESSONS_OPTIONS: Record<Format, LessonsCount[]> = {
   group: [4],
   premade: [6, 7],
 }
-const FORMAT_ORDER: Format[] = ['individual', 'pair', 'group', 'premade']
+const FORMAT_ORDER: Format[] = ['individual', 'group', 'premade']
 
 const DAYS: Record<Lang, string[]> = {
   en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -262,9 +262,9 @@ function PackagePageInner() {
 
   type GroupSession = { id: string; session_date: string; start_time: string }
   type GroupBatch = {
-    id: string; teacher_id: string; subject: string; day_of_week: number
-    start_time: string; duration_minutes: number; max_students: number
-    enrollment_count: number; group_slot_sessions: GroupSession[]
+    id: string; teacher_id: string; subject: string; teaching_language: string
+    day_of_week: number; start_time: string; duration_minutes: number
+    max_students: number; enrollment_count: number; group_slot_sessions: GroupSession[]
   }
   const [groupBatches, setGroupBatches] = useState<GroupBatch[]>([])
   useEffect(() => {
@@ -306,8 +306,10 @@ function PackagePageInner() {
     }
     const premadeAvailableForLang = premadeBatches.some(b => b.teaching_language === selectedLearningLang)
     if (!premadeAvailableForLang) union.delete('premade')
+    const groupAvailableForLang = groupBatches.some(b => b.teaching_language === selectedLearningLang)
+    if (!groupAvailableForLang) union.delete('group')
     setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : ['individual'])
-  }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches])
+  }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches, groupBatches])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
@@ -347,7 +349,7 @@ function PackagePageInner() {
 
   const selectedBatch = filteredPremadeBatches.find(b => b.id === selectedBatchId) ?? null
   const tierMultiplier = appData?.tierMultiplier ?? 1.0
-  const applyTier = (base: number) => Math.round(base * tierMultiplier * 100) / 100
+  const applyTier = (base: number) => Math.ceil(base * tierMultiplier)
   const pricePerLesson = applyTier(BASE_PRICES[format][lessons] ?? 0)
   // Each student pays their own invoice (×1), regardless of format
   const total = format === 'premade'
@@ -355,7 +357,7 @@ function PackagePageInner() {
     : pricePerLesson * lessons
 
   const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'serforylearning_bot'
-  const tgEligible = appData ? isTgEligible(appData.country_code, selectedLearningLang) : false
+  const tgEligible = appData ? (isTgEligible(appData.country_code, selectedLearningLang) || uiLang === 'ru') : false
 
   // Reset format when switching subject (DB-driven)
   useEffect(() => {
@@ -571,13 +573,25 @@ function PackagePageInner() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.format}</p>
               <div className={`grid gap-3 grid-cols-${availableFormats.length}`}>
-                {FORMAT_ORDER.filter(f => availableFormats.includes(f)).map(f => (
-                  <button key={f} onClick={() => setFormat(f)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                    <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
-                  </button>
-                ))}
+                {(() => {
+                  const price1on1 = applyTier(BASE_PRICES['individual'][1] ?? 0)
+                  return FORMAT_ORDER.filter(f => availableFormats.includes(f)).map(f => {
+                    const fPrice = f === 'group' ? applyTier(BASE_PRICES['group'][4] ?? 0)
+                      : f === 'premade' ? applyTier(18)
+                      : price1on1
+                    const discountVs1on1 = f !== 'individual' && price1on1 > 0
+                      ? Math.round((1 - fPrice / price1on1) * 100)
+                      : 0
+                    return (
+                      <button key={f} onClick={() => setFormat(f)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${format === f ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        <p className="font-semibold text-gray-900 text-sm">{FORMAT_INFO[f][uiLang].label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{FORMAT_INFO[f][uiLang].students}</p>
+                        {discountVs1on1 > 0 && <p className="text-xs text-green-600 font-semibold mt-1">-{discountVs1on1}% vs 1:1</p>}
+                      </button>
+                    )
+                  })
+                })()}
               </div>
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mt-6 mb-3">{t.package}</p>
               {format === 'premade' ? (
@@ -600,7 +614,7 @@ function PackagePageInner() {
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="font-bold text-gray-900 text-base">{batch.premade_sessions.length * 18}€</p>
+                            <p className="font-bold text-gray-900 text-base">{applyTier(batch.premade_sessions.length * 18)}€</p>
                             <p className="text-[10px] text-gray-400 mt-0.5">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</p>
                           </div>
                         </div>
@@ -619,7 +633,6 @@ function PackagePageInner() {
                       <button key={n} onClick={() => setLessons(n)}
                         className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                         <p className="font-semibold text-gray-900 text-sm">{t.weeks(n)}</p>
-                        {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
                         <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
                         <p className="text-[10px] text-gray-400">{t.perLesson} · {t.perPerson}</p>
                       </button>
@@ -694,23 +707,29 @@ function PackagePageInner() {
                 : LESSONS_OPTIONS[format].length === 3 ? 'grid-cols-3'
                 : 'grid-cols-4'
               }`}>
-                {LESSONS_OPTIONS[format].map(n => {
-                  const price = applyTier(BASE_PRICES[format][n] ?? 0)
-                  const isSelected = lessons === n
-                  const isPopular = (format === 'individual' || format === 'pair') && n === 8
-                  return (
-                    <button key={n} onClick={() => setLessons(n)}
-                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                      {isPopular && (
-                        <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">{t.popular}</span>
-                      )}
-                      <p className="font-semibold text-gray-900 text-sm">{t.lessons(n)}</p>
-                      {DISCOUNTS[n] && <p className="text-xs text-green-600 font-medium mt-0.5">{DISCOUNTS[n]}</p>}
-                      <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
-                      <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
-                    </button>
-                  )
-                })}
+                {(() => {
+                  const price1 = applyTier(BASE_PRICES[format][1] ?? 0)
+                  return LESSONS_OPTIONS[format].map(n => {
+                    const price = applyTier(BASE_PRICES[format][n] ?? 0)
+                    const isSelected = lessons === n
+                    const isPopular = format === 'individual' && n === 8
+                    const discount = format === 'individual' && price1 > 0 && price < price1
+                      ? Math.round((1 - price / price1) * 100)
+                      : 0
+                    return (
+                      <button key={n} onClick={() => setLessons(n)}
+                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                        {isPopular && (
+                          <span className="absolute -top-2 left-3 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full">{t.popular}</span>
+                        )}
+                        <p className="font-semibold text-gray-900 text-sm">{t.lessons(n)}</p>
+                        {discount > 0 && <p className="text-xs text-green-600 font-medium mt-0.5">-{discount}%</p>}
+                        <p className="text-base font-bold text-gray-900 mt-1">{price}€</p>
+                        <p className="text-[10px] text-gray-400">{t.perLesson}{format !== 'individual' ? ` · ${t.perPerson}` : ''}</p>
+                      </button>
+                    )
+                  })
+                })()}
               </div>
               )}
             </div>
@@ -821,7 +840,7 @@ function PageShell({ children, uiLang, onLangChange }: {
 }) {
   return (
     <div className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
-      <div className="max-w-screen-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <a href="https://serfory.eu" className="flex items-center gap-2">
             <Image src="/logo.png" alt="Serfory" width={32} height={32} className="rounded-lg" />

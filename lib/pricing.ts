@@ -60,7 +60,7 @@ export function getPricePerLesson(
 ): number {
   const multiplier = TIER_MULTIPLIERS[tier as PriceTier] ?? 1.00
   const base = format === 'premade' ? 18 : (BASE_PRICES[format][lessons as LessonsCount] ?? 0)
-  return Math.round(base * multiplier * 100) / 100
+  return Math.ceil(base * multiplier)
 }
 
 export function getStudentsCount(format: Format): number {
@@ -74,7 +74,7 @@ export function getTotalAmount(
 ): number {
   const pricePerLesson = getPricePerLesson(format, lessons, tier)
   const students = STUDENTS_COUNT[format]
-  return Math.round(pricePerLesson * lessons * students * 100) / 100
+  return pricePerLesson * lessons * students
 }
 
 export const DISPLAY_PRICES = BASE_PRICES

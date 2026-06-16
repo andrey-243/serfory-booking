@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       .single()
     if (app?.price_tier && teacher?.price_per_hour) {
       const multiplier = TIER_MULTIPLIERS[app.price_tier] ?? 1.00
-      amount = Math.round(teacher.price_per_hour * 1.22 * multiplier * 100) / 100
+      amount = Math.ceil(teacher.price_per_hour * 1.22 * multiplier)
     }
     if (app?.telegram_username && !tgUsername) tgUsername = app.telegram_username
   }

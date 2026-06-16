@@ -589,7 +589,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
           {formatStats && (() => {
             type FKey = 'individual' | 'group' | 'premade'
             const allRows: { label: string; key: FKey; color: string }[] = [
-              { label: '1:1 / Pair', key: 'individual', color: 'text-blue-500' },
+              { label: '1:1', key: 'individual', color: 'text-blue-500' },
               { label: 'Group', key: 'group', color: 'text-emerald-500' },
               { label: 'Premade', key: 'premade', color: 'text-violet-500' },
             ]
@@ -902,6 +902,12 @@ export default function AdminPage() {
   const [showGroupSection, setShowGroupSection] = useState(false)
   const [showPremadeSection, setShowPremadeSection] = useState(false)
 
+  const [invSort, setInvSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'desc' })
+  const [invFilterFormat, setInvFilterFormat] = useState<string>('all')
+  const [invFilterSubject, setInvFilterSubject] = useState<string>('all')
+  const [invFilterPack, setInvFilterPack] = useState<string>('all')
+  const [invFilterStatus, setInvFilterStatus] = useState<string>('all')
+
   function handleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
@@ -1204,6 +1210,39 @@ export default function AdminPage() {
     })
   }, [students, crmFilterCourse, crmFilterTeacher, crmSortCol, crmSortDir])
 
+  const invSubjects = useMemo(() => [...new Set(invoices.map(i => i.applications?.subject).filter(Boolean) as string[])].sort(), [invoices])
+  const invPacks = useMemo(() => [...new Set(invoices.map(i => String(i.lessons_count)))].sort((a, b) => Number(a) - Number(b)), [invoices])
+
+  const filteredSortedInvoices = useMemo(() => {
+    let result = [...invoices]
+    if (invFilterFormat !== 'all') result = result.filter(i => i.format === invFilterFormat)
+    if (invFilterSubject !== 'all') result = result.filter(i => i.applications?.subject === invFilterSubject)
+    if (invFilterPack !== 'all') result = result.filter(i => String(i.lessons_count) === invFilterPack)
+    if (invFilterStatus !== 'all') result = result.filter(i => i.status === invFilterStatus)
+    const d = invSort.dir === 'asc' ? 1 : -1
+    return result.sort((a, b) => {
+      switch (invSort.col) {
+        case 'date': return d * a.created_at.localeCompare(b.created_at)
+        case 'number': return d * (a.invoice_number - b.invoice_number)
+        case 'student': return d * (a.applications?.name ?? '').localeCompare(b.applications?.name ?? '')
+        case 'subject': return d * (a.applications?.subject ?? '').localeCompare(b.applications?.subject ?? '')
+        case 'format': return d * a.format.localeCompare(b.format)
+        case 'pack': return d * (a.lessons_count - b.lessons_count)
+        case 'amount': return d * (a.total_amount - b.total_amount)
+        case 'status': return d * a.status.localeCompare(b.status)
+        default: return 0
+      }
+    })
+  }, [invoices, invSort, invFilterFormat, invFilterSubject, invFilterPack, invFilterStatus])
+
+  function toggleInvSort(col: string) {
+    setInvSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' })
+  }
+  function InvSortIcon({ col }: { col: string }) {
+    if (invSort.col !== col) return <span className="ml-0.5 opacity-25">⇕</span>
+    return <span className="ml-0.5 text-blue-500">{invSort.dir === 'asc' ? '↑' : '↓'}</span>
+  }
+
   return (
     <main className="min-h-screen bg-[#EEF2FF] p-6 md:p-10">
       <div className="max-w-screen-2xl mx-auto">
@@ -1383,15 +1422,18 @@ export default function AdminPage() {
                             </div>
                             {/* Sessions — horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
-                              {sessions.map((s, i) => (
-                                <span key={s.id} className="flex items-center gap-1 text-[11px] whitespace-nowrap bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5">
-                                  <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
-                                  <span className="font-semibold text-gray-700">{fmtDate(s.session_date)}</span>
-                                  <span className="text-gray-300">·</span>
-                                  <span className="text-gray-500">{s.start_time.slice(0, 5)}</span>
-                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
-                                </span>
-                              ))}
+                              {sessions.map((s, i) => {
+                                const isPast = s.session_date < new Date().toISOString().slice(0, 10)
+                                return (
+                                  <span key={s.id} className={`flex items-center gap-1 text-[11px] whitespace-nowrap border rounded-md px-2 py-0.5 ${isPast ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                    <span className={`font-mono text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-300'}`}>{i + 1}</span>
+                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmtDate(s.session_date)}</span>
+                                    <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
+                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{s.start_time.slice(0, 5)}</span>
+                                    {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
+                                  </span>
+                                )
+                              })}
                             </div>
                             {/* Students */}
                             {students.length === 0 ? (
@@ -1480,17 +1522,20 @@ export default function AdminPage() {
                             </div>
                             {/* Sessions — horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
-                              {sessions.map((s, i) => (
-                                <span key={s.id} className="flex items-center gap-1 text-[11px] whitespace-nowrap bg-gray-50 border border-gray-200 rounded-md px-2 py-0.5">
-                                  <span className="text-gray-300 font-mono text-[10px]">{i + 1}</span>
-                                  <span className="font-medium text-gray-500 max-w-[70px] truncate">{s.name}</span>
-                                  <span className="text-gray-300">·</span>
-                                  <span className="font-semibold text-gray-700">{fmtDate(s.session_date)}</span>
-                                  <span className="text-gray-300">·</span>
-                                  <span className="text-gray-500">{s.start_time.slice(0, 5)}</span>
-                                  {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
-                                </span>
-                              ))}
+                              {sessions.map((s, i) => {
+                                const isPast = s.session_date < new Date().toISOString().slice(0, 10)
+                                return (
+                                  <span key={s.id} className={`flex items-center gap-1 text-[11px] whitespace-nowrap border rounded-md px-2 py-0.5 ${isPast ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                    <span className={`font-mono text-[10px] ${isPast ? 'text-emerald-400' : 'text-gray-300'}`}>{i + 1}</span>
+                                    <span className={`font-medium max-w-[70px] truncate ${isPast ? 'text-emerald-600' : 'text-gray-500'}`}>{s.name}</span>
+                                    <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
+                                    <span className={`font-semibold ${isPast ? 'text-emerald-700' : 'text-gray-700'}`}>{fmtDate(s.session_date)}</span>
+                                    <span className={isPast ? 'text-emerald-300' : 'text-gray-300'}>·</span>
+                                    <span className={isPast ? 'text-emerald-600' : 'text-gray-500'}>{s.start_time.slice(0, 5)}</span>
+                                    {s.gcal_event_id && <span className="text-[10px] text-emerald-500">✓</span>}
+                                  </span>
+                                )
+                              })}
                             </div>
                             {/* Students */}
                             {students.length === 0 ? (
@@ -1698,7 +1743,74 @@ export default function AdminPage() {
 
         {/* ── INVOICES VIEW ── */}
         {view === 'invoices' && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {/* Filter bar */}
+            {invoices.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Format */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase">Format</span>
+                  {(['all', 'individual', 'pair', 'group', 'premade'] as const).map(f => {
+                    const label = f === 'all' ? 'All' : f === 'individual' ? (lang === 'fr' ? 'Indiv.' : 'Indiv.') : f === 'pair' ? (lang === 'fr' ? 'Duo' : 'Pair') : f === 'group' ? (lang === 'fr' ? 'Groupe' : 'Group') : 'Premade'
+                    const on = invFilterFormat === f
+                    return (
+                      <button key={f} onClick={() => setInvFilterFormat(f)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {invSubjects.length > 1 && <div className="h-4 w-px bg-gray-200" />}
+                {invSubjects.length > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase">{lang === 'fr' ? 'Matière' : 'Subject'}</span>
+                    {(['all', ...invSubjects] as string[]).map(s => {
+                      const on = invFilterSubject === s
+                      const col = s !== 'all' ? (SUBJECT_COLORS_CRM[s] ?? { bg: 'bg-gray-100', text: 'text-gray-600' }) : null
+                      return (
+                        <button key={s} onClick={() => setInvFilterSubject(s)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? (col ? `${col.bg} ${col.text} border-transparent` : 'bg-blue-500 text-white border-blue-500') : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                          {s === 'all' ? 'All' : s}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                {invPacks.length > 1 && <div className="h-4 w-px bg-gray-200" />}
+                {invPacks.length > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase">Pack</span>
+                    {(['all', ...invPacks] as string[]).map(p => {
+                      const on = invFilterPack === p
+                      return (
+                        <button key={p} onClick={() => setInvFilterPack(p)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                          {p === 'all' ? 'All' : `${p}L`}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="h-4 w-px bg-gray-200" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase">{lang === 'fr' ? 'Statut' : 'Status'}</span>
+                  {(['all', 'sent', 'paid'] as const).map(s => {
+                    const on = invFilterStatus === s
+                    const label = s === 'all' ? 'All' : s === 'paid' ? (lang === 'fr' ? 'Payé' : 'Paid') : (lang === 'fr' ? 'En attente' : 'Pending')
+                    return (
+                      <button key={s} onClick={() => setInvFilterStatus(s)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? (s === 'paid' ? 'bg-green-500 text-white border-green-500' : s === 'sent' ? 'bg-amber-400 text-white border-amber-400' : 'bg-blue-500 text-white border-blue-500') : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {filteredSortedInvoices.length !== invoices.length && (
+                  <span className="text-xs text-gray-400">{filteredSortedInvoices.length} / {invoices.length}</span>
+                )}
+              </div>
+            )}
             {loadingInvoices ? (
               <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-400">
                 {t.loading}
@@ -1712,19 +1824,26 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Date' : 'Date'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'N°' : 'No.'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Élève' : 'Student'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Matière' : 'Subject'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Format' : 'Format'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Pack' : 'Pack'}</th>
-                      <th className="text-right px-4 py-3 font-medium">{lang === 'fr' ? 'Montant' : 'Amount'}</th>
-                      <th className="text-left px-4 py-3 font-medium">{lang === 'fr' ? 'Statut' : 'Status'}</th>
+                      {([
+                        { col: 'date', label: lang === 'fr' ? 'Date' : 'Date', align: 'left' },
+                        { col: 'number', label: lang === 'fr' ? 'N°' : 'No.', align: 'left' },
+                        { col: 'student', label: lang === 'fr' ? 'Élève' : 'Student', align: 'left' },
+                        { col: 'subject', label: lang === 'fr' ? 'Matière' : 'Subject', align: 'left' },
+                        { col: 'format', label: 'Format', align: 'left' },
+                        { col: 'pack', label: 'Pack', align: 'left' },
+                        { col: 'amount', label: lang === 'fr' ? 'Montant' : 'Amount', align: 'right' },
+                        { col: 'status', label: lang === 'fr' ? 'Statut' : 'Status', align: 'left' },
+                      ] as { col: string; label: string; align: string }[]).map(({ col, label, align }) => (
+                        <th key={col} onClick={() => toggleInvSort(col)}
+                          className={`text-${align} px-4 py-3 font-medium cursor-pointer hover:text-gray-600 select-none whitespace-nowrap`}>
+                          {label}<InvSortIcon col={col} />
+                        </th>
+                      ))}
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map(inv => {
+                    {filteredSortedInvoices.map(inv => {
                       const app = inv.applications
                       const isPaid = inv.status === 'paid'
                       return (
@@ -1753,10 +1872,12 @@ export default function AdminPage() {
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               inv.format === 'individual' ? 'bg-blue-50 text-blue-700' :
                               inv.format === 'pair' ? 'bg-purple-50 text-purple-700' :
+                              inv.format === 'premade' ? 'bg-violet-50 text-violet-700' :
                               'bg-green-50 text-green-700'
                             }`}>
                               {inv.format === 'individual' ? (lang === 'fr' ? 'Individuel' : 'Individual') :
                                inv.format === 'pair' ? (lang === 'fr' ? 'Duo' : 'Pair') :
+                               inv.format === 'premade' ? 'Premade' :
                                (lang === 'fr' ? 'Groupe' : 'Group')}
                             </span>
                           </td>
