@@ -28,7 +28,7 @@ const T = {
     dateFormat: "d MMM 'at' HH:mm",
     locale: enUS,
     nextLesson: 'Next lesson',
-    thisWeek: 'This week',
+    thisWeek: 'Next 7 days',
     noNext: 'None scheduled',
   },
   ru: {
@@ -47,7 +47,7 @@ const T = {
     dateFormat: "d MMM 'в' HH:mm",
     locale: ruLocale,
     nextLesson: 'Следующий урок',
-    thisWeek: 'На этой неделе',
+    thisWeek: 'Ближайшие 7 дней',
     noNext: 'Нет запланированных',
   },
   et: {
@@ -66,7 +66,7 @@ const T = {
     dateFormat: "d MMM 'kell' HH:mm",
     locale: etLocale,
     nextLesson: 'Järgmine tund',
-    thisWeek: 'Sel nädalal',
+    thisWeek: 'Järgmised 7 päeva',
     noNext: 'Pole planeeritud',
   },
 }
@@ -84,6 +84,7 @@ type Booking = {
   slot_start: string
   slot_end: string
   student_name: string
+  student_email: string
   student_phone: string
   contact_pref: string
   telegram_username: string | null
@@ -99,6 +100,8 @@ type AvailabilityRow = {
   enabled: boolean
 }
 
+type EnrolledStudent = { id: string; name: string; email: string; phone: string; telegram_username: string | null; contact_pref: string }
+
 type GroupBatch = {
   id: string
   subject: string
@@ -109,6 +112,7 @@ type GroupBatch = {
   max_students: number
   status: string
   enrollment_count: number
+  enrolled_students?: EnrolledStudent[]
   group_slot_sessions: { id: string; session_date: string; start_time: string; session_start_utc: string | null }[]
 }
 
@@ -122,6 +126,7 @@ type PremadeBatch = {
   max_students: number
   status: string
   enrollment_count: number
+  enrolled_students?: EnrolledStudent[]
   premade_sessions: { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null }[]
 }
 
@@ -150,6 +155,12 @@ function sessionDate(s: { session_date: string; start_time: string; session_star
     : new Date(`${s.session_date}T${s.start_time}`)
 }
 
+function isEffectivelyCompleted(sessions: { session_date: string; start_time: string; session_start_utc: string | null }[]): boolean {
+  if (sessions.length === 0) return false
+  const now = new Date()
+  return sessions.every(s => sessionDate(s) < now)
+}
+
 type User = { email: string; role: string; teacherId: string | null; name: string }
 
 export default function TeacherPage() {
@@ -169,7 +180,7 @@ export default function TeacherPage() {
   )
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
-  const [overviewOpen, setOverviewOpen] = useState({ oneToOne: true, group: true, premade: true })
+  const [overviewOpen, setOverviewOpen] = useState<Record<string, boolean>>({ oneToOne: true, group: true, premade: true })
 
   const t = T[lang]
 
@@ -256,8 +267,10 @@ export default function TeacherPage() {
   const now = new Date()
   const upcoming = bookings.filter(b => new Date(b.slot_start) >= now && b.status !== 'cancelled')
 
+  const next7Days = new Date(now.getTime() + 7 * 24 * 3600 * 1000)
+
   const upcomingGroupSessions = groupBatches
-    .filter(b => b.status === 'active')
+    .filter(b => b.status === 'active' && !isEffectivelyCompleted(b.group_slot_sessions))
     .flatMap(b => b.group_slot_sessions
       .filter(s => sessionDate(s) >= now)
       .map(s => ({ ...s, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
@@ -265,7 +278,7 @@ export default function TeacherPage() {
     .sort((a, c) => sessionDate(a).getTime() - sessionDate(c).getTime())
 
   const upcomingPremadeSessions = premadeBatches
-    .filter(b => b.status === 'active')
+    .filter(b => b.status === 'active' && !isEffectivelyCompleted(b.premade_sessions))
     .flatMap(b => b.premade_sessions
       .filter(s => sessionDate(s) >= now)
       .map(s => ({ ...s, batchName: b.name, subject: b.subject, teachingLang: b.teaching_language, targetLevels: b.target_levels, enrollmentCount: b.enrollment_count, maxStudents: b.max_students, batchId: b.id }))
@@ -273,8 +286,8 @@ export default function TeacherPage() {
     .sort((a, c) => sessionDate(a).getTime() - sessionDate(c).getTime())
 
   const thisWeek1v1 = upcoming.filter(b => isThisWeek(parseISO(b.slot_start), { weekStartsOn: 1 })).length
-  const thisWeekGroup = upcomingGroupSessions.filter(s => isThisWeek(sessionDate(s), { weekStartsOn: 1 })).length
-  const thisWeekPremade = upcomingPremadeSessions.filter(s => isThisWeek(sessionDate(s), { weekStartsOn: 1 })).length
+  const thisWeekGroup = upcomingGroupSessions.filter(s => sessionDate(s) <= next7Days).length
+  const thisWeekPremade = upcomingPremadeSessions.filter(s => sessionDate(s) <= next7Days).length
   const thisWeekCount = thisWeek1v1 + thisWeekGroup + thisWeekPremade
   const totalUpcoming = upcoming.length + upcomingGroupSessions.length + upcomingPremadeSessions.length
   const nextLesson = upcoming[0] ?? null
@@ -287,7 +300,7 @@ export default function TeacherPage() {
   }
 
   const overviewGroupMap = new Map<string, { subject: string; lang: string; levels: string[]; batches: GroupBatch[] }>()
-  for (const b of groupBatches.filter(bt => bt.status === 'active')) {
+  for (const b of groupBatches.filter(bt => bt.status === 'active' && !isEffectivelyCompleted(bt.group_slot_sessions))) {
     const key = `${b.subject}||${b.teaching_language ?? ''}||${[...(b.target_levels || [])].sort().join(',')}`
     if (!overviewGroupMap.has(key)) overviewGroupMap.set(key, { subject: b.subject, lang: b.teaching_language ?? '', levels: b.target_levels || [], batches: [] })
     overviewGroupMap.get(key)!.batches.push(b)
@@ -295,7 +308,7 @@ export default function TeacherPage() {
   const overviewGroups = [...overviewGroupMap.values()]
 
   const overviewPremadeMap = new Map<string, { subject: string; batches: PremadeBatch[] }>()
-  for (const b of premadeBatches.filter(bt => bt.status === 'active')) {
+  for (const b of premadeBatches.filter(bt => bt.status === 'active' && !isEffectivelyCompleted(bt.premade_sessions))) {
     if (!overviewPremadeMap.has(b.subject)) overviewPremadeMap.set(b.subject, { subject: b.subject, batches: [] })
     overviewPremadeMap.get(b.subject)!.batches.push(b)
   }
@@ -474,27 +487,43 @@ export default function TeacherPage() {
                               const nextSession = sorted.find(s => sessionDate(s) >= now)
                               const displaySession = nextSession ?? sorted[sorted.length - 1]
                               const isPast = !nextSession
+                              const expandKey = `group-${batch.id}`
                               return (
-                                <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Active</span>
-                                    {displaySession && (() => {
-                                      if (displaySession.session_start_utc) {
-                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
+                                <div key={batch.id} className="rounded-lg overflow-hidden">
+                                  <button
+                                    onClick={() => setOverviewOpen(p => ({ ...p, [expandKey]: !p[expandKey] }))}
+                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Active</span>
+                                      {displaySession && (() => {
+                                        if (displaySession.session_start_utc) {
+                                          const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
+                                          return (
+                                            <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                              {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                            </span>
+                                          )
+                                        }
                                         return (
                                           <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
-                                            {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                            {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
                                           </span>
                                         )
-                                      }
-                                      return (
-                                        <span className={`text-xs ${isPast ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
-                                          {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
-                                        </span>
-                                      )
-                                    })()}
-                                  </div>
-                                  <span className="text-xs text-gray-500 font-medium">{batch.enrollment_count}/{batch.max_students}</span>
+                                      })()}
+                                    </div>
+                                    <span className="text-xs text-gray-500 font-medium">{batch.enrollment_count}/{batch.max_students}</span>
+                                  </button>
+                                  {overviewOpen[expandKey] && batch.enrolled_students && batch.enrolled_students.length > 0 && (
+                                    <div className="bg-white border-t border-gray-100 px-3 py-2 space-y-1.5">
+                                      {batch.enrolled_students.map(s => (
+                                        <div key={s.id} className="text-xs text-gray-600">
+                                          <span className="font-medium text-gray-800">{s.name}</span>
+                                          <span className="text-gray-400"> · {s.email} · {s.phone}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })}
@@ -529,27 +558,43 @@ export default function TeacherPage() {
                               const nextSession = sorted.find(s => sessionDate(s) >= now)
                               const displaySession = nextSession ?? sorted[sorted.length - 1]
                               const isPast = !nextSession
+                              const expandKey = `premade-${batch.id}`
                               return (
-                                <div key={batch.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-sm font-medium text-gray-800 truncate">{batch.name}</span>
-                                    {displaySession && (() => {
-                                      if (displaySession.session_start_utc) {
-                                        const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
+                                <div key={batch.id} className="rounded-lg overflow-hidden">
+                                  <button
+                                    onClick={() => setOverviewOpen(p => ({ ...p, [expandKey]: !p[expandKey] }))}
+                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-sm font-medium text-gray-800 truncate">{batch.name}</span>
+                                      {displaySession && (() => {
+                                        if (displaySession.session_start_utc) {
+                                          const { date, time, tzAbbr } = formatSessionUtc(displaySession.session_start_utc, selectedTz)
+                                          return (
+                                            <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
+                                              {displaySession.name} · {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                            </span>
+                                          )
+                                        }
                                         return (
                                           <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
-                                            {displaySession.name} · {date} {time} <span className="text-gray-400">{tzAbbr}</span>
+                                            {displaySession.name} · {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
                                           </span>
                                         )
-                                      }
-                                      return (
-                                        <span className={`text-xs shrink-0 ${isPast ? 'text-gray-400 line-through' : 'text-gray-400'}`}>
-                                          {displaySession.name} · {format(new Date(`${displaySession.session_date}T${displaySession.start_time}`), t.dateFormat, { locale: t.locale })}
-                                        </span>
-                                      )
-                                    })()}
-                                  </div>
-                                  <span className="text-xs text-gray-500 font-medium shrink-0 ml-2">{batch.enrollment_count}/{batch.max_students}</span>
+                                      })()}
+                                    </div>
+                                    <span className="text-xs text-gray-500 font-medium shrink-0 ml-2">{batch.enrollment_count}/{batch.max_students}</span>
+                                  </button>
+                                  {overviewOpen[expandKey] && batch.enrolled_students && batch.enrolled_students.length > 0 && (
+                                    <div className="bg-white border-t border-gray-100 px-3 py-2 space-y-1.5">
+                                      {batch.enrolled_students.map(s => (
+                                        <div key={s.id} className="text-xs text-gray-600">
+                                          <span className="font-medium text-gray-800">{s.name}</span>
+                                          <span className="text-gray-400"> · {s.email} · {s.phone}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })}
@@ -569,7 +614,7 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* Courses — Groups + Premade 50/50 */}
+          {/* Courses - Groups + Premade 50/50 */}
           {nav === 'courses' && user?.teacherId && (
             <div className="grid grid-cols-2 gap-5 items-start">
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
@@ -594,7 +639,7 @@ export default function TeacherPage() {
             </div>
           )}
 
-          {/* Settings — Schedule + CourseSettings 50/50 */}
+          {/* Settings - Schedule + CourseSettings 50/50 */}
           {nav === 'settings' && user?.teacherId && (
             <div className="grid grid-cols-2 gap-5 items-start">
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -672,38 +717,41 @@ function UpcomingList({ bookings, t, onUpdateTg, timezone }: UpcomingListProps) 
         const timeStr = d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
         const dateStr = d.toLocaleDateString('en-GB', { timeZone: tz, day: 'numeric', month: 'short' })
         return (
-        <li key={b.id} className="flex items-center justify-between py-3">
-          <div>
-            <p className="text-sm font-medium text-gray-900">{b.student_name}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {b.subject} · {dateStr} · {timeStr} <span className="text-gray-300">{getTzAbbr(d, tz)}</span>
-            </p>
-            {b.contact_pref === 'telegram' && (
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <a href={b.telegram_username ? `https://t.me/${b.telegram_username}` : `https://t.me/+${b.student_phone.replace(/\D/g, '')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2 py-0.5 rounded-full font-medium transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.04 9.613c-.148.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.903.608z"/></svg>
-                  TG
-                </a>
-                <input
-                  className="w-28 text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400"
-                  defaultValue={b.telegram_username ? `@${b.telegram_username}` : ''}
-                  placeholder="@username"
-                  onBlur={e => { if (e.target.value !== (b.telegram_username ? `@${b.telegram_username}` : '')) onUpdateTg(b.id, e.target.value) }}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                />
-              </div>
-            )}
-          </div>
-          <div className="flex items-center shrink-0">
-            {b.student_status === 'confirmed' ? (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-600">✓</span>
-            ) : b.student_status === 'cancelled' ? (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">✗</span>
-            ) : (
-              <span className="text-xs text-gray-300">—</span>
-            )}
+        <li key={b.id} className="py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-900">{b.student_name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {b.subject} · {dateStr} · {timeStr} <span className="text-gray-300">{getTzAbbr(d, tz)}</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{b.student_email} · {b.student_phone}</p>
+              {b.contact_pref === 'telegram' && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <a href={b.telegram_username ? `https://t.me/${b.telegram_username}` : `https://t.me/+${b.student_phone.replace(/\D/g, '')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-white bg-sky-500 hover:bg-sky-600 px-2 py-0.5 rounded-full font-medium transition-colors">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.04 9.613c-.148.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.903.608z"/></svg>
+                    TG
+                  </a>
+                  <input
+                    className="w-28 text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 placeholder-gray-300 focus:outline-none focus:border-sky-400"
+                    defaultValue={b.telegram_username ? `@${b.telegram_username}` : ''}
+                    placeholder="@username"
+                    onBlur={e => { if (e.target.value !== (b.telegram_username ? `@${b.telegram_username}` : '')) onUpdateTg(b.id, e.target.value) }}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex items-center shrink-0">
+              {b.student_status === 'confirmed' ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-600">✓</span>
+              ) : b.student_status === 'cancelled' ? (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">✗</span>
+              ) : (
+                <span className="text-xs text-gray-300">-</span>
+              )}
+            </div>
           </div>
         </li>
       )})}

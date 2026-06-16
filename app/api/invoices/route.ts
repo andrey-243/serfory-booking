@@ -20,10 +20,11 @@ const INVOICE_SUBJECTS: Record<string, string> = {
 
 const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string) => string> = {
   en: (name, total, due) => `
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
-      <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Your invoice is ready, ${name}</h2>
-      <p style="color:#6b7280;margin-bottom:8px">Please find your invoice attached (PDF).</p>
-      <p style="color:#6b7280;margin-bottom:24px">Total: <strong>${total}€</strong> — due by <strong>${due}</strong>.</p>
+    <div style="font-family:Inter,sans-serif;max-width:620px;margin:0 auto;padding:36px 40px;color:#1e1e2e">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:8px">Your invoice is ready, ${name}</h2>
+      <p style="color:#6b7280;margin-bottom:6px">Please find your invoice attached (PDF).</p>
+      <p style="color:#6b7280;margin-bottom:20px">Total: <strong>${total}€</strong>, due by <strong>${due}</strong>.</p>
+      <!-- BATCH_BLOCK -->
       <p style="color:#6b7280;margin-bottom:4px">Transfer to:</p>
       <p style="font-size:14px;font-weight:600;color:#1e1e2e;margin-bottom:4px">Serfory Learning OÜ</p>
       <p style="font-size:14px;color:#1e1e2e;margin-bottom:24px">IBAN: EE702200221095085563</p>
@@ -33,10 +34,11 @@ const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string
     </div>
   `,
   et: (name, total, due) => `
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
-      <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Sinu arve on valmis, ${name}</h2>
-      <p style="color:#6b7280;margin-bottom:8px">Arve on lisatud manusena (PDF).</p>
-      <p style="color:#6b7280;margin-bottom:24px">Kokku: <strong>${total}€</strong> — tähtaeg <strong>${due}</strong>.</p>
+    <div style="font-family:Inter,sans-serif;max-width:620px;margin:0 auto;padding:36px 40px;color:#1e1e2e">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:8px">Sinu arve on valmis, ${name}</h2>
+      <p style="color:#6b7280;margin-bottom:6px">Arve on lisatud manusena (PDF).</p>
+      <p style="color:#6b7280;margin-bottom:20px">Kokku: <strong>${total}€</strong>, tähtaeg <strong>${due}</strong>.</p>
+      <!-- BATCH_BLOCK -->
       <p style="color:#6b7280;margin-bottom:4px">Kanda üle:</p>
       <p style="font-size:14px;font-weight:600;color:#1e1e2e;margin-bottom:4px">Serfory Learning OÜ</p>
       <p style="font-size:14px;color:#1e1e2e;margin-bottom:24px">IBAN: EE702200221095085563</p>
@@ -46,10 +48,11 @@ const INVOICE_BODY: Record<string, (name: string, total: number, dueDate: string
     </div>
   `,
   ru: (name, total, due) => `
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
-      <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Ваш счёт готов, ${name}</h2>
-      <p style="color:#6b7280;margin-bottom:8px">Счёт прикреплён к письму (PDF).</p>
-      <p style="color:#6b7280;margin-bottom:24px">Итого: <strong>${total}€</strong> — срок оплаты <strong>${due}</strong>.</p>
+    <div style="font-family:Inter,sans-serif;max-width:620px;margin:0 auto;padding:36px 40px;color:#1e1e2e">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:8px">Ваш счёт готов, ${name}</h2>
+      <p style="color:#6b7280;margin-bottom:6px">Счёт прикреплён к письму (PDF).</p>
+      <p style="color:#6b7280;margin-bottom:20px">Итого: <strong>${total}€</strong>, срок оплаты <strong>${due}</strong>.</p>
+      <!-- BATCH_BLOCK -->
       <p style="color:#6b7280;margin-bottom:4px">Перевести на:</p>
       <p style="font-size:14px;font-weight:600;color:#1e1e2e;margin-bottom:4px">Serfory Learning OÜ</p>
       <p style="font-size:14px;color:#1e1e2e;margin-bottom:24px">IBAN: EE702200221095085563</p>
@@ -82,57 +85,56 @@ function paymentDeadlineLabel(sessionDate: string, sessionTime: string, lang: st
   }
 }
 
-async function buildBatchSuggestionsBlock(subject: string, learningLang: string, lang: string): Promise<string> {
+async function buildBatchSuggestionsBlock(subject: string, learningLang: string, lang: string, format: 'group' | 'premade'): Promise<string> {
   const today = new Date().toISOString().split('T')[0]
-
-  const [{ data: groupBatches }, { data: premadeBatches }] = await Promise.all([
-    getSupabaseAdmin()
-      .from('group_slot_batches')
-      .select('id, day_of_week, start_time, duration_minutes, group_slot_sessions(session_date, start_time, session_start_utc)')
-      .eq('subject', subject)
-      .eq('teaching_language', learningLang)
-      .eq('status', 'active'),
-    getSupabaseAdmin()
-      .from('premade_batches')
-      .select('id, name, premade_sessions(session_date, start_time, session_start_utc)')
-      .eq('subject', subject)
-      .eq('teaching_language', learningLang)
-      .eq('status', 'active'),
-  ])
 
   type Suggestion = { name: string; firstDate: string; firstTime: string }
   const suggestions: Suggestion[] = []
 
-  for (const b of groupBatches ?? []) {
-    const sessions = (b.group_slot_sessions as { session_date: string; start_time: string }[])
-      .filter(s => s.session_date >= today)
-      .sort((a, z) => a.session_date.localeCompare(z.session_date))
-    if (sessions.length === 0) continue
-    const locale = lang === 'et' ? 'et-EE' : lang === 'ru' ? 'ru-RU' : 'en-GB'
+  if (format === 'group') {
+    const { data: groupBatches } = await getSupabaseAdmin()
+      .from('group_slot_batches')
+      .select('id, day_of_week, start_time, group_slot_sessions(session_date, start_time)')
+      .eq('subject', subject)
+      .eq('teaching_language', learningLang)
+      .eq('status', 'active')
+
     const DAYS: Record<string, string[]> = {
       en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       et: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
       ru: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
     }
-    const day = DAYS[lang]?.[b.day_of_week] ?? b.day_of_week
-    const fmtDate = new Date(sessions[0].session_date + 'T12:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
-    suggestions.push({
-      name: `${subject} Group · ${day} ${sessions[0].start_time.slice(0, 5)} (${lang === 'ru' ? 'с' : lang === 'et' ? 'alates' : 'from'} ${fmtDate})`,
-      firstDate: sessions[0].session_date,
-      firstTime: sessions[0].start_time,
-    })
-  }
+    const locale = lang === 'et' ? 'et-EE' : lang === 'ru' ? 'ru-RU' : 'en-GB'
 
-  for (const b of premadeBatches ?? []) {
-    const sessions = (b.premade_sessions as { session_date: string; start_time: string }[])
-      .filter(s => s.session_date >= today)
-      .sort((a, z) => a.session_date.localeCompare(z.session_date))
-    if (sessions.length === 0) continue
-    suggestions.push({
-      name: b.name,
-      firstDate: sessions[0].session_date,
-      firstTime: sessions[0].start_time,
-    })
+    for (const b of groupBatches ?? []) {
+      const sessions = (b.group_slot_sessions as { session_date: string; start_time: string }[])
+        .filter(s => s.session_date >= today)
+        .sort((a, z) => a.session_date.localeCompare(z.session_date))
+      if (sessions.length === 0) continue
+      const day = DAYS[lang]?.[b.day_of_week] ?? b.day_of_week
+      const fmtDate = new Date(sessions[0].session_date + 'T12:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+      const fromWord = lang === 'ru' ? 'с' : lang === 'et' ? 'alates' : 'from'
+      suggestions.push({
+        name: `${subject} Group · ${day} ${sessions[0].start_time.slice(0, 5)} (${fromWord} ${fmtDate})`,
+        firstDate: sessions[0].session_date,
+        firstTime: sessions[0].start_time,
+      })
+    }
+  } else {
+    const { data: premadeBatches } = await getSupabaseAdmin()
+      .from('premade_batches')
+      .select('id, name, premade_sessions(session_date, start_time)')
+      .eq('subject', subject)
+      .eq('teaching_language', learningLang)
+      .eq('status', 'active')
+
+    for (const b of premadeBatches ?? []) {
+      const sessions = (b.premade_sessions as { session_date: string; start_time: string }[])
+        .filter(s => s.session_date >= today)
+        .sort((a, z) => a.session_date.localeCompare(z.session_date))
+      if (sessions.length === 0) continue
+      suggestions.push({ name: b.name, firstDate: sessions[0].session_date, firstTime: sessions[0].start_time })
+    }
   }
 
   suggestions.sort((a, z) => a.firstDate.localeCompare(z.firstDate))
@@ -140,29 +142,27 @@ async function buildBatchSuggestionsBlock(subject: string, learningLang: string,
   if (top3.length === 0) return ''
 
   const headers: Record<string, string> = {
-    en: 'Want to join a group or structured course?',
-    et: 'Soovid liituda grupi- või struktureeritud kursusega?',
-    ru: 'Хотите присоединиться к групповому или структурированному курсу?',
+    en: format === 'group' ? 'Available group sessions' : 'Your course schedule',
+    et: format === 'group' ? 'Saadaolevad rühmatunnid' : 'Kursuse ajakava',
+    ru: format === 'group' ? 'Доступные группы' : 'Расписание курса',
   }
-  const payBy: Record<string, string> = {
-    en: 'Pay before',
-    et: 'Maksa enne',
-    ru: 'Оплатите до',
+
+  const joinPhrase: Record<string, (name: string, deadline: string) => string> = {
+    en: (name, dl) => `To join <strong>${name}</strong>, pay by <strong>${dl}</strong>.`,
+    et: (name, dl) => `Kursusele <strong>${name}</strong> liitumiseks maksa enne: <strong>${dl}</strong>.`,
+    ru: (name, dl) => `Чтобы записаться на <strong>${name}</strong>, оплатите до: <strong>${dl}</strong>.`,
   }
+  const phrase = joinPhrase[lang] ?? joinPhrase.en
 
   const rows = top3.map(s => {
     const deadline = paymentDeadlineLabel(s.firstDate, s.firstTime, lang)
-    return `
-      <tr>
-        <td style="padding:5px 12px 5px 0;font-size:13px;color:#1e1e2e;vertical-align:top">${s.name}</td>
-        <td style="padding:5px 0;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top">${payBy[lang] ?? payBy.en}: <strong>${deadline}</strong></td>
-      </tr>`
+    return `<p style="margin:0 0 8px;font-size:14px;color:#374151">${phrase(s.name, deadline)}</p>`
   }).join('')
 
   return `
-    <div style="margin:20px 0 16px;padding:14px 16px;background:#f8fafc;border-radius:10px;border:1px solid #e5e7eb">
-      <p style="font-size:12px;font-weight:600;color:#374151;margin:0 0 10px">${headers[lang] ?? headers.en}</p>
-      <table style="border-collapse:collapse;width:100%">${rows}</table>
+    <div style="margin:0 0 24px;padding:18px 20px;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe">
+      <p style="font-size:13px;font-weight:700;color:#1d4ed8;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.04em">${headers[lang] ?? headers.en}</p>
+      ${rows}
     </div>
   `
 }
@@ -205,19 +205,19 @@ export async function POST(req: NextRequest) {
   if (appErr || !app) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
   if (app.status !== 'accepted') return NextResponse.json({ error: 'Token not active' }, { status: 403 })
 
-  // Store overrides on invoice — applied to application only when invoice is marked paid
+  // Store overrides on invoice - applied to application only when invoice is marked paid
   const effectiveSubject = subjectOverride || app.subject
   const effectiveLearningLang = learningLangOverride || app.learning_lang || app.lang
 
-  // Block only if there's an unpaid invoice pending
-  const { data: existing } = await getSupabaseAdmin()
+  // Block if 3+ pending invoices (prevents abuse while allowing multi-course booking)
+  const { count: pendingCount } = await getSupabaseAdmin()
     .from('invoices')
-    .select('id')
+    .select('*', { count: 'exact', head: true })
     .eq('application_id', app.id)
     .eq('status', 'sent')
-    .limit(1)
-    .maybeSingle()
-  if (existing) return NextResponse.json({ error: 'Invoice already sent' }, { status: 409 })
+  if ((pendingCount ?? 0) >= 3) {
+    return NextResponse.json({ error: 'Too many pending invoices. Pay the existing ones first.' }, { status: 429 })
+  }
 
   const tier = (app.price_tier || 'baltics') as string
   const pricePerLesson = getPricePerLesson(format, lessons_count, tier)
@@ -306,16 +306,18 @@ export async function POST(req: NextRequest) {
     ? botCtaStudentBlock(lang, `https://t.me/${BOT}?start=s_${app.id}`)
     : ''
 
-  // Batch suggestions block — only for group/premade formats
+  // Batch suggestions block - only for group/premade formats
   let batchBlock = ''
   if (format === 'group' || format === 'premade') {
-    batchBlock = await buildBatchSuggestionsBlock(effectiveSubject, effectiveLearningLang ?? '', lang)
+    batchBlock = await buildBatchSuggestionsBlock(effectiveSubject, effectiveLearningLang ?? '', lang, format)
   }
 
-  const html = rawHtml.replace(
-    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
-    `${batchBlock}${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
-  )
+  const html = rawHtml
+    .replace('<!-- BATCH_BLOCK -->', batchBlock)
+    .replace(
+      '<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">',
+      `${botBlock}<hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">`
+    )
 
   await transporter.sendMail({
     from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,

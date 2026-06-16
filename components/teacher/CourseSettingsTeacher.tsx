@@ -189,7 +189,7 @@ export default function CourseSettingsTeacher({
         </div>
       </div>
 
-      {/* Per-subject settings — collapsible */}
+      {/* Per-subject settings - collapsible */}
       <div className="flex flex-col gap-2">
         {subjects.map(subject => {
           const isLang = LANG_SUBJECTS.includes(subject)
@@ -200,7 +200,7 @@ export default function CourseSettingsTeacher({
 
           return (
             <div key={subject} className="border border-gray-200 rounded-xl overflow-hidden">
-              {/* Header — clickable */}
+              {/* Header - clickable */}
               <button
                 type="button"
                 onClick={() => setExpandedSubject(open ? null : subject)}

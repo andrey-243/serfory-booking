@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       }
     }
   } else if (!teacher?.google_refresh_token) {
-    // No token yet — will be retried by cron
+    // No token yet - will be retried by cron
     gcalLastError = 'Teacher has no GCal token'
   } else {
     // No sessions with gcal_event_id (shouldn't happen on active batch)
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', enrollment.id)
 
-  // Invalidate booking_token — group enrollment uses all 4 lessons at once
+  // Invalidate booking_token - group enrollment uses all 4 lessons at once
   await supabase.from('invoices').update({ booking_token: null }).eq('id', invoice.id)
 
   // TG admin notif

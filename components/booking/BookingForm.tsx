@@ -9,6 +9,11 @@ import { useLang } from '@/lib/language-context'
 
 const dateFnsLocales = { en: enUS, et, ru }
 
+const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
+function isTgEligible(country_code: string | null | undefined, learning_lang: string | null | undefined): boolean {
+  return learning_lang === 'ru' || (!!country_code && TG_COUNTRIES.has(country_code.toUpperCase()))
+}
+
 // ── Country list ─────────────────────────────────────────────────────────────
 
 type Country = { code: string; dial: string; name: string }
@@ -140,13 +145,16 @@ const CONTACT_OPTIONS = [
 function ContactPills({
   selected,
   onChange,
+  showTelegram,
 }: {
   selected: string
   onChange: (v: string) => void
+  showTelegram: boolean
 }) {
+  const options = showTelegram ? CONTACT_OPTIONS : CONTACT_OPTIONS.filter(o => o.key !== 'telegram')
   return (
     <div className="flex gap-2 flex-wrap">
-      {CONTACT_OPTIONS.map(opt => {
+      {options.map(opt => {
         const on = selected === opt.key
         return (
           <button
@@ -173,8 +181,8 @@ type Props = {
   subject: string
   onSuccess: () => void
   onCancel: () => void
-  onNoLessons?: () => void
   prefill?: ApplicationPrefill
+  adjustedPrice?: number
   refToken?: string
   invoiceId?: string
 }
@@ -186,15 +194,15 @@ type FormData = {
   contact_pref: string
 }
 
-export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, onNoLessons, prefill, refToken, invoiceId }: Props) {
+export default function BookingForm({ teacher, slot, subject, onSuccess, onCancel, prefill, adjustedPrice, refToken, invoiceId }: Props) {
   const { t, lang } = useLang()
   const ft = t.form
-  const [selectedSubject, setSelectedSubject] = useState(subject)
+  const showTelegram = isTgEligible(prefill?.country_code, prefill?.learning_lang)
   const [form, setForm] = useState<FormData>(() => ({
     student_name: prefill?.name ?? '',
     student_email: prefill?.email ?? '',
     student_phone: prefill?.phone ?? '',
-    contact_pref: prefill?.contact_pref ?? 'telegram',
+    contact_pref: prefill?.contact_pref === 'telegram' && !showTelegram ? 'email' : (prefill?.contact_pref ?? 'email'),
   }))
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
@@ -227,7 +235,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teacher_id: teacher.id,
-          subject: selectedSubject,
+          subject,
           slot_start: slot.start,
           slot_end: slot.end,
           student_name: form.student_name,
@@ -241,11 +249,10 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
 
       if (!res.ok) {
         const data = await res.json()
-        if (data.error === 'No lessons remaining on this package') {
-          onNoLessons?.()
-          return
-        }
-        throw new Error(data.error || 'Error')
+        const msg = data.error === 'No lessons remaining on this package'
+          ? ft.noLessonsError
+          : (data.error || 'Error')
+        throw new Error(msg)
       }
 
       onSuccess()
@@ -262,28 +269,20 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
       <div className="mb-4 pb-3 border-b border-gray-100">
-        <p className="text-xs text-gray-500 mb-0.5">{ft.courseWith} {teacher.name}</p>
         <p className="font-semibold text-gray-900 text-sm">
-          {format(parseISO(slot.start), ft.dateFormat, { locale })}
+          {format(parseISO(slot.start), ft.dateFormat, { locale })} {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
         </p>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {format(parseISO(slot.start), 'HH:mm')} – {format(parseISO(slot.end), 'HH:mm')}
-        </p>
+        {adjustedPrice != null && (
+          <div className="mt-2 inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {adjustedPrice}€/h
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-3">
-        <Field label={ft.course} required>
-          <select
-            value={selectedSubject}
-            onChange={e => setSelectedSubject(e.target.value)}
-            className={inputClass}
-          >
-            {teacher.subjects.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </Field>
-
         <Field label={ft.fullName} required error={fieldErrors.student_name}>
           <input
             type="text"
@@ -319,6 +318,7 @@ export default function BookingForm({ teacher, slot, subject, onSuccess, onCance
           <ContactPills
             selected={form.contact_pref}
             onChange={v => set('contact_pref', v as string)}
+            showTelegram={showTelegram}
           />
         </Field>
 

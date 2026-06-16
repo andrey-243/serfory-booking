@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
         teacher.google_refresh_token,
         teacher.google_calendar_id || 'primary',
         {
-          summary: `${subject} — ${student_name}`,
+          summary: `${subject} | ${student_name}`,
           start: slot_start,
           end: slot_end,
           description,
@@ -193,7 +193,7 @@ export async function GET(req: NextRequest) {
   const teacherId = searchParams.get('teacherId')
 
   // BUG FIXÉ : query doit être réassigné sinon .eq() est appelé mais ignoré
-  // (Supabase query builder est immutable — chaque méthode retourne une nouvelle instance)
+  // (Supabase query builder est immutable - chaque méthode retourne une nouvelle instance)
   let query = getSupabaseAdmin()
     .from('bookings')
     .select('*, teachers(name)')

@@ -8,7 +8,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-// Pricing tiers — server-side only, never exposed to client
+// Pricing tiers - server-side only, never exposed to client
 const EU_COUNTRIES = new Set([
   'AD','AT','BE','CH','CY','DE','DK','ES','FI','FR','GB','GR','IE','IS','IT',
   'LI','LU','MC','MT','NL','NO','PT','SE','SM','VA',
@@ -285,7 +285,7 @@ export async function GET(req: NextRequest) {
   if (ref) {
     const { data, error } = await getSupabaseAdmin()
       .from('applications')
-      .select('id, name, email, phone, contact_pref, subject, learning_lang, price_tier, status')
+      .select('id, name, email, phone, contact_pref, subject, learning_lang, country_code, price_tier, status')
       .eq('ref_token', ref)
       .single()
 

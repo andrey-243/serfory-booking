@@ -23,6 +23,7 @@ export type ApplicationPrefill = {
   subject?: string
   grade?: string | null
   learning_lang?: string | null
+  country_code?: string | null
 }
 
 type BookingFormat = 'individual' | 'pair' | 'group' | 'premade' | null
@@ -59,6 +60,7 @@ function BookingPageInner() {
   const [selectedSlot, setSelectedSlot] = useState<{ teacherId: string; slot: CalendarSlot } | null>(null)
   const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()))
   const [studentGrade, setStudentGrade] = useState<string | null>(null)
+  const [sessionReady, setSessionReady] = useState(() => !(session || ref))
   const [loadingTeachers, setLoadingTeachers] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [booked, setBooked] = useState(false)
@@ -102,6 +104,7 @@ function BookingPageInner() {
         }
       })
       .catch(() => setSessionInvalid(true))
+      .finally(() => setSessionReady(true))
   }, [session, setLang])
 
   // Ref flow (legacy): ?ref=<ref_token>
@@ -125,6 +128,7 @@ function BookingPageInner() {
         }
       })
       .catch(() => {})
+      .finally(() => setSessionReady(true))
   }, [ref, setLang])
 
   function selectLang(lang: TeachingLang | '') {
@@ -135,18 +139,24 @@ function BookingPageInner() {
   }
 
   useEffect(() => {
+    if (!sessionReady) return
+    const controller = new AbortController()
     setLoadingTeachers(true)
     const params = new URLSearchParams({ subject: selectedCourse })
     if (ref) params.set('ref', ref)
-    fetch(`/api/teachers?${params}`)
+    fetch(`/api/teachers?${params}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => {
-        setTeachers(d.teachers || [])
+        const list = d.teachers || []
+        if (list.length > 0) setLoadingSlots(true)
+        setTeachers(list)
         setSelectedTeacher(null)
         setSelectedSlot(null)
       })
+      .catch(err => { if (err.name !== 'AbortError') setTeachers([]) })
       .finally(() => setLoadingTeachers(false))
-  }, [selectedCourse])
+    return () => controller.abort()
+  }, [selectedCourse, sessionReady])
 
   const loadSlots = useCallback(async (teacherList: Teacher[], week: Date) => {
     setLoadingSlots(true)
@@ -176,14 +186,14 @@ function BookingPageInner() {
     setSelectedSlot({ teacherId, slot })
   }
 
-  const isLoading = loadingTeachers || loadingSlots
+  const isLoading = !sessionReady || loadingTeachers || loadingSlots
 
   // Client-side lang filter
   const teachersAfterLang = selectedLang === ''
     ? teachers
     : teachers.filter(t => t.teaching_languages.includes(selectedLang))
 
-  // Client-side grade filter — soft: if no teacher matches fall back to all
+  // Client-side grade filter - soft: if no teacher matches fall back to all
   const teachersMatchingGrade = studentGrade
     ? teachersAfterLang.filter(t => (t.subject_levels?.[selectedCourse] ?? []).includes(studentGrade))
     : teachersAfterLang
@@ -201,7 +211,7 @@ function BookingPageInner() {
     : teacherSlots.filter(ts =>
         ts.slots.length > 0 &&
         (selectedLang === '' || ts.teacher.teaching_languages.includes(selectedLang)) &&
-        (!gradeFilterActive || (t => (t.subject_levels?.[selectedCourse] ?? []).includes(studentGrade!))(ts.teacher))
+        (!gradeFilterActive || (ts.teacher.subject_levels?.[selectedCourse] ?? []).includes(studentGrade!))
       )
 
   if (sessionInvalid) {
@@ -283,6 +293,7 @@ function BookingPageInner() {
             <h1 className="text-2xl font-bold text-gray-900">{t.booking.title}</h1>
           </div>
           <div className="flex items-center gap-3">
+            <TimezoneSelect value={selectedTz} onChange={setSelectedTz} />
             <LanguageSwitcher />
             <a
               href="/login"
@@ -297,14 +308,14 @@ function BookingPageInner() {
           </div>
         </div>
 
-        {/* Filters — hidden when arriving via ref token (subject + lang preset from UTM) */}
+        {/* Filters - hidden when arriving via ref token (subject + lang preset from UTM) */}
         <div className="mb-5 flex flex-wrap items-center gap-3">
           {!ref && !session && <CourseTabFilter
             selected={selectedCourse}
             onChange={course => { setSelectedCourse(course); setBooked(false) }}
           />}
 
-          {/* Teaching language — hidden when ref token present (preset from UTM) */}
+          {/* Teaching language - hidden when ref token present (preset from UTM) */}
           {!ref && !session && <div className="relative">
             <button
               onClick={() => setLangDropdownOpen(o => !o)}
@@ -353,19 +364,24 @@ function BookingPageInner() {
             )}
           </div>}
 
-          <TimezoneSelect value={selectedTz} onChange={setSelectedTz} />
         </div>
 
-        {/* Grade mismatch info — shown when student's grade isn't covered by any teacher */}
         {gradeMismatch && (
           <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
             {t.booking.gradeMismatch}
           </div>
         )}
 
-        {/* Main layout — stopPropagation so click-outside-to-deselect only triggers on bg */}
+        {/* Main layout - stopPropagation so click-outside-to-deselect only triggers on bg */}
         <div onClick={e => e.stopPropagation()}>
-        {bookingFormat === 'group' ? (
+        {!sessionReady ? (
+          <div className="flex gap-5 items-stretch" style={{ height: 'calc(100vh - 220px)', minHeight: '560px' }}>
+            <div className="flex-shrink-0 w-72 flex flex-col gap-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-[104px] rounded-2xl bg-gray-200/70 animate-pulse" />)}
+            </div>
+            <div className="flex-1 rounded-2xl bg-gray-200/70 animate-pulse" />
+          </div>
+        ) : bookingFormat === 'group' ? (
           <GroupBatchView
             subject={selectedCourse}
             refToken={ref ?? sessionAppRefToken ?? ''}
@@ -391,7 +407,7 @@ function BookingPageInner() {
             }`}>
               {selectedTeacher && selectedSlot ? (
                 <>
-                  <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} />
+                  <TeacherCard teacher={selectedTeacher} selected={true} onClick={() => {}} subject={selectedCourse} />
                   {lessonsRemaining !== null && (
                     <div className={`px-3 py-1.5 rounded-xl text-xs font-medium text-center border ${
                       lessonsRemaining === 0
@@ -411,7 +427,6 @@ function BookingPageInner() {
                       if (lessonsRemaining !== null) setLessonsRemaining(r => r !== null ? Math.max(0, r - 1) : null)
                     }}
                     onCancel={() => { setSelectedSlot(null); setSelectedTeacher(null) }}
-                    onNoLessons={() => setSessionInvalid(true)}
                     prefill={prefill ?? undefined}
                     refToken={ref ?? undefined}
                     invoiceId={invoiceId ?? undefined}
@@ -431,6 +446,7 @@ function BookingPageInner() {
                     key={teacher.id}
                     teacher={teacher}
                     selected={selectedTeacher?.id === teacher.id}
+                    subject={selectedCourse}
                     onClick={() => {
                       setSelectedTeacher(prev => prev?.id === teacher.id ? null : teacher)
                       setSelectedSlot(null)
@@ -440,8 +456,8 @@ function BookingPageInner() {
               )}
             </div>
 
-            {/* Right panel — calendar */}
-            <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 overflow-auto">
+            {/* Right panel - calendar */}
+            <div className={`flex-1 bg-white rounded-xl border border-gray-200 p-4 ${selectedSlot ? 'overflow-hidden' : 'overflow-auto'}`}>
               {isLoading ? (
                 <div className="flex items-center justify-center h-full text-gray-400 text-sm">
                   {t.booking.loading}
@@ -458,7 +474,6 @@ function BookingPageInner() {
                   weekStart={weekStart}
                   onPrevWeek={() => setWeekStart(w => subDays(w, 7))}
                   onNextWeek={() => setWeekStart(w => addDays(w, 7))}
-                  timezone={selectedTz}
                 />
               )}
             </div>

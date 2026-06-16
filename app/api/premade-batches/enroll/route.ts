@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Invalidate booking_token — premade enrollment uses all lessons at once
+  // Invalidate booking_token - premade enrollment uses all lessons at once
   await supabase.from('invoices').update({ booking_token: null }).eq('id', invoice_id)
 
   // TG admin notif

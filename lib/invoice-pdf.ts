@@ -121,7 +121,7 @@ export function generateInvoicePDF(data: InvoiceData): Promise<Buffer> {
     sy += 16
 
     const formatLabel = l.formatLabel[data.format]
-    const serviceDesc = `${data.lessonsCount} × ${data.subject} lesson — ${formatLabel}`
+    const serviceDesc = `${data.lessonsCount} × ${data.subject} lesson, ${formatLabel}`
     doc.font('Helvetica').fontSize(10).fillColor(dark).text(serviceDesc, 56, sy)
     sy += 14
 

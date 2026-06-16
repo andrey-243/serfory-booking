@@ -125,6 +125,7 @@ export async function GET(req: NextRequest) {
       created_at: inv.created_at as string,
       lessonsUsed,
       hasBookingToken: !!(inv as { booking_token?: string | null }).booking_token,
+      booking_token: (inv as { booking_token?: string | null }).booking_token ?? null,
     }
   }))
 

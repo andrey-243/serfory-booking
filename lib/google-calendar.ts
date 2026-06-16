@@ -289,7 +289,7 @@ export async function createGroupSessionEvent(
     conferenceDataVersion: 1,
     requestBody: {
       summary: `${subject} group · Serfory`,
-      description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Group lesson`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Group lesson`,
       start: { dateTime: sessionStartUtc },
       end: { dateTime: endUtc },
       conferenceData: { createRequest: { requestId: `group-${sessionId}` } },
@@ -359,8 +359,8 @@ export async function createPremadeSessionEvent(
     sendUpdates: 'none',
     conferenceDataVersion: 1,
     requestBody: {
-      summary: `${batchName} — ${sessionName} · Serfory`,
-      description: `👩‍🏫 ${teacherName}\n📚 ${subject} — Premade course\n📖 ${sessionName}`,
+      summary: `${batchName}: ${sessionName} · Serfory`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Premade course\n📖 ${sessionName}`,
       start: { dateTime: sessionStartUtc },
       end: { dateTime: endUtc },
       conferenceData: { createRequest: { requestId: `premade-${sessionId}` } },

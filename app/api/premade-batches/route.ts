@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('premade_batches')
-    .select('*, premade_sessions(*), premade_enrollments(id, status)')
+    .select('*, premade_sessions(*), premade_enrollments(id, status, applications(id, name, email, phone, telegram_username, contact_pref))')
     .order('created_at', { ascending: false })
 
   if (teacherId) query = query.eq('teacher_id', teacherId)
@@ -77,12 +77,16 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
 
-  const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
-    ...b,
-    premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
-    enrollment_count: (b.premade_enrollments || []).filter(e => e.status === 'active').length,
-    premade_enrollments: undefined,
-  }))
+  const batches = ((data || []) as unknown as RawBatch[]).map(b => {
+    const activeEnrollments = (b.premade_enrollments || []).filter(e => e.status === 'active')
+    return {
+      ...b,
+      premade_sessions: (b.premade_sessions || []).sort((a, c) => a.session_date.localeCompare(c.session_date)),
+      enrollment_count: activeEnrollments.length,
+      enrolled_students: activeEnrollments.map(e => e.applications).filter(Boolean),
+      premade_enrollments: undefined,
+    }
+  })
 
   return NextResponse.json({ batches })
 }
@@ -127,14 +131,19 @@ export async function POST(req: NextRequest) {
   // Auto-complete active batches where all sessions are in the past
   const { data: activeBatches } = await supabase
     .from('premade_batches')
-    .select('id, premade_sessions(session_date)')
+    .select('id, premade_sessions(session_date, start_time, session_start_utc)')
     .eq('teacher_id', teacher_id)
     .eq('subject', subject)
     .eq('status', 'active')
 
+  const now = new Date()
   for (const b of activeBatches ?? []) {
-    const sessions = (b as { id: string; premade_sessions: { session_date: string }[] }).premade_sessions ?? []
-    if (sessions.length > 0 && sessions.every(s => s.session_date < today)) {
+    const sessions = (b as { id: string; premade_sessions: { session_date: string; start_time: string; session_start_utc: string | null }[] }).premade_sessions ?? []
+    const allPast = sessions.length > 0 && sessions.every(s => {
+      const d = s.session_start_utc ? new Date(s.session_start_utc) : new Date(`${s.session_date}T${s.start_time}`)
+      return d < now
+    })
+    if (allPast) {
       await supabase.from('premade_batches').update({ status: 'completed' }).eq('id', b.id)
     }
   }
@@ -238,7 +247,7 @@ export async function POST(req: NextRequest) {
     const sessionLines = (createdSessions || [])
       .map((s: { name: string; session_date: string; start_time: string }, i: number) => {
         const d = new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-        return `  ${i + 1}. ${s.name} — ${d} ${s.start_time.slice(0, 5)}`
+        return `  ${i + 1}. ${s.name}: ${d} ${s.start_time.slice(0, 5)}`
       })
       .join('\n')
     const msg = [

@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Connexion — Serfory' }
+export const metadata: Metadata = { title: 'Connexion | Serfory' }
 
 export default async function LoginPage({
   searchParams,

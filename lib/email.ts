@@ -112,7 +112,7 @@ const PACKAGE_MESSAGES = {
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Welcome to Serfory, ${name}!</h2>
         <p style="color:#6b7280;margin-bottom:8px">Your application for <strong>${subject}</strong> has been reviewed and accepted.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Choose your lesson package to get started — you'll receive an invoice by email.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Choose your lesson package to get started. You'll receive an invoice by email.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Choose my package →</a>
         <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">This link is personal. Do not share it.</p>
@@ -127,7 +127,7 @@ const PACKAGE_MESSAGES = {
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Tere tulemast Serforysse, ${name}!</h2>
         <p style="color:#6b7280;margin-bottom:8px">Sinu avaldus <strong>${subject}</strong> jaoks on läbi vaadatud ja vastu võetud.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Vali tunnipakett alustamiseks — saad arve e-posti teel.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Vali tunnipakett alustamiseks. Saad arve e-posti teel.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Vali pakett →</a>
         <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">See link on isiklik. Ära jaga seda.</p>
@@ -142,7 +142,7 @@ const PACKAGE_MESSAGES = {
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Добро пожаловать в Serfory, ${name}!</h2>
         <p style="color:#6b7280;margin-bottom:8px">Ваша заявка на <strong>${subject}</strong> рассмотрена и принята.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Выберите пакет уроков — вы получите счёт на оплату по электронной почте.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Выберите пакет уроков. Вы получите счёт на оплату по электронной почте.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Выбрать пакет →</a>
         <!--BOT-->
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">Эта ссылка персональная. Не передавайте её другим.</p>
@@ -181,7 +181,7 @@ export async function sendPackageEmail({
 
 const BOOKING_LINK_MESSAGES = {
   en: {
-    subject: 'Your invoice is paid — book your lesson now!',
+    subject: 'Your invoice is paid. Book your lesson now!',
     body: (name: string, link: string, subject: string) => `
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Payment confirmed, ${name}!</h2>
@@ -194,7 +194,7 @@ const BOOKING_LINK_MESSAGES = {
     `,
   },
   et: {
-    subject: 'Arve on makstud — broneeri oma tunnid!',
+    subject: 'Arve on makstud. Broneeri oma tunnid!',
     body: (name: string, link: string, subject: string) => `
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Makse kinnitatud, ${name}!</h2>
@@ -207,7 +207,7 @@ const BOOKING_LINK_MESSAGES = {
     `,
   },
   ru: {
-    subject: 'Счёт оплачен — бронируй уроки!',
+    subject: 'Счёт оплачен. Бронируй уроки!',
     body: (name: string, link: string, subject: string) => `
       <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Оплата подтверждена, ${name}!</h2>
@@ -231,7 +231,7 @@ const CANCELLATION_MESSAGES = {
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Lesson cancelled</h2>
         <p style="color:#6b7280;margin-bottom:8px">Hi ${name},</p>
         <p style="color:#6b7280;margin-bottom:24px">Your <strong>${subject}</strong> lesson with <strong>${teacher}</strong> on <strong>${date}</strong> has been cancelled.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Your lesson credit has been returned — you can book a new slot at any time.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Your lesson credit has been returned. You can book a new slot at any time.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Book a new slot →</a>
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">This link is personal. Do not share it.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
@@ -248,7 +248,7 @@ const CANCELLATION_MESSAGES = {
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Tund tühistatud</h2>
         <p style="color:#6b7280;margin-bottom:8px">Tere, ${name},</p>
         <p style="color:#6b7280;margin-bottom:24px">Sinu <strong>${subject}</strong> tund õpetajaga <strong>${teacher}</strong> kuupäeval <strong>${date}</strong> on tühistatud.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Tunni krediit on tagastatud — saad igal ajal uue aja broneerida.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Tunni krediit on tagastatud. Saad igal ajal uue aja broneerida.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Broneeri uus aeg →</a>
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">See link on isiklik. Ära jaga seda.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
@@ -265,7 +265,7 @@ const CANCELLATION_MESSAGES = {
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Урок отменён</h2>
         <p style="color:#6b7280;margin-bottom:8px">Здравствуйте, ${name},</p>
         <p style="color:#6b7280;margin-bottom:24px">Ваш урок по <strong>${subject}</strong> с <strong>${teacher}</strong> <strong>${date}</strong> был отменён.</p>
-        <p style="color:#6b7280;margin-bottom:24px">Кредит урока возвращён — вы можете забронировать новое время в любой момент.</p>
+        <p style="color:#6b7280;margin-bottom:24px">Кредит урока возвращён. Вы можете забронировать новое время в любой момент.</p>
         <a href="${link}" style="display:inline-block;background:#3B82F6;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Забронировать новое время →</a>
         <p style="margin-top:24px;font-size:12px;color:#9ca3af">Эта ссылка персональная. Не передавайте её другим.</p>
         <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">

@@ -54,9 +54,11 @@ export async function GET(req: NextRequest) {
     teachers?: { name: string; teaching_languages: string[] | null } | null
   }
 
+  const enrollSelect = 'group_slot_enrollments(id, status, applications(id, name, email, phone, telegram_username, contact_pref))'
+
   let baseQuery = supabase
     .from('group_slot_batches')
-    .select('*, group_slot_sessions(*), group_slot_enrollments(id, status)')
+    .select(`*, group_slot_sessions(*), ${enrollSelect}`)
     .order('start_date', { ascending: true })
 
   if (teacherId) baseQuery = baseQuery.eq('teacher_id', teacherId)
@@ -72,7 +74,7 @@ export async function GET(req: NextRequest) {
   if (all) {
     const { data, error } = await supabase
       .from('group_slot_batches')
-      .select('*, group_slot_sessions(*), group_slot_enrollments(id, status, applications(id, name, email, phone, telegram_username, telegram_chat_id, contact_pref)), teachers(name, teaching_languages)')
+      .select(`*, group_slot_sessions(*), group_slot_enrollments(id, status, applications(id, name, email, phone, telegram_username, telegram_chat_id, contact_pref)), teachers(name, teaching_languages)`)
       .order('start_date', { ascending: true })
     if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
     const batches = ((data || []) as unknown as RawBatch[]).map(b => {
@@ -93,14 +95,18 @@ export async function GET(req: NextRequest) {
   const { data, error } = await baseQuery
   if (error) return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
 
-  const batches = ((data || []) as unknown as RawBatch[]).map(b => ({
-    ...b,
-    group_slot_sessions: (b.group_slot_sessions || []).sort(
-      (a, c) => a.session_date.localeCompare(c.session_date)
-    ),
-    enrollment_count: (b.group_slot_enrollments || []).filter(e => e.status === 'active').length,
-    group_slot_enrollments: undefined,
-  }))
+  const batches = ((data || []) as unknown as RawBatch[]).map(b => {
+    const activeEnrollments = (b.group_slot_enrollments || []).filter(e => e.status === 'active')
+    return {
+      ...b,
+      group_slot_sessions: (b.group_slot_sessions || []).sort(
+        (a, c) => a.session_date.localeCompare(c.session_date)
+      ),
+      enrollment_count: activeEnrollments.length,
+      enrolled_students: activeEnrollments.map(e => e.applications).filter(Boolean),
+      group_slot_enrollments: undefined,
+    }
+  })
 
   return NextResponse.json({ batches })
 }
@@ -145,7 +151,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Count all active batches (after auto-complete) — no start_date filter: batches created in the past but still running count
+  // Count all active batches (after auto-complete) - no start_date filter: batches created in the past but still running count
   const { count } = await supabase
     .from('group_slot_batches')
     .select('*', { count: 'exact', head: true })
@@ -245,7 +251,7 @@ export async function POST(req: NextRequest) {
       `👥 <b>New group course created</b>`,
       ``,
       `👩‍🏫 <b>${teacherName}</b>`,
-      `📖 ${subject} · ${teaching_language?.toUpperCase() ?? '—'}`,
+      `📖 ${subject} · ${teaching_language?.toUpperCase() ?? '-'}`,
       `⏱ ${duration_minutes} min · max ${max_students} students`,
       ``,
       `<b>Sessions:</b>`,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-// Pricing tiers — server-side only
+// Pricing tiers - server-side only
 const EU_COUNTRIES = new Set([
   'AD','AT','BE','CH','CY','DE','DK','ES','FI','FR','GB','GR','IE','IS','IT',
   'LI','LU','MC','MT','NL','NO','PT','SE','SM','VA',
@@ -107,7 +107,7 @@ export async function PATCH(req: NextRequest) {
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
   if (adminChatId && teacher?.name) {
     const changes: string[] = []
-    if (teaching_languages !== undefined) changes.push(`🗣 Languages: ${(teaching_languages as string[]).join(', ') || '—'}`)
+    if (teaching_languages !== undefined) changes.push(`🗣 Languages: ${(teaching_languages as string[]).join(', ') || '-'}`)
     if (subject_formats !== undefined) {
       const lines = Object.entries(subject_formats as Record<string, string[]>)
         .map(([s, fmts]) => `  ${s}: ${fmts.join(', ')}`)
@@ -115,7 +115,7 @@ export async function PATCH(req: NextRequest) {
     }
     if (subject_levels !== undefined) {
       const lines = Object.entries(subject_levels as Record<string, string[]>)
-        .map(([s, lvls]) => `  ${s}: ${lvls.join(', ') || '—'}`)
+        .map(([s, lvls]) => `  ${s}: ${lvls.join(', ') || '-'}`)
       changes.push(`🎯 Levels:\n${lines.join('\n')}`)
     }
     const msg = [`⚙️ <b>${teacher.name}</b> updated their teaching profile`, '', ...changes].join('\n')

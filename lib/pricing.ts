@@ -1,4 +1,4 @@
-// Server-side only — never import from client components
+// Server-side only - never import from client components
 
 export type Format = 'individual' | 'pair' | 'group' | 'premade'
 export type LessonsCount = 1 | 4 | 6 | 7 | 8 | 12

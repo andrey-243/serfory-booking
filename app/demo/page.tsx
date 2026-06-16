@@ -412,7 +412,7 @@ export default function DemoPage() {
   )
 }
 
-// ── D1 — 2-column layout + stat row ──────────────────────────────────────────
+// ── D1 - 2-column layout + stat row ──────────────────────────────────────────
 // Wider than current (max-w-3xl vs max-w-2xl). Top: 4 stat cards.
 // Row 2: left col (GCal + Availability), right col (Upcoming lessons).
 // Row 3: full-width sections for Groups + Premade side by side.
@@ -489,7 +489,7 @@ function DashboardD1() {
   )
 }
 
-// ── D2 — Left sidebar navigation ─────────────────────────────────────────────
+// ── D2 - Left sidebar navigation ─────────────────────────────────────────────
 // Fixed left sidebar: avatar + name + nav items.
 // Main area shows selected section. Feels like a real SaaS app.
 
@@ -611,7 +611,7 @@ function DashboardD2() {
   )
 }
 
-// ── D3 — Horizontal tabs ──────────────────────────────────────────────────────
+// ── D3 - Horizontal tabs ──────────────────────────────────────────────────────
 // Current width (max-w-2xl feel but slightly wider). Clean horizontal tabs
 // replace stacked cards. Each tab is focused on a single area.
 // Minimal header, content changes per tab.
@@ -716,7 +716,7 @@ function DashboardD3() {
   )
 }
 
-// ── D4 — Compact grid, max-w-2xl, dense ──────────────────────────────────────
+// ── D4 - Compact grid, max-w-2xl, dense ──────────────────────────────────────
 // Same narrow width as current but better visual grouping.
 // Top: inline header with stats pills. GCal status = 1 line in header.
 // Availability = compact visual grid (colored dots per hour slot).
@@ -773,7 +773,7 @@ function DashboardD4() {
                 <span className="w-6 text-[11px] text-gray-500 shrink-0 font-medium">{row.day.slice(0, 2)}</span>
                 {row.enabled
                   ? <span className="text-[11px] text-gray-600">{row.start} – {row.end}</span>
-                  : <span className="text-[11px] text-gray-300">—</span>}
+                  : <span className="text-[11px] text-gray-300">-</span>}
               </div>
             ))}
           </div>
@@ -781,7 +781,7 @@ function DashboardD4() {
         </div>
       </div>
 
-      {/* Group sessions — accordion */}
+      {/* Group sessions - accordion */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <button onClick={() => setOpenGroup(!openGroup)}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
@@ -800,7 +800,7 @@ function DashboardD4() {
         )}
       </div>
 
-      {/* Premade courses — accordion */}
+      {/* Premade courses - accordion */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <button onClick={() => setOpenPremade(!openPremade)}
           className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
@@ -819,7 +819,7 @@ function DashboardD4() {
         )}
       </div>
 
-      {/* Course settings — compact inline */}
+      {/* Course settings - compact inline */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="font-semibold text-gray-800 mb-3 text-sm">Course settings</h3>
         <div className="space-y-3">
@@ -838,7 +838,7 @@ function DashboardD4() {
   )
 }
 
-// ── T1 — Cards Grid ───────────────────────────────────────────────────────────
+// ── T1 - Cards Grid ───────────────────────────────────────────────────────────
 // Clean 3-column grid. Each card: avatar + name + title + subject pills + langs + experience.
 // Hover: lift shadow. Click: blue ring selection + "Book now" CTA revealed.
 
@@ -901,7 +901,7 @@ function TeachersT1() {
   )
 }
 
-// ── T2 — Left list + Right profile panel ──────────────────────────────────────
+// ── T2 - Left list + Right profile panel ──────────────────────────────────────
 // Compact left list (avatar + name + subjects). Right panel shows full profile
 // with large avatar, bio section, subject cards, teaching langs.
 
@@ -996,7 +996,7 @@ function TeachersT2() {
             {/* Availability hint */}
             <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-green-50 border border-green-100">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
-              <p className="text-xs text-green-700 font-medium">Available this week — slots visible on the booking page</p>
+              <p className="text-xs text-green-700 font-medium">Available this week. Slots visible on the booking page.</p>
             </div>
 
             <button className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors">
@@ -1009,7 +1009,7 @@ function TeachersT2() {
   )
 }
 
-// ── T3 — Subject filter + filtered cards ──────────────────────────────────────
+// ── T3 - Subject filter + filtered cards ──────────────────────────────────────
 // Subject pill tabs at top (like booking page). Below: teacher cards filtered
 // by selected subject, with an additional "All" tab. Compact horizontal cards.
 
@@ -1053,7 +1053,7 @@ function TeachersT3() {
         })}
       </div>
 
-      {/* Teacher cards — horizontal layout */}
+      {/* Teacher cards - horizontal layout */}
       <div className="space-y-3">
         {filtered.map(t => {
           const isSelected = selected === t.id
@@ -1115,7 +1115,7 @@ function TeachersT3() {
   )
 }
 
-// ── T4 — Magazine layout ──────────────────────────────────────────────────────
+// ── T4 - Magazine layout ──────────────────────────────────────────────────────
 // First teacher = hero card (full-width horizontal, large avatar, bio-style).
 // Rest = 2-column grid of compact cards below.
 // Editorial feel, "Meet our team" style.
@@ -1181,7 +1181,7 @@ function TeachersT4() {
         </div>
       </div>
 
-      {/* Rest — 2-column grid */}
+      {/* Rest - 2-column grid */}
       <div className="grid grid-cols-2 gap-4">
         {rest.map(t => {
           const isSelected = selected === t.id
@@ -1226,7 +1226,7 @@ function TeachersT4() {
   )
 }
 
-// ── P1 — Toolbar compact ──────────────────────────────────────────────────────
+// ── P1 - Toolbar compact ──────────────────────────────────────────────────────
 
 function PackageP1() {
   return (
@@ -1279,7 +1279,7 @@ function PackageP1() {
   )
 }
 
-// ── P2 — Sidebar ──────────────────────────────────────────────────────────────
+// ── P2 - Sidebar ──────────────────────────────────────────────────────────────
 
 function PackageP2() {
   return (
@@ -1338,7 +1338,7 @@ function PackageP2() {
   )
 }
 
-// ── P3 — Compact banner ───────────────────────────────────────────────────────
+// ── P3 - Compact banner ───────────────────────────────────────────────────────
 
 function PackageP3() {
   return (
@@ -1389,7 +1389,7 @@ function PackageP3() {
   )
 }
 
-// ── P4 — Summary sidebar ──────────────────────────────────────────────────────
+// ── P4 - Summary sidebar ──────────────────────────────────────────────────────
 
 function PackageP4() {
   return (
@@ -1464,7 +1464,7 @@ function PackageP4() {
               <svg className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 102 0V7zm-1 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"/>
               </svg>
-              <p className="text-[10px] text-gray-400 leading-snug">This link is personal — please don&apos;t share it with others.</p>
+              <p className="text-[10px] text-gray-400 leading-snug">This link is personal. Please don&apos;t share it with others.</p>
             </div>
           </div>
         </div>

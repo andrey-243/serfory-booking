@@ -104,7 +104,7 @@ const T = {
     confirm: 'Confirm and receive invoice',
     sending: 'Sending...',
     success: 'Invoice sent! Check your email.',
-    personalLink: 'This link is personal — do not share it.',
+    personalLink: 'This link is personal. Do not share it.',
     tgTitle: 'Get updates on Telegram',
     tgDesc: 'Receive lesson reminders and messages from your teacher directly on Telegram.',
     tgCta: 'Connect to bot',
@@ -126,6 +126,11 @@ const T = {
     sessions: 'sessions',
     minAbbr: 'min',
     vsIndividual: 'vs individual',
+    tooManyPending: 'You already have 3 unpaid invoices. Please pay the existing ones first.',
+    errorGeneric: 'Something went wrong. Please try again.',
+    wrongLang: 'Wrong language',
+    wrongLevel: 'Wrong level',
+    selectGradeHint: 'Select a grade or level to continue.',
   },
   et: {
     loading: 'Laadimine...',
@@ -153,7 +158,7 @@ const T = {
     confirm: 'Kinnita ja saa arve',
     sending: 'Saatmine...',
     success: 'Arve saadetud! Kontrolli oma e-posti.',
-    personalLink: 'See link on isiklik — ära jaga seda.',
+    personalLink: 'See link on isiklik. Ära jaga seda.',
     tgTitle: 'Saa uuendusi Telegrami kaudu',
     tgDesc: 'Tunnimuistutused ja õpetaja sõnumid otse Telegrami.',
     tgCta: 'Ühenda botiga',
@@ -175,12 +180,17 @@ const T = {
     sessions: 'sessiooni',
     minAbbr: 'min',
     vsIndividual: 'vs individuaalne',
+    tooManyPending: 'Sul on juba 3 tasumata arvet. Maksa esmalt olemasolevad.',
+    errorGeneric: 'Midagi läks valesti. Palun proovi uuesti.',
+    wrongLang: 'Vale keel',
+    wrongLevel: 'Vale tase',
+    selectGradeHint: 'Jätkamiseks vali klass või tase.',
   },
   ru: {
     loading: 'Загрузка...',
     invalidToken: 'Эта ссылка недействительна или уже использована.',
     alreadySent: 'Счёт для этой заявки уже был отправлен.',
-    paid: 'Оплата получена. Проверьте почту — там ссылка для бронирования.',
+    paid: 'Оплата получена. Проверьте почту: там ссылка для бронирования.',
     title: (name: string) => `Привет ${name}, выберите пакет`,
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
@@ -202,7 +212,7 @@ const T = {
     confirm: 'Подтвердить и получить счёт',
     sending: 'Отправка...',
     success: 'Счёт отправлен! Проверьте почту.',
-    personalLink: 'Эта ссылка персональная — не передавайте её.',
+    personalLink: 'Эта ссылка персональная. Не передавайте её.',
     tgTitle: 'Получайте уведомления в Telegram',
     tgDesc: 'Напоминания об уроках и сообщения от учителя прямо в Telegram.',
     tgCta: 'Подключить бота',
@@ -224,6 +234,11 @@ const T = {
     sessions: 'занятий',
     minAbbr: 'мин',
     vsIndividual: 'vs индивидуально',
+    tooManyPending: 'У вас уже 3 неоплаченных счёта. Сначала оплатите существующие.',
+    errorGeneric: 'Что-то пошло не так. Попробуйте снова.',
+    wrongLang: 'Другой язык',
+    wrongLevel: 'Другой уровень',
+    selectGradeHint: 'Выберите класс или уровень, чтобы продолжить.',
   },
 }
 
@@ -255,6 +270,21 @@ function fmtSessionUtc(utcIso: string, locale: string, tz?: string): { date: str
   }
 }
 
+function isDeadlinePassed(session1: { session_start_utc: string | null; session_date: string; start_time: string }, tz: string): boolean {
+  const now = new Date()
+  const s1 = session1.session_start_utc
+    ? new Date(session1.session_start_utc)
+    : new Date(`${session1.session_date}T${session1.start_time}`)
+  if (s1 <= now) return true
+  const localHour = parseInt(
+    new Intl.DateTimeFormat('en', { timeZone: tz, hour: 'numeric', hour12: false }).format(s1), 10
+  )
+  const deadline = localHour >= 17
+    ? new Date(s1.getTime() - (localHour - 9) * 3600000)
+    : new Date(s1.getTime() - (localHour + 1) * 3600000)
+  return now > deadline
+}
+
 function PackagePageInner() {
   const params = useSearchParams()
   const token = params.get('token') ?? ''
@@ -263,6 +293,7 @@ function PackagePageInner() {
     id: string; invoice_number: number; format: string; subject: string | null
     lessons_count: number; total_amount: number; status: 'sent' | 'paid'
     created_at: string; lessonsUsed: number | null; hasBookingToken: boolean
+    booking_token: string | null
   }
 
   const [appData, setAppData] = useState<{
@@ -291,7 +322,7 @@ function PackagePageInner() {
   type PremadeSession = { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null }
   type PremadeBatch = {
     id: string; teacher_id: string; name: string; subject: string; duration_min: number
-    teaching_language: string | null
+    teaching_language: string | null; target_levels: string[]
     max_students: number; enrollment_count: number
     premade_sessions: PremadeSession[]
   }
@@ -356,17 +387,27 @@ function PackagePageInner() {
       if (!tc.teaching_languages?.includes(selectedLearningLang)) continue
       for (const f of tc.subject_formats?.[selectedSubject] ?? []) union.add(f)
     }
-    const premadeAvailableForLang = premadeBatches.some(b => b.teaching_language === selectedLearningLang)
-    if (!premadeAvailableForLang) union.delete('premade')
-    const groupAvailableForLang = groupBatches.some(b => b.teaching_language === selectedLearningLang)
-    if (!groupAvailableForLang) union.delete('group')
+    // Premade: show format if any batch with non-passed deadline exists (non-matching lang shown grayed)
+    const premadeAvailable = premadeBatches.some(b => {
+      const s1 = b.premade_sessions[0]
+      return s1 && !isDeadlinePassed(s1, selectedTz)
+    })
+    if (!premadeAvailable) union.delete('premade')
+    // Group: only show format if a batch with matching lang AND non-passed deadline exists
+    const groupAvailable = groupBatches.some(b => {
+      if (b.teaching_language !== selectedLearningLang) return false
+      const s1 = b.group_slot_sessions[0]
+      return s1 && !isDeadlinePassed(s1, selectedTz)
+    })
+    if (!groupAvailable) union.delete('group')
     setAvailableFormats(union.size > 0 ? FORMAT_ORDER.filter(f => union.has(f)) : ['individual'])
-  }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches, groupBatches])
+  }, [selectedSubject, selectedLearningLang, teacherCache, premadeBatches, groupBatches, selectedTz])
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [availableGradesPkg, setAvailableGradesPkg] = useState<string[]>([...GRADE_KEYS_PKG])
   const [format, setFormat] = useState<Format>('individual')
   const [lessons, setLessons] = useState<LessonsCount>(8)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [interest8w, setInterest8w] = useState<'idle' | 'ask' | 'sending' | 'done'>('idle')
   const [tgUsernameInput, setTgUsernameInput] = useState('')
 
@@ -392,15 +433,17 @@ function PackagePageInner() {
 
   const t = T[uiLang]
 
-  const filteredPremadeBatches = teacherCache
-    ? premadeBatches.filter(b => teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang))
-    : premadeBatches
+  // Premade: show all for subject (deadline filter), lang matching determines selectability
+  const validPremadeBatches = premadeBatches.filter(b => {
+    const s1 = b.premade_sessions[0]
+    return s1 && !isDeadlinePassed(s1, selectedTz)
+  })
+  const filteredGroupBatches = groupBatches.filter(b => {
+    const s1 = b.group_slot_sessions[0]
+    const langOk = teacherCache ? !!teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang) : true
+    return langOk && s1 && !isDeadlinePassed(s1, selectedTz)
+  })
 
-  const filteredGroupBatches = teacherCache
-    ? groupBatches.filter(b => teacherCache.find(t => t.id === b.teacher_id)?.teaching_languages?.includes(selectedLearningLang))
-    : groupBatches
-
- ?? null
   const tierMultiplier = appData?.tierMultiplier ?? 1.0
   const applyTier = (base: number) => Math.ceil(base * tierMultiplier)
 
@@ -462,6 +505,7 @@ function PackagePageInner() {
 
   async function handleConfirm() {
     setStatus('sending')
+    setErrorMsg(null)
     const body = { token, format, lessons_count: lessons, subject: selectedSubject, learning_lang: selectedLearningLang }
     const res = await fetch('/api/invoices', {
       method: 'POST',
@@ -471,8 +515,9 @@ function PackagePageInner() {
     if (res.ok) {
       setStatus('done')
     } else {
+      const data = await res.json().catch(() => ({}))
       setStatus('ready')
-      alert('Something went wrong. Please try again.')
+      setErrorMsg(res.status === 429 ? t.tooManyPending : (data.error || t.errorGeneric))
     }
   }
 
@@ -520,23 +565,69 @@ function PackagePageInner() {
         <p className="text-gray-500 mb-6 text-sm">{t.subtitle}</p>
 
         {(() => {
-          const useful = invoiceList.filter(inv => {
-            if (inv.status === 'sent') return true
+          const sentInvs = invoiceList.filter(inv => inv.status === 'sent')
+          const paidInvs = invoiceList.filter(inv => {
+            if (inv.status !== 'paid') return false
             if (inv.format === 'individual' || inv.format === 'pair') return (inv.lessonsUsed ?? 0) < inv.lessons_count
             return inv.hasBookingToken
           })
-          if (useful.length === 0) return null
+          if (sentInvs.length === 0 && paidInvs.length === 0) return null
+
+          // Group paid by format
+          const paidByFmt = new Map<string, InvoiceInfo[]>()
+          for (const inv of paidInvs) {
+            if (!paidByFmt.has(inv.format)) paidByFmt.set(inv.format, [])
+            paidByFmt.get(inv.format)!.push(inv)
+          }
+          const fmtOrder = ['individual', 'pair', 'group', 'premade']
+          const paidGroups = fmtOrder.filter(f => paidByFmt.has(f)).map(f => ({ fmt: f, invs: paidByFmt.get(f)! }))
+
           return (
             <div className="mb-5 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-3">{t.yourPackages}</p>
               <div className="space-y-2">
-                {useful.map(inv => {
-                  const remaining = inv.status === 'paid' && (inv.format === 'individual' || inv.format === 'pair')
-                    ? inv.lessons_count - (inv.lessonsUsed ?? 0)
-                    : null
+                {/* Paid - 1 row per format, chips per invoice */}
+                {paidGroups.map(({ fmt, invs }) => {
+                  const fmtInfo = FORMAT_INFO[fmt as Format]
+                  const formatLabel = fmtInfo ? fmtInfo[uiLang].label : fmt
+                  return (
+                    <div key={fmt} className="flex items-start gap-2 min-w-0">
+                      <span className="shrink-0 text-xs font-semibold text-gray-500 pt-0.5 min-w-[80px]">{formatLabel}</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {invs.map(inv => {
+                          const dateStr = new Date(inv.created_at).toLocaleDateString(
+                            uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB',
+                            { day: 'numeric', month: 'short' }
+                          )
+                          const subjectLabel = inv.subject ?? appData?.subject ?? ''
+                          const remaining = (fmt === 'individual' || fmt === 'pair')
+                            ? inv.lessons_count - (inv.lessonsUsed ?? 0)
+                            : null
+                          const label = remaining !== null
+                            ? `${subjectLabel} · ${remaining}/${inv.lessons_count} · ${dateStr}`
+                            : `${subjectLabel} · ${dateStr}`
+                          if (inv.booking_token) {
+                            return (
+                              <a key={inv.id} href={`/booking?session=${inv.booking_token}`}
+                                className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition-colors">
+                                {label}
+                              </a>
+                            )
+                          }
+                          return (
+                            <span key={inv.id} className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-400 border border-gray-100">
+                              {label}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* Sent - 1 row per invoice */}
+                {sentInvs.map(inv => {
                   const fmtInfo = FORMAT_INFO[inv.format as Format]
                   const formatLabel = fmtInfo ? fmtInfo[uiLang].label : inv.format
-                  const subjectLabel = inv.subject ? (t.courseLabels[inv.subject] ?? inv.subject) : (t.courseLabels[selectedSubject] ?? selectedSubject)
                   const dateStr = new Date(inv.created_at).toLocaleDateString(
                     uiLang === 'et' ? 'et-EE' : uiLang === 'ru' ? 'ru-RU' : 'en-GB',
                     { day: 'numeric', month: 'short' }
@@ -544,23 +635,12 @@ function PackagePageInner() {
                   return (
                     <div key={inv.id} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
-                        {inv.status === 'paid' ? (
-                          <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                            {remaining !== null ? t.lessonsToBook(remaining) : t.readyToEnroll}
-                          </span>
-                        ) : (
-                          <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                            {t.invoicePendingLabel}
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-700 truncate">
-                          {(inv.format === 'group' || inv.format === 'premade' || inv.status === 'sent') && `${subjectLabel} · `}{formatLabel}
-                          {inv.status === 'sent' && ` · ${inv.total_amount}€`}
+                        <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          {t.invoicePendingLabel}
                         </span>
+                        <span className="text-sm text-gray-700 truncate">{formatLabel} · {inv.total_amount}€</span>
                       </div>
-                      {inv.status === 'sent' && (
-                        <span className="text-xs text-gray-400 shrink-0">#{inv.invoice_number} · {dateStr}</span>
-                      )}
+                      <span className="text-xs text-gray-400 shrink-0">#{inv.invoice_number} · {dateStr}</span>
                     </div>
                   )
                 })}
@@ -694,15 +774,36 @@ function PackagePageInner() {
               {format === 'premade' ? (
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.availableCourses}</p>
-                  {filteredPremadeBatches.map(batch => {
+                  {validPremadeBatches.length === 0 && (
+                    <p className="text-xs text-gray-400">{t.comingSoon}</p>
+                  )}
+                  {validPremadeBatches.map(batch => {
                     const fmtDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                     const spotsLeft = batch.max_students - batch.enrollment_count
                     const teacherName = teacherCache?.find(tc => tc.id === batch.teacher_id)?.name
+                    const langMatches = batch.teaching_language === selectedLearningLang
+                    const levelMatches = !selectedGrade || (batch.target_levels ?? []).includes(selectedGrade)
+                    const isClickable = langMatches && levelMatches
                     return (
-                      <div key={batch.id} className="w-full p-4 rounded-xl border border-gray-100 bg-gray-50 text-left">
+                      <div
+                        key={batch.id}
+                        className={`w-full p-4 rounded-xl border text-left ${
+                          isClickable
+                            ? 'border-gray-200 bg-white'
+                            : 'border-gray-100 bg-gray-50 opacity-50'
+                        }`}
+                      >
                         <div className="flex justify-between items-start gap-4">
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-gray-900 text-sm">{batch.name}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`font-semibold text-sm ${isClickable ? 'text-gray-900' : 'text-gray-400'}`}>{batch.name}</p>
+                              {!langMatches && batch.teaching_language && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 font-medium uppercase">{batch.teaching_language} · {t.wrongLang}</span>
+                              )}
+                              {langMatches && !levelMatches && selectedGrade && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 font-medium">{(batch.target_levels ?? []).join(', ')} · {t.wrongLevel}</span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-500 mt-0.5">{batch.premade_sessions.length} {t.sessions} · {batch.duration_min}{t.minAbbr}{teacherName ? ` · ${teacherName}` : ''}</p>
                             <div className="mt-2 space-y-0.5">
                               {batch.premade_sessions.map((s, i) => {
@@ -717,7 +818,7 @@ function PackagePageInner() {
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="font-bold text-gray-900 text-base">{applyTier(batch.premade_sessions.length * 18)}€</p>
+                            <p className={`font-bold text-base ${isClickable ? 'text-gray-900' : 'text-gray-400'}`}>{applyTier(batch.premade_sessions.length * 18)}€</p>
                             <p className="text-[10px] text-gray-400 mt-0.5">{t.spotsLeft(spotsLeft)}</p>
                           </div>
                         </div>
@@ -727,7 +828,7 @@ function PackagePageInner() {
                 </div>
               ) : format === 'group' ? (
               <div className="flex gap-4 items-start">
-                {/* Package options — left column */}
+                {/* Package options - left column */}
                 <div className="flex flex-col gap-3 w-[160px] shrink-0">
                   {LESSONS_OPTIONS[format].map(n => {
                     const price = applyTier(BASE_PRICES[format][n] ?? 0)
@@ -744,7 +845,7 @@ function PackagePageInner() {
                   <div className="relative p-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-left">
                     <span className="absolute -top-2 left-3 text-[10px] font-bold bg-gray-400 text-white px-2 py-0.5 rounded-full">{t.comingSoon}</span>
                     <p className="font-semibold text-gray-400 text-sm">{t.weeks(8)}</p>
-                    <p className="text-base font-bold text-gray-300 mt-1">—</p>
+                    <p className="text-base font-bold text-gray-300 mt-1">-</p>
                     {interest8w === 'done' ? (
                       <p className="mt-2 text-[11px] text-green-600 font-medium">{t.interestedSent}</p>
                     ) : interest8w === 'ask' ? (
@@ -774,7 +875,7 @@ function PackagePageInner() {
                     )}
                   </div>
                 </div>
-                {/* Available sessions — right column */}
+                {/* Available sessions - right column */}
                 {filteredGroupBatches.length > 0 && (
                   <div className="flex-1 min-w-0 space-y-2">
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t.availableSessions}</p>
@@ -853,7 +954,7 @@ function PackagePageInner() {
 
           </div>
 
-          {/* Right sidebar — sticky order summary */}
+          {/* Right sidebar - sticky order summary */}
           <div className="w-72 shrink-0 sticky top-8 space-y-3">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 space-y-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.yourOrder}</p>
@@ -879,12 +980,14 @@ function PackagePageInner() {
               </div>
               <div className="border-t border-gray-100 pt-3 flex justify-between items-baseline">
                 <span className="text-xs text-gray-500">{t.total}</span>
-                <span className="text-xl font-bold text-gray-900">{total > 0 ? `${total}€` : '—'}</span>
+                <span className="text-xl font-bold text-gray-900">{total > 0 ? `${total}€` : '-'}</span>
               </div>
               <button onClick={handleConfirm} disabled={status === 'sending' || !selectedGrade}
                 className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors">
                 {status === 'sending' ? t.sending : t.confirm}
               </button>
+              {!selectedGrade && <p className="text-xs text-amber-600 text-center leading-snug">{t.selectGradeHint}</p>}
+              {errorMsg && <p className="text-xs text-red-600 text-center leading-snug">{errorMsg}</p>}
               <p className="text-[10px] text-center text-gray-400">{t.invoiceNote}</p>
               <div className="border-t border-gray-100 pt-3 flex items-start gap-1.5">
                 <svg className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">

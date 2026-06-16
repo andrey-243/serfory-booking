@@ -291,7 +291,7 @@ const GRADE_NORMALIZE: Record<string, string> = {
 }
 const normalizeGrade = (g: string) => GRADE_NORMALIZE[g] ?? g
 
-// ── CRM D2×A — helpers ────────────────────────────────────────────────────────
+// ── CRM D2×A - helpers ────────────────────────────────────────────────────────
 
 const SUBJECT_COLORS_CRM: Record<string, { bg: string; text: string }> = {
   Russian:  { bg: 'bg-pink-100',   text: 'text-pink-700'   },
@@ -380,7 +380,7 @@ function teacherInitialsCrm(name: string): string {
   return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase()
 }
 
-// ── CRM D2×A — components ─────────────────────────────────────────────────────
+// ── CRM D2×A - components ─────────────────────────────────────────────────────
 
 function CircleToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
@@ -503,9 +503,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
 
   const panelTeachers = [...new Set([
     ...allBookings.map(b => b.teacher),
-    ...(studentGroupBatches ?? []).map(b => b.teachers?.name ?? '—'),
-    ...(studentPremadeBatches ?? []).map(b => b.teachers?.name ?? '—'),
-  ].filter(t => t !== '—'))].sort()
+    ...(studentGroupBatches ?? []).map(b => b.teachers?.name ?? '-'),
+    ...(studentPremadeBatches ?? []).map(b => b.teachers?.name ?? '-'),
+  ].filter(t => t !== '-'))].sort()
   const panelCourses = [...new Set([
     ...allBookings.map(b => b.subject),
     ...(studentGroupBatches ?? []).map(b => b.subject),
@@ -692,7 +692,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
               <tbody>
                 {sortedInvoices.map(inv => {
                   const fmtColor: Record<string, string> = { individual: 'bg-blue-50 text-blue-600', pair: 'bg-violet-50 text-violet-600', group: 'bg-emerald-50 text-emerald-600', premade: 'bg-amber-50 text-amber-600' }
-                  const subj = inv.applications?.subject ?? '—'
+                  const subj = inv.applications?.subject ?? '-'
                   const sc = subjectColorCrm(subj)
                   const isPaid = inv.status === 'paid'
                   return (
@@ -782,7 +782,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                         </td>
                         <td className="px-3 py-2 text-gray-600">{b.teacher.split(' ')[0]}</td>
                         <td className="px-3 py-2"><span className={`font-medium capitalize ${crmStatusColor(bStatus)}`}>{bStatus}</span></td>
-                        <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">—</span>}</td>
+                        <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">-</span>}</td>
                       </tr>
                     )
                   })}
@@ -807,9 +807,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                                 <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold">Group</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '—').split(' ')[0]}</td>
+                            <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '-').split(' ')[0]}</td>
                             <td className="px-3 py-2"><span className={`font-medium ${sessStatus === 'Done' ? 'text-blue-600' : 'text-green-600'}`}>{sessStatus}</span></td>
-                            <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">—</span>}</td>
+                            <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">-</span>}</td>
                           </tr>
                         )
                       })
@@ -837,9 +837,9 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                                 <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{sess.name}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '—').split(' ')[0]}</td>
+                            <td className="px-3 py-2 text-gray-600">{(batch.teachers?.name ?? '-').split(' ')[0]}</td>
                             <td className="px-3 py-2"><span className={`font-medium ${sessStatus === 'Done' ? 'text-blue-600' : 'text-green-600'}`}>{sessStatus}</span></td>
-                            <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">—</span>}</td>
+                            <td className="px-5 py-2 text-right font-medium text-gray-700">{perSession ? `€${perSession}` : <span className="text-gray-300">-</span>}</td>
                           </tr>
                         )
                       })
@@ -868,7 +868,7 @@ function StudentStatsPanelAdmin({ bookings: allBookings, studentName, grade, ini
                             <td className="px-3 py-2 w-12"><span className={`font-bold text-[11px] px-1.5 py-0.5 rounded ${subjectColorCrm(b.subject).bg} ${subjectColorCrm(b.subject).text}`}>{SUBJECT_ABBR_CRM[b.subject] ?? b.subject}</span></td>
                             <td className="px-3 py-2 text-gray-600 w-28">{b.teacher.split(' ')[0]}</td>
                             <td className="px-3 py-2 text-red-400 font-medium">Cancelled</td>
-                            <td className="px-5 py-2 text-right w-20 text-gray-300">—</td>
+                            <td className="px-5 py-2 text-right w-20 text-gray-300">-</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1163,7 +1163,7 @@ export default function AdminPage() {
       const s = map.get(key)!
       s.total++
       b.contact_pref?.split(',').forEach(p => { if (!s.prefs.includes(p)) s.prefs.push(p) })
-      const tName = b.teachers?.name ?? '—'
+      const tName = b.teachers?.name ?? '-'
       const comboKey = `${b.subject}||${tName}`
       const existing = s.combos.find(c => `${c.subject}||${c.teacher}` === comboKey)
       if (existing) existing.count++
@@ -1202,14 +1202,14 @@ export default function AdminPage() {
     groupBatches.forEach(batch => {
       batch.enrolled_students.forEach(es => {
         const arr = map.get(es.email) ?? []
-        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '—', format: 'group' })
+        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '-', format: 'group' })
         map.set(es.email, arr)
       })
     })
     adminPremadeBatches.forEach(batch => {
       batch.enrolled_students.forEach(es => {
         const arr = map.get(es.email) ?? []
-        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '—', format: 'premade', batchName: batch.name })
+        arr.push({ subject: batch.subject, teacher: batch.teachers?.name ?? '-', format: 'premade', batchName: batch.name })
         map.set(es.email, arr)
       })
     })
@@ -1427,7 +1427,7 @@ export default function AdminPage() {
                                 {batch.enrollment_count}/{batch.max_students}
                               </span>
                             </div>
-                            {/* Sessions — horizontal */}
+                            {/* Sessions - horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => {
                                 const isPast = s.session_start_utc
@@ -1531,7 +1531,7 @@ export default function AdminPage() {
                                 {batch.enrollment_count}/{batch.max_students}
                               </span>
                             </div>
-                            {/* Sessions — horizontal */}
+                            {/* Sessions - horizontal */}
                             <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1.5">
                               {sessions.map((s, i) => {
                                 const isPast = s.session_start_utc
@@ -1615,7 +1615,7 @@ export default function AdminPage() {
                       : (() => {
                           const map = new Map<string, typeof sorted>()
                           for (const b of sorted) {
-                            const key = groupBy === 'teacher' ? (b.teachers?.name ?? '—') : b.subject
+                            const key = groupBy === 'teacher' ? (b.teachers?.name ?? '-') : b.subject
                             if (!map.has(key)) map.set(key, [])
                             map.get(key)!.push(b)
                           }
@@ -1657,7 +1657,7 @@ export default function AdminPage() {
                                 <td className="px-4 py-3 text-gray-700 align-middle">
                                   <div className="flex items-center gap-2">
                                     {b.teachers?.name && <TeacherAvatar name={b.teachers.name} />}
-                                    <span>{b.teachers?.name?.split(' ')[0] ?? '—'}</span>
+                                    <span>{b.teachers?.name?.split(' ')[0] ?? '-'}</span>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 align-middle">
@@ -1864,11 +1864,11 @@ export default function AdminPage() {
                             {app.name}
                           </button>
                         ) : (
-                          <p className="font-semibold text-gray-900">{app?.name ?? '—'}</p>
+                          <p className="font-semibold text-gray-900">{app?.name ?? '-'}</p>
                         )}
                         <p className="text-xs text-gray-400">{app?.email ?? ''}</p>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{app?.subject ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-700">{app?.subject ?? '-'}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           inv.format === 'individual' ? 'bg-blue-50 text-blue-700' :
@@ -1918,7 +1918,7 @@ export default function AdminPage() {
                 }
                 return (
                   <div className="space-y-3">
-                    {/* Pending — open by default */}
+                    {/* Pending - open by default */}
                     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                       <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
                         <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
@@ -1937,7 +1937,7 @@ export default function AdminPage() {
                         </table>
                       )}
                     </div>
-                    {/* Paid — closed by default */}
+                    {/* Paid - closed by default */}
                     {paidInvs.length > 0 && (
                       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                         <button
@@ -1965,7 +1965,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── CRM VIEW — D2×A ── */}
+        {/* ── CRM VIEW - D2×A ── */}
         {view === 'crm' && (
           <>
             <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -2091,7 +2091,7 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Chevron toggle — always visible on right edge */}
+                          {/* Chevron toggle - always visible on right edge */}
                           {!parentOpen && (
                             <button onClick={e => { e.stopPropagation(); toggleParent(s.email) }}
                               className="flex items-center px-2.5 text-gray-400 hover:text-gray-600 transition-colors">
@@ -2099,7 +2099,7 @@ export default function AdminPage() {
                             </button>
                           )}
 
-                          {/* Parent panel — collapsible */}
+                          {/* Parent panel - collapsible */}
                           {parentOpen && (
                             <div className="w-[30%] p-4 flex flex-col gap-2 border-l border-gray-100">
                               <div className="flex items-center justify-between mb-0.5">
@@ -2182,7 +2182,7 @@ export default function AdminPage() {
                 id: b.id,
                 date: b.slot_start,
                 subject: b.subject,
-                teacher: b.teachers?.name ?? '—',
+                teacher: b.teachers?.name ?? '-',
                 status: b.status as 'active' | 'cancelled' | 'completed',
                 cancelled_by: b.cancelled_by ?? null,
                 amount: b.amount ?? 0,

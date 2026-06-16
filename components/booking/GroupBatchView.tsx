@@ -154,7 +154,7 @@ export default function GroupBatchView({ subject, refToken, prefill, onSuccess, 
             >
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-900 text-sm">{subject} — Group</span>
+                  <span className="font-semibold text-gray-900 text-sm">{subject}: Group</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                     isFull ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'
                   }`}>

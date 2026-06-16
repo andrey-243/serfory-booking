@@ -138,7 +138,7 @@ const LABELS = {
   },
 }
 
-// Browser timezone (computed once at module level — stable per tab)
+// Browser timezone (computed once at module level - stable per tab)
 function getBrowserTz(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
@@ -355,7 +355,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                 onChange={e => setFormLang(e.target.value)}
                 className="px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">—</option>
+                <option value="">-</option>
                 {teachingLanguages.map(l => <option key={l} value={l}>{LANG_LABELS[l] ?? l}</option>)}
               </select>
             </div>

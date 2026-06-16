@@ -498,7 +498,7 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
                   <div key={i} className="flex items-center gap-3 text-sm">
                     <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-[11px] flex-shrink-0">{i + 1}</span>
                     <span className="text-gray-700 font-medium truncate flex-1">{s.name || `Session ${i + 1}`}</span>
-                    <span className="text-gray-500 flex-shrink-0">{s.session_date ? new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}</span>
+                    <span className="text-gray-500 flex-shrink-0">{s.session_date ? new Date(s.session_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '-'}</span>
                     <span className="text-gray-500 flex-shrink-0">{s.start_time}</span>
                     <span className="text-xs text-gray-400 flex-shrink-0">{tzAbbr}</span>
                   </div>

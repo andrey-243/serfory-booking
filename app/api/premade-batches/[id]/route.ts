@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           .single()
         if (s?.gcal_event_id) {
           try {
-            const summary = `${batch.name} — ${u.name} · Serfory`
+            const summary = `${batch.name}: ${u.name} · Serfory`
             await patchCalendarEventSummary(
               teacher.google_refresh_token,
               teacher.google_calendar_id || 'primary',
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 }
 
-// DELETE /api/premade-batches/[id]  — admin only: cancel batch + delete GCal events
+// DELETE /api/premade-batches/[id] - admin only: cancel batch + delete GCal events
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession(req.cookies.get('session')?.value ?? '')
   if (!session || session.role !== 'admin') {
