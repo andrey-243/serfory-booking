@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifySession } from '@/lib/session'
 import { createGroupSessionEvent } from '@/lib/google-calendar'
+import { createZoomMeeting } from '@/lib/zoom'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
 const MAX_FUTURE_BATCHES = 5
@@ -219,21 +220,33 @@ export async function POST(req: NextRequest) {
     .eq('id', teacher_id)
     .single()
 
-  if (teacher?.google_refresh_token) {
-    for (const s of createdSessions || []) {
-      try {
-        const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
-        const eventId = await createGroupSessionEvent(
-          teacher.google_refresh_token,
-          teacher.google_calendar_id || 'primary',
-          { subject, teacherName: teacher.name, sessionStartUtc, durationMinutes: duration_minutes, sessionId: s.id }
-        )
-        if (eventId) {
-          await supabase.from('group_slot_sessions').update({ gcal_event_id: eventId }).eq('id', s.id)
-        }
-      } catch {
-        // Non-blocking: session valid in DB even if GCal fails
+  for (const s of createdSessions || []) {
+    try {
+      const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
+
+      const zoomLink = await createZoomMeeting(
+        `${subject} group · Serfory`,
+        sessionStartUtc,
+        duration_minutes,
+        teacher?.email ?? undefined
+      )
+
+      const eventId = teacher?.google_refresh_token
+        ? await createGroupSessionEvent(
+            teacher.google_refresh_token,
+            teacher.google_calendar_id || 'primary',
+            { subject, teacherName: teacher.name, sessionStartUtc, durationMinutes: duration_minutes, zoomLink }
+          )
+        : null
+
+      const updates: Record<string, string | null> = {}
+      if (zoomLink) updates.zoom_link = zoomLink
+      if (eventId) updates.gcal_event_id = eventId
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('group_slot_sessions').update(updates).eq('id', s.id)
       }
+    } catch {
+      // Non-blocking: session valid in DB even if GCal/Zoom fails
     }
   }
 

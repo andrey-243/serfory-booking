@@ -264,12 +264,12 @@ export async function addAttendeeToEvent(
 export async function createGroupSessionEvent(
   refreshToken: string,
   calendarId: string,
-  { subject, teacherName, sessionStartUtc, durationMinutes, sessionId }: {
+  { subject, teacherName, sessionStartUtc, durationMinutes, zoomLink }: {
     subject: string
     teacherName: string
     sessionStartUtc: string  // ISO UTC
     durationMinutes: number
-    sessionId: string
+    zoomLink?: string | null
   }
 ): Promise<string | null> {
   const { google } = await import('googleapis')
@@ -282,13 +282,12 @@ export async function createGroupSessionEvent(
   const res = await calendar.events.insert({
     calendarId: calendarId || 'primary',
     sendUpdates: 'none',
-    conferenceDataVersion: 1,
     requestBody: {
       summary: `${subject} group · Serfory`,
-      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Group lesson`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Group lesson${zoomLink ? `\n\n🎥 Zoom: ${zoomLink}` : ''}`,
+      location: zoomLink ?? undefined,
       start: { dateTime: sessionStartUtc },
       end: { dateTime: endUtc },
-      conferenceData: { createRequest: { requestId: `group-${sessionId}` } },
     },
   })
 
@@ -333,14 +332,14 @@ export async function patchCalendarEventSummary(
 export async function createPremadeSessionEvent(
   refreshToken: string,
   calendarId: string,
-  { batchName, sessionName, subject, teacherName, sessionStartUtc, durationMinutes, sessionId }: {
+  { batchName, sessionName, subject, teacherName, sessionStartUtc, durationMinutes, zoomLink }: {
     batchName: string
     sessionName: string
     subject: string
     teacherName: string
     sessionStartUtc: string  // ISO UTC
     durationMinutes: number
-    sessionId: string
+    zoomLink?: string | null
   }
 ): Promise<string | null> {
   const { google } = await import('googleapis')
@@ -353,13 +352,12 @@ export async function createPremadeSessionEvent(
   const res = await calendar.events.insert({
     calendarId: calendarId || 'primary',
     sendUpdates: 'none',
-    conferenceDataVersion: 1,
     requestBody: {
       summary: `${batchName}: ${sessionName} · Serfory`,
-      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Premade course\n📖 ${sessionName}`,
+      description: `👩‍🏫 ${teacherName}\n📚 ${subject}: Premade course\n📖 ${sessionName}${zoomLink ? `\n\n🎥 Zoom: ${zoomLink}` : ''}`,
+      location: zoomLink ?? undefined,
       start: { dateTime: sessionStartUtc },
       end: { dateTime: endUtc },
-      conferenceData: { createRequest: { requestId: `premade-${sessionId}` } },
     },
   })
 
