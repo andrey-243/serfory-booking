@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifySession } from '@/lib/session'
 import { createPremadeSessionEvent } from '@/lib/google-calendar'
+import { createZoomMeeting } from '@/lib/zoom'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
 
@@ -214,29 +215,40 @@ export async function POST(req: NextRequest) {
     .eq('id', teacher_id)
     .single()
 
-  if (teacher?.google_refresh_token) {
-    for (const s of createdSessions || []) {
-      try {
-        const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
-        const eventId = await createPremadeSessionEvent(
-          teacher.google_refresh_token,
-          teacher.google_calendar_id || 'primary',
-          {
-            batchName: name,
-            sessionName: s.name,
-            subject,
-            teacherName: teacher.name,
-            sessionStartUtc,
-            durationMinutes: duration_min,
-            sessionId: s.id,
-          }
-        )
-        if (eventId) {
-          await supabase.from('premade_sessions').update({ gcal_event_id: eventId }).eq('id', s.id)
-        }
-      } catch {
-        // Non-blocking
+  for (const s of createdSessions || []) {
+    try {
+      const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
+
+      const zoomLink = await createZoomMeeting(
+        `${name}: ${s.name} · Serfory`,
+        sessionStartUtc,
+        duration_min
+      )
+
+      const eventId = teacher?.google_refresh_token
+        ? await createPremadeSessionEvent(
+            teacher.google_refresh_token,
+            teacher.google_calendar_id || 'primary',
+            {
+              batchName: name,
+              sessionName: s.name,
+              subject,
+              teacherName: teacher.name,
+              sessionStartUtc,
+              durationMinutes: duration_min,
+              zoomLink,
+            }
+          )
+        : null
+
+      const updates: Record<string, string | null> = {}
+      if (zoomLink) updates.zoom_link = zoomLink
+      if (eventId) updates.gcal_event_id = eventId
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('premade_sessions').update(updates).eq('id', s.id)
       }
+    } catch {
+      // Non-blocking
     }
   }
 

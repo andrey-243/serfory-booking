@@ -113,7 +113,7 @@ type GroupBatch = {
   status: string
   enrollment_count: number
   enrolled_students?: EnrolledStudent[]
-  group_slot_sessions: { id: string; session_date: string; start_time: string; session_start_utc: string | null }[]
+  group_slot_sessions: { id: string; session_date: string; start_time: string; session_start_utc: string | null; zoom_link: string | null }[]
 }
 
 type PremadeBatch = {
@@ -127,7 +127,7 @@ type PremadeBatch = {
   status: string
   enrollment_count: number
   enrolled_students?: EnrolledStudent[]
-  premade_sessions: { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null }[]
+  premade_sessions: { id: string; name: string; session_date: string; start_time: string; session_start_utc: string | null; zoom_link: string | null }[]
 }
 
 function getBrowserTz(): string {
@@ -514,6 +514,15 @@ export default function TeacherPage() {
                                     </div>
                                     <span className="text-xs text-gray-500 font-medium">{batch.enrollment_count}/{batch.max_students}</span>
                                   </button>
+                                  {nextSession?.zoom_link && !isPast && (
+                                    <div className="border-t border-gray-100 px-3 py-1.5 bg-white">
+                                      <a href={nextSession.zoom_link} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-2 py-0.5 hover:bg-blue-50 transition-colors">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                                        Join Zoom
+                                      </a>
+                                    </div>
+                                  )}
                                   {overviewOpen[expandKey] && batch.enrolled_students && batch.enrolled_students.length > 0 && (
                                     <div className="bg-white border-t border-gray-100 px-3 py-2 space-y-1.5">
                                       {batch.enrolled_students.map(s => (
@@ -585,6 +594,15 @@ export default function TeacherPage() {
                                     </div>
                                     <span className="text-xs text-gray-500 font-medium shrink-0 ml-2">{batch.enrollment_count}/{batch.max_students}</span>
                                   </button>
+                                  {nextSession?.zoom_link && !isPast && (
+                                    <div className="border-t border-gray-100 px-3 py-1.5 bg-white">
+                                      <a href={nextSession.zoom_link} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-2 py-0.5 hover:bg-blue-50 transition-colors">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                                        Join Zoom
+                                      </a>
+                                    </div>
+                                  )}
                                   {overviewOpen[expandKey] && batch.enrolled_students && batch.enrolled_students.length > 0 && (
                                     <div className="bg-white border-t border-gray-100 px-3 py-2 space-y-1.5">
                                       {batch.enrolled_students.map(s => (
