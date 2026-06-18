@@ -303,7 +303,7 @@ export async function POST(req: NextRequest) {
         const emailLang: 'en' | 'et' | 'ru' = ['en', 'et', 'ru'].includes(commLang) ? commLang as 'en' | 'et' | 'ru' : 'en'
         const packageLink = app.ref_token ? `${BOOKING_URL}/package?token=${app.ref_token}` : BOOKING_URL
 
-        sendGroupBatchOpenedEmail({
+        await sendGroupBatchOpenedEmail({
           to: app.email,
           name: app.name,
           teacherName,
@@ -317,8 +317,8 @@ export async function POST(req: NextRequest) {
 
         if (app.telegram_chat_id && isTelegramEligible(app.country_code, app.learning_lang)) {
           const LANG_LABELS_TG: Record<string, string> = { en: 'English', ru: 'Russian', et: 'Estonian', ky: 'Kyrgyz' }
-          const tgMsg = `🎉 A new group ${subject} course opened!\n\n👩‍🏫 ${teacherName}\n📖 ${interest.level} · ${LANG_LABELS_TG[teaching_language as string] ?? teaching_language}\n\nSessions:\n${sessionDateStrings.map((d, i) => `  ${i + 1}. ${d}`).join('\n')}\n\n${packageLink}`
-          fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          const tgMsg = `🎉 A new group ${subject} course opened!\n\n👩‍🏫 ${teacherName}\n📖 ${interest.level as string} · ${LANG_LABELS_TG[teaching_language as string] ?? teaching_language}\n\nSessions:\n${sessionDateStrings.map((d, i) => `  ${i + 1}. ${d}`).join('\n')}\n\n${packageLink}`
+          await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: app.telegram_chat_id, text: tgMsg }),
