@@ -22,6 +22,34 @@ async function getAccessToken(): Promise<string> {
   return data.access_token as string
 }
 
+async function createMeetingRequest(token: string, topic: string, startUtc: string, durationMinutes: number, alternativeHost?: string): Promise<string | null> {
+  const res = await fetch(`${ZOOM_API_BASE}/users/serfory.learning@gmail.com/meetings`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      topic,
+      type: 2,
+      start_time: startUtc,
+      duration: durationMinutes,
+      settings: {
+        join_before_host: true,
+        waiting_room: false,
+        auto_recording: 'none',
+        ...(alternativeHost ? { alternative_hosts: alternativeHost } : {}),
+      },
+    }),
+  })
+  if (!res.ok) {
+    console.error('Zoom meeting creation failed:', res.status, await res.text())
+    return null
+  }
+  const data = await res.json()
+  return data.join_url as string
+}
+
 export async function createZoomMeeting(
   topic: string,
   startUtc: string,
@@ -30,34 +58,13 @@ export async function createZoomMeeting(
 ): Promise<string | null> {
   try {
     const token = await getAccessToken()
-
-    const res = await fetch(`${ZOOM_API_BASE}/users/serfory.learning@gmail.com/meetings`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        topic,
-        type: 2,
-        start_time: startUtc,
-        duration: durationMinutes,
-        settings: {
-          join_before_host: true,
-          waiting_room: false,
-          auto_recording: 'none',
-          ...(alternativeHost ? { alternative_hosts: alternativeHost } : {}),
-        },
-      }),
-    })
-
-    if (!res.ok) {
-      console.error('Zoom meeting creation failed:', res.status, await res.text())
-      return null
+    const joinUrl = await createMeetingRequest(token, topic, startUtc, durationMinutes, alternativeHost)
+    if (joinUrl) return joinUrl
+    // Retry without alternative_hosts (teacher not yet a licensed Zoom user)
+    if (alternativeHost) {
+      return await createMeetingRequest(token, topic, startUtc, durationMinutes)
     }
-
-    const data = await res.json()
-    return data.join_url as string
+    return null
   } catch (err) {
     console.error('createZoomMeeting error:', err)
     return null
