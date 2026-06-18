@@ -55,18 +55,19 @@ export async function createZoomMeeting(
   startUtc: string,
   durationMinutes: number,
   alternativeHost?: string
-): Promise<string | null> {
+): Promise<{ joinUrl: string | null; fallback: boolean }> {
   try {
     const token = await getAccessToken()
     const joinUrl = await createMeetingRequest(token, topic, startUtc, durationMinutes, alternativeHost)
-    if (joinUrl) return joinUrl
+    if (joinUrl) return { joinUrl, fallback: false }
     // Retry without alternative_hosts (teacher not yet a licensed Zoom user)
     if (alternativeHost) {
-      return await createMeetingRequest(token, topic, startUtc, durationMinutes)
+      const fallbackUrl = await createMeetingRequest(token, topic, startUtc, durationMinutes)
+      return { joinUrl: fallbackUrl, fallback: !!fallbackUrl }
     }
-    return null
+    return { joinUrl: null, fallback: false }
   } catch (err) {
     console.error('createZoomMeeting error:', err)
-    return null
+    return { joinUrl: null, fallback: false }
   }
 }

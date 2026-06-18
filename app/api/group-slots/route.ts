@@ -256,16 +256,18 @@ export async function POST(req: NextRequest) {
     .eq('id', teacher_id)
     .single()
 
+  let zoomFallbackOccurred = false
   for (const s of createdSessions || []) {
     try {
       const sessionStartUtc = s.session_start_utc ?? localToUtc(s.session_date, s.start_time.slice(0, 5), timezone)
 
-      const zoomLink = await createZoomMeeting(
+      const { joinUrl: zoomLink, fallback: zoomFallback } = await createZoomMeeting(
         `${subject} group · Serfory`,
         sessionStartUtc,
         duration_minutes,
         teacher?.email ?? undefined
       )
+      if (zoomFallback) zoomFallbackOccurred = true
 
       const eventId = teacher?.google_refresh_token
         ? await createGroupSessionEvent(
@@ -283,6 +285,26 @@ export async function POST(req: NextRequest) {
       }
     } catch {
       // Non-blocking: session valid in DB even if GCal/Zoom fails
+    }
+  }
+
+  if (zoomFallbackOccurred) {
+    const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID
+    if (adminChatId) {
+      const teacherEmail = teacher?.email ?? 'unknown'
+      const teacherName = teacher?.name ?? teacher_id
+      const fallbackMsg = [
+        `⚠️ <b>Zoom fallback: group batch</b>`,
+        ``,
+        `Teacher <b>${teacherName}</b> (${teacherEmail}) is not a licensed Zoom user.`,
+        `Meetings created with admin account only (no alternative host).`,
+        `📖 ${subject} · ${teaching_language?.toUpperCase() ?? '-'}`,
+      ].join('\n')
+      await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: adminChatId, text: fallbackMsg, parse_mode: 'HTML' }),
+      }).catch(() => {})
     }
   }
 
