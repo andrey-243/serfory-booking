@@ -4,6 +4,7 @@ import { verifySession } from '@/lib/session'
 import { createGroupSessionEvent } from '@/lib/google-calendar'
 import { createZoomMeeting } from '@/lib/zoom'
 import { sendGroupBatchOpenedEmail, isTelegramEligible } from '@/lib/email'
+import { checkTeacherConflicts } from '@/lib/schedule'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
 const MAX_FUTURE_BATCHES = 5
@@ -198,8 +199,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A group session already exists for this subject at this date and time' }, { status: 422 })
   }
 
-  // Parse start_date to get day_of_week
+  // Check for schedule conflicts before creating anything
   const startDateObj = new Date(`${start_date}T12:00:00Z`)
+  const tentativeUtcs = [0, 7, 14, 21].map(offset => {
+    const d = new Date(startDateObj)
+    d.setUTCDate(d.getUTCDate() + offset)
+    return localToUtc(toDateStr(d), start_time.slice(0, 5), timezone)
+  })
+  const scheduleConflicts = await checkTeacherConflicts(
+    supabase,
+    teacher_id,
+    tentativeUtcs.map(startUtc => ({ startUtc, durationMin: duration_minutes }))
+  )
+  if (scheduleConflicts.length > 0) {
+    return NextResponse.json({ error: 'Schedule conflict', conflicts: scheduleConflicts }, { status: 422 })
+  }
+
+  // Parse start_date to get day_of_week
   const day_of_week = startDateObj.getUTCDay()
 
   // Create batch

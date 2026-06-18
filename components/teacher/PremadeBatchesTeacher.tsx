@@ -66,6 +66,7 @@ const LABELS = {
     confirmCreate: 'Confirm & Create',
     maxReached: 'You already have 2 active courses for this subject. A slot will free up automatically once all sessions of a course have passed.',
     duplicateCourse: 'You already have an active course with this name for this language and level. Change the language or level to create a variant.',
+    scheduleConflict: (label: string) => `Schedule conflict: ${label}. Please adjust the time or resolve the existing session first.`,
     saveAsTemplate: 'Save as template',
     savedTemplate: 'Saved!',
     templates: 'Templates',
@@ -109,6 +110,7 @@ const LABELS = {
     confirmCreate: 'Подтвердить и создать',
     maxReached: 'У вас уже 2 активных курса по этому предмету. Слот освободится автоматически, когда все занятия курса пройдут.',
     duplicateCourse: 'Активный курс с таким названием для этого языка и уровня уже существует. Измените язык или уровень для создания варианта.',
+    scheduleConflict: (label: string) => `Конфликт расписания: ${label}. Измените время или сначала урегулируйте существующее занятие.`,
     saveAsTemplate: 'Сохранить как шаблон',
     savedTemplate: 'Сохранено!',
     templates: 'Шаблоны',
@@ -152,6 +154,7 @@ const LABELS = {
     confirmCreate: 'Kinnita ja loo',
     maxReached: 'Teil on juba 2 aktiivset kursust selle aine jaoks. Koht vabaneb automaatselt, kui kõik kursuse tunnid on möödas.',
     duplicateCourse: 'Selle keele ja tasemega sama nimega aktiivne kursus on juba olemas. Variandi loomiseks muutke keelt või taset.',
+    scheduleConflict: (label: string) => `Ajakava konflikt: ${label}. Muutke kellaaega või lahendage olemasolev tund esmalt.`,
     saveAsTemplate: 'Salvesta mallina',
     savedTemplate: 'Salvestatud!',
     templates: 'Mallid',
@@ -449,8 +452,14 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
       const data = await res.json()
       if (!res.ok) {
         if (res.status === 422) {
-          const isDuplicate = (data.error as string)?.toLowerCase().includes('same name')
-          setFormError(isDuplicate ? t.duplicateCourse : t.maxReached)
+          if (Array.isArray(data.conflicts) && data.conflicts.length > 0) {
+            const first = data.conflicts[0] as { label: string; startUtc: string }
+            const time = new Date(first.startUtc).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+            setFormError(t.scheduleConflict(`${first.label} (${time})`))
+          } else {
+            const isDuplicate = (data.error as string)?.toLowerCase().includes('same name')
+            setFormError(isDuplicate ? t.duplicateCourse : t.maxReached)
+          }
         } else {
           setFormError(data.error || t.errorGeneric)
         }

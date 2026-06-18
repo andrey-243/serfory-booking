@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifySession } from '@/lib/session'
 import { createPremadeSessionEvent } from '@/lib/google-calendar'
 import { createZoomMeeting } from '@/lib/zoom'
+import { checkTeacherConflicts } from '@/lib/schedule'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
 
@@ -178,6 +179,16 @@ export async function POST(req: NextRequest) {
 
   if (isDuplicate) {
     return NextResponse.json({ error: 'A course with the same name, language and level already exists' }, { status: 422 })
+  }
+
+  // Check for schedule conflicts before creating anything
+  const tentativeSessions = (sessions as { session_date: string; start_time: string }[]).map(s => ({
+    startUtc: localToUtc(s.session_date, s.start_time.slice(0, 5), timezone),
+    durationMin: duration_min as number,
+  }))
+  const scheduleConflicts = await checkTeacherConflicts(supabase, teacher_id, tentativeSessions)
+  if (scheduleConflicts.length > 0) {
+    return NextResponse.json({ error: 'Schedule conflict', conflicts: scheduleConflicts }, { status: 422 })
   }
 
   const { data: batch, error: batchErr } = await supabase

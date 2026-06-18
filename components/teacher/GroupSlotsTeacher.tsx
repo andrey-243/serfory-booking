@@ -94,6 +94,7 @@ const LABELS = {
     conflictBody: (name: string) => `${name} already opened a group for this subject, language and level. Create yours anyway?`,
     conflictCancel: 'Cancel',
     conflictForce: 'Create anyway',
+    scheduleConflict: (label: string) => `Schedule conflict: ${label}. Please adjust the time or resolve the existing session first.`,
   },
   ru: {
     title: 'Групповые занятия',
@@ -123,6 +124,7 @@ const LABELS = {
     conflictBody: (name: string) => `${name} уже открыл группу для этого предмета, языка и уровня. Создать свою всё равно?`,
     conflictCancel: 'Отмена',
     conflictForce: 'Создать всё равно',
+    scheduleConflict: (label: string) => `Конфликт расписания: ${label}. Измените время или сначала урегулируйте существующее занятие.`,
   },
   et: {
     title: 'Grupitunnid',
@@ -152,6 +154,7 @@ const LABELS = {
     conflictBody: (name: string) => `${name} avas juba selle aine, keele ja taseme jaoks grupi. Loo oma grupp ikkagi?`,
     conflictCancel: 'Tühista',
     conflictForce: 'Loo ikkagi',
+    scheduleConflict: (label: string) => `Ajakava konflikt: ${label}. Muutke kellaaega või lahendage olemasolev tund esmalt.`,
   },
 }
 
@@ -299,7 +302,11 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
         }
         if (res.status === 422) {
           const msg = (data.error as string) ?? ''
-          if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('date and time')) {
+          if (Array.isArray(data.conflicts) && data.conflicts.length > 0) {
+            const first = data.conflicts[0] as { label: string; startUtc: string }
+            const time = new Date(first.startUtc).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+            setFormError(t.scheduleConflict(`${first.label} (${time})`))
+          } else if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('date and time')) {
             setFormError(t.duplicateSlot)
           } else if (msg.toLowerCase().includes('max')) {
             setFormError(t.maxReached)
