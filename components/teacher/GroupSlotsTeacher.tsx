@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz']
 const ALL_GRADES = ['kindergarten', '1', '2', '3-4', '5-6', '7-8', '9', '10-12']
@@ -58,6 +58,11 @@ type Props = {
   subjectLevels: Record<string, string[]>
   teachingLanguages: string[]
   lang: 'en' | 'ru' | 'et'
+  prefillSubject?: string
+  prefillLang?: string
+  prefillLevel?: string
+  prefillTrigger?: number
+  onBatchCreated?: () => void
 }
 
 const LABELS = {
@@ -78,13 +83,17 @@ const LABELS = {
     sessions: '4 sessions:',
     empty: 'No group batches yet.',
     maxReached: 'Max 5 active groups for this subject.',
-    duplicateSlot: 'A group already exists for this subject at this date and time.',
+    duplicateSlot: 'You already have a session scheduled at this date and time.',
     errorGeneric: 'Failed to create batch.',
     errorFields: 'Please fill all required fields.',
     confirmTitle: 'Confirm creation',
     confirmBody: 'Once created, this group cannot be deleted. Enrolled students will hold these slots permanently. Make sure all details are correct and that these time slots will be dedicated to this course.',
     confirmReview: 'Review',
     confirmCreate: 'Confirm & Create',
+    conflictTitle: 'Group already created',
+    conflictBody: (name: string) => `${name} already opened a group for this subject, language and level. Create yours anyway?`,
+    conflictCancel: 'Cancel',
+    conflictForce: 'Create anyway',
   },
   ru: {
     title: 'Групповые занятия',
@@ -103,13 +112,17 @@ const LABELS = {
     sessions: '4 занятия:',
     empty: 'Групп пока нет.',
     maxReached: 'Максимум 5 активных групп для этого предмета.',
-    duplicateSlot: 'Группа для этого предмета на эту дату и время уже существует.',
+    duplicateSlot: 'У вас уже запланировано занятие на эту дату и время.',
     errorGeneric: 'Не удалось создать группу.',
     errorFields: 'Заполните все обязательные поля.',
     confirmTitle: 'Подтвердить создание',
     confirmBody: 'После создания группу нельзя удалить. Записанные студенты займут эти слоты навсегда. Убедитесь, что все данные верны.',
     confirmReview: 'Проверить',
     confirmCreate: 'Подтвердить и создать',
+    conflictTitle: 'Группа уже создана',
+    conflictBody: (name: string) => `${name} уже открыл группу для этого предмета, языка и уровня. Создать свою всё равно?`,
+    conflictCancel: 'Отмена',
+    conflictForce: 'Создать всё равно',
   },
   et: {
     title: 'Grupitunnid',
@@ -128,13 +141,17 @@ const LABELS = {
     sessions: '4 tundi:',
     empty: 'Gruppe pole veel.',
     maxReached: 'Maksimaalselt 5 aktiivset gruppi selle aine jaoks.',
-    duplicateSlot: 'Sellele ainele sellel kuupäeval ja kellaajal on grupp juba olemas.',
+    duplicateSlot: 'Teil on sellel kuupäeval ja kellaajal juba tund planeeritud.',
     errorGeneric: 'Grupi loomine ebaõnnestus.',
     errorFields: 'Täitke kõik kohustuslikud väljad.',
     confirmTitle: 'Kinnita loomine',
     confirmBody: 'Pärast loomist ei saa gruppi kustutada. Registreeritud õpilased hoiavad neid aegu jäädavalt.',
     confirmReview: 'Vaata üle',
     confirmCreate: 'Kinnita ja loo',
+    conflictTitle: 'Grupp on juba loodud',
+    conflictBody: (name: string) => `${name} avas juba selle aine, keele ja taseme jaoks grupi. Loo oma grupp ikkagi?`,
+    conflictCancel: 'Tühista',
+    conflictForce: 'Loo ikkagi',
   },
 }
 
@@ -165,7 +182,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats, subjectLevels: _subjectLevels, teachingLanguages, lang }: Props) {
+export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats, subjectLevels: _subjectLevels, teachingLanguages, lang, prefillSubject, prefillLang, prefillLevel, prefillTrigger = 0, onBatchCreated }: Props) {
   const t = LABELS[lang]
   const gl = GRADE_LABELS[lang]
 
@@ -177,6 +194,9 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
   const [formError, setFormError] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [statusFilter, setStatusFilter] = useState<('active' | 'completed')[]>(['active'])
+  const [isDemandDriven, setIsDemandDriven] = useState(false)
+  const [conflictData, setConflictData] = useState<{ fulfilledBy: string } | null>(null)
+  const prevTriggerRef = useRef(0)
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -216,8 +236,29 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
 
   useEffect(() => { loadBatches() }, [teacherId])
 
+  // When parent triggers a prefill (from DemandSection "+ Create batch"), open form with preset values
+  useEffect(() => {
+    if (prefillTrigger > 0 && prefillTrigger !== prevTriggerRef.current) {
+      prevTriggerRef.current = prefillTrigger
+      if (prefillSubject) setFormSubject(prefillSubject)
+      if (prefillLang) setFormLang(prefillLang)
+      if (prefillLevel) {
+        setFormLevels([prefillLevel])
+        const isCefr = ['A1', 'A2', 'B1', 'B2'].includes(prefillLevel)
+        setLevelMode(isCefr ? 'cefr' : 'grade')
+      }
+      setFormDate(today)
+      setFormTime('17:00')
+      setFormError(null)
+      setIsDemandDriven(true)
+      setShowForm(true)
+    }
+  }, [prefillTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleOpenForm() {
     resetForm()
+    setIsDemandDriven(false)
+    setConflictData(null)
     setShowForm(s => !s)
   }
 
@@ -230,8 +271,9 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
     setShowConfirm(true)
   }
 
-  async function handleCreate() {
+  async function handleCreate(force = false) {
     setShowConfirm(false)
+    setConflictData(null)
     setCreating(true)
     try {
       const res = await fetch('/api/group-slots', {
@@ -245,21 +287,35 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
           start_date: formDate,
           start_time: formTime,
           timezone: getBrowserTz(),
+          isDemandDriven,
+          force,
         }),
       })
       const data = await res.json()
       if (!res.ok) {
+        if (res.status === 409 && data.conflict) {
+          setConflictData({ fulfilledBy: data.fulfilled_by ?? 'Another teacher' })
+          return
+        }
         if (res.status === 422) {
-          const isDuplicate = (data.error as string)?.toLowerCase().includes('already exists')
-          setFormError(isDuplicate ? t.duplicateSlot : t.maxReached)
+          const msg = (data.error as string) ?? ''
+          if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('date and time')) {
+            setFormError(t.duplicateSlot)
+          } else if (msg.toLowerCase().includes('max')) {
+            setFormError(t.maxReached)
+          } else {
+            setFormError(msg || t.errorGeneric)
+          }
         } else {
           setFormError(data.error || t.errorGeneric)
         }
         return
       }
       setShowForm(false)
+      setIsDemandDriven(false)
       resetForm()
       loadBatches()
+      onBatchCreated?.()
     } catch {
       setFormError(t.errorGeneric)
     } finally {
@@ -284,6 +340,22 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
 
   return (
     <div className="flex flex-col gap-4">
+      {conflictData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-4">
+            <h3 className="text-base font-semibold text-gray-900">{t.conflictTitle}</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">{t.conflictBody(conflictData.fulfilledBy)}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setConflictData(null); setShowForm(false); resetForm() }} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors">
+                {t.conflictCancel}
+              </button>
+              <button onClick={() => { handleCreate(true) }} className="px-4 py-2 text-sm font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
+                {t.conflictForce}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showConfirm && (() => {
         const browserTz = getBrowserTz()
         const tzAbbr = getTzAbbr(new Date(), browserTz)
@@ -311,7 +383,7 @@ export default function GroupSlotsTeacher({ teacherId, subjects, subjectFormats,
                 <button onClick={() => setShowConfirm(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg transition-colors">
                   {t.confirmReview}
                 </button>
-                <button onClick={handleCreate} className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                <button onClick={() => { handleCreate() }} className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
                   {t.confirmCreate}
                 </button>
               </div>

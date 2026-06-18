@@ -666,36 +666,38 @@ export default function PremadeBatchesTeacher({ teacherId, subjects, lang, teach
             <label className="text-xs font-medium text-gray-500">{t.sessions} ({sessions.length})</label>
             <div className="flex flex-col gap-2">
               {sessions.map((s, i) => (
-                <div key={i} className="grid grid-cols-[1fr_140px_100px_auto] gap-2 items-center">
+                <div key={i} className="flex flex-col gap-1.5">
                   <input
                     type="text"
                     value={s.name}
                     onChange={e => updateSession(i, 'name', e.target.value)}
                     placeholder={`Session ${i + 1}`}
-                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <input
-                    type="date"
-                    value={s.session_date}
-                    min={i === 0 ? new Date().toISOString().slice(0, 10) : (sessions[0]?.session_date || undefined)}
-                    max={i === 0 ? undefined : (sessions[0]?.session_date ? lastDayOfMonth(sessions[0].session_date) : undefined)}
-                    onChange={e => updateSession(i, 'session_date', e.target.value)}
-                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="time"
-                    value={s.start_time}
-                    onChange={e => updateSession(i, 'start_time', e.target.value)}
-                    className="px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSession(i)}
-                    disabled={sessions.length <= 1}
-                    className="text-xs text-red-400 hover:text-red-600 disabled:opacity-30 transition-colors whitespace-nowrap"
-                  >
-                    {t.removeSession}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={s.session_date}
+                      min={i === 0 ? new Date().toISOString().slice(0, 10) : (sessions[0]?.session_date || undefined)}
+                      max={i === 0 ? undefined : (sessions[0]?.session_date ? lastDayOfMonth(sessions[0].session_date) : undefined)}
+                      onChange={e => updateSession(i, 'session_date', e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="time"
+                      value={s.start_time}
+                      onChange={e => updateSession(i, 'start_time', e.target.value)}
+                      className="w-28 px-3 py-1.5 text-sm text-gray-900 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSession(i)}
+                      disabled={sessions.length <= 1}
+                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-30 transition-colors whitespace-nowrap flex-shrink-0"
+                    >
+                      {t.removeSession}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

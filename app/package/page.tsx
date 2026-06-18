@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import TimezoneSelect from '@/components/TimezoneSelect'
+import GroupInterestModal from '@/components/booking/GroupInterestModal'
 
 type Format = 'individual' | 'pair' | 'group' | 'premade'
 type LessonsCount = 1 | 4 | 6 | 7 | 8 | 12
@@ -131,6 +132,8 @@ const T = {
     wrongLang: 'Wrong language',
     wrongLevel: 'Wrong level',
     selectGradeHint: 'Select a grade or level to continue.',
+    groupInterestText: "Can't find a group that fits?",
+    groupInterestCta: 'Request one',
   },
   et: {
     loading: 'Laadimine...',
@@ -185,6 +188,8 @@ const T = {
     wrongLang: 'Vale keel',
     wrongLevel: 'Vale tase',
     selectGradeHint: 'Jätkamiseks vali klass või tase.',
+    groupInterestText: 'Ei leia sobivat gruppi?',
+    groupInterestCta: 'Taotle',
   },
   ru: {
     loading: 'Загрузка...',
@@ -239,6 +244,8 @@ const T = {
     wrongLang: 'Другой язык',
     wrongLevel: 'Другой уровень',
     selectGradeHint: 'Выберите класс или уровень, чтобы продолжить.',
+    groupInterestText: 'Не нашли подходящую группу?',
+    groupInterestCta: 'Запросить',
   },
 }
 
@@ -408,6 +415,7 @@ function PackagePageInner() {
   const [lessons, setLessons] = useState<LessonsCount>(8)
   const [hasPendingInvoice, setHasPendingInvoice] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [showGroupInterest, setShowGroupInterest] = useState(false)
   const [interest8w, setInterest8w] = useState<'idle' | 'ask' | 'sending' | 'done'>('idle')
   const [tgUsernameInput, setTgUsernameInput] = useState('')
 
@@ -560,6 +568,15 @@ function PackagePageInner() {
 
   return (
     <PageShell uiLang={uiLang} onLangChange={handleLangChange} timezone={selectedTz} onTimezoneChange={setSelectedTz}>
+      {showGroupInterest && token && (
+        <GroupInterestModal
+          onClose={() => setShowGroupInterest(false)}
+          defaultSubject={selectedSubject}
+          defaultLang={selectedLearningLang}
+          uiLang={uiLang}
+          refToken={token}
+        />
+      )}
       <div className="w-full">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.title(appData!.name)}</h1>
         <p className="text-gray-500 mb-6 text-sm">{t.subtitle}</p>
@@ -950,6 +967,21 @@ function PackagePageInner() {
                 })()}
               </div>
               )}
+
+              {/* G1: group interest trigger */}
+              <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-xs text-gray-400">{t.groupInterestText}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowGroupInterest(true)}
+                  className="text-xs text-blue-500 hover:text-blue-700 font-semibold underline underline-offset-2 transition-colors"
+                >
+                  {t.groupInterestCta}
+                </button>
+              </div>
             </div>
 
           </div>

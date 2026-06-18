@@ -335,6 +335,96 @@ export async function sendBookingLinkEmail({
   })
 }
 
+const GROUP_BATCH_OPENED_MESSAGES = {
+  en: {
+    subject: (s: string) => `A new group ${s} course is available for you!`,
+    body: (name: string, teacherName: string, courseSubject: string, level: string, teachingLangLabel: string, sessionLines: string, link: string) => `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Good news, ${name}!</h2>
+        <p style="color:#6b7280;margin-bottom:8px">You requested a group <strong>${courseSubject}</strong> course (${level}, taught in ${teachingLangLabel}).</p>
+        <p style="color:#6b7280;margin-bottom:16px"><strong>${teacherName}</strong> has just opened a group matching your request.</p>
+        <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #bbf7d0">
+          <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#166534">Sessions</p>
+          ${sessionLines}
+        </div>
+        <a href="${link}" style="display:inline-block;background:#10b981;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Book my group course</a>
+        <p style="margin-top:16px;font-size:12px;color:#9ca3af">This link is personal. Do not share it.</p>
+        <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
+        <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
+      </div>
+    `,
+  },
+  et: {
+    subject: (s: string) => `Uus grupp ${s} kursus on teile saadaval!`,
+    body: (name: string, teacherName: string, courseSubject: string, level: string, teachingLangLabel: string, sessionLines: string, link: string) => `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Head uudist, ${name}!</h2>
+        <p style="color:#6b7280;margin-bottom:8px">Soovisite grupikursust ainest <strong>${courseSubject}</strong> (${level}, õpetamiskeel: ${teachingLangLabel}).</p>
+        <p style="color:#6b7280;margin-bottom:16px"><strong>${teacherName}</strong> avas just teie soovidele vastava grupikursuse.</p>
+        <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #bbf7d0">
+          <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#166534">Tunnid</p>
+          ${sessionLines}
+        </div>
+        <a href="${link}" style="display:inline-block;background:#10b981;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Broneeri grupitund</a>
+        <p style="margin-top:16px;font-size:12px;color:#9ca3af">See link on isiklik. Ära jaga seda.</p>
+        <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
+        <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
+      </div>
+    `,
+  },
+  ru: {
+    subject: (s: string) => `Открылась групповая запись по предмету ${s}!`,
+    body: (name: string, teacherName: string, courseSubject: string, level: string, teachingLangLabel: string, sessionLines: string, link: string) => `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e1e2e">
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Хорошие новости, ${name}!</h2>
+        <p style="color:#6b7280;margin-bottom:8px">Вы запрашивали групповой курс по предмету <strong>${courseSubject}</strong> (${level}, язык: ${teachingLangLabel}).</p>
+        <p style="color:#6b7280;margin-bottom:16px"><strong>${teacherName}</strong> только что открыл группу, которая соответствует вашему запросу.</p>
+        <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #bbf7d0">
+          <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#166534">Занятия</p>
+          ${sessionLines}
+        </div>
+        <a href="${link}" style="display:inline-block;background:#10b981;color:#fff;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;text-decoration:none">Записаться в группу</a>
+        <p style="margin-top:16px;font-size:12px;color:#9ca3af">Эта ссылка персональная. Не передавайте её другим.</p>
+        <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0">
+        <p style="font-size:12px;color:#9ca3af">Serfory Learning · <a href="https://serfory.eu" style="color:#9ca3af">serfory.eu</a></p>
+      </div>
+    `,
+  },
+}
+
+const LANG_LABELS_EMAIL: Record<string, Record<string, string>> = {
+  en: { en: 'English', ru: 'Russian', et: 'Estonian', ky: 'Kyrgyz' },
+  et: { en: 'inglise keeles', ru: 'vene keeles', et: 'eesti keeles', ky: 'kirgiisi keeles' },
+  ru: { en: 'английском', ru: 'русском', et: 'эстонском', ky: 'кыргызском' },
+}
+
+export async function sendGroupBatchOpenedEmail({
+  to, name, teacherName, courseSubject, level, teachingLang, sessionDates, packageLink, lang,
+}: {
+  to: string
+  name: string
+  teacherName: string
+  courseSubject: string
+  level: string
+  teachingLang: string
+  sessionDates: string[]
+  packageLink: string
+  lang: 'en' | 'et' | 'ru'
+}) {
+  const l = GROUP_BATCH_OPENED_MESSAGES[lang] ?? GROUP_BATCH_OPENED_MESSAGES.en
+  const teachingLangLabel = (LANG_LABELS_EMAIL[lang] ?? LANG_LABELS_EMAIL.en)[teachingLang] ?? teachingLang.toUpperCase()
+  const sessionLines = sessionDates
+    .map(d => `<p style="margin:0 0 4px;font-size:13px;color:#374151">${d}</p>`)
+    .join('')
+  const html = l.body(name, teacherName, courseSubject, level, teachingLangLabel, sessionLines, packageLink)
+  await transporter.sendMail({
+    from: `"Serfory Learning" <${process.env.OVH_SMTP_USER}>`,
+    to,
+    subject: l.subject(courseSubject),
+    html,
+  })
+}
+
 export async function sendAcceptanceEmail({
   to,
   name,

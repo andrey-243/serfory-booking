@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { verifySession } from '@/lib/session'
 import { createGroupSessionEvent } from '@/lib/google-calendar'
 import { createZoomMeeting } from '@/lib/zoom'
+import { sendGroupBatchOpenedEmail, isTelegramEligible } from '@/lib/email'
 
 const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
 const MAX_FUTURE_BATCHES = 5
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { teacher_id, subject, teaching_language, target_levels, start_date, start_time, duration_minutes = 60, max_students = 6, timezone = 'UTC' } = body
+  const { teacher_id, subject, teaching_language, target_levels, start_date, start_time, duration_minutes = 60, max_students = 6, timezone = 'UTC', isDemandDriven = false, force = false } = body
 
   if (!teacher_id || !subject || !start_date || !start_time || !teaching_language || !target_levels?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -162,6 +163,25 @@ export async function POST(req: NextRequest) {
 
   if ((count ?? 0) >= MAX_FUTURE_BATCHES) {
     return NextResponse.json({ error: 'Max 5 distinct active groups for this subject' }, { status: 422 })
+  }
+
+  // Race condition guard: if demand-driven and not force, check if this interest was already fulfilled
+  if (isDemandDriven && !force) {
+    const { data: alreadyFulfilled } = await supabase
+      .from('group_interests')
+      .select('id, fulfilled_by_name')
+      .eq('subject', subject)
+      .eq('teaching_language', teaching_language)
+      .in('level', target_levels as string[])
+      .eq('status', 'fulfilled')
+      .limit(1)
+
+    if ((alreadyFulfilled ?? []).length > 0) {
+      return NextResponse.json({
+        conflict: true,
+        fulfilled_by: alreadyFulfilled![0].fulfilled_by_name ?? 'Another teacher',
+      }, { status: 409 })
+    }
   }
 
   // Reject duplicate slot (same teacher × subject × start_date × start_time)
@@ -247,6 +267,64 @@ export async function POST(req: NextRequest) {
       }
     } catch {
       // Non-blocking: session valid in DB even if GCal/Zoom fails
+    }
+  }
+
+  // Fulfill matching pending interests and notify students (skip when force=true: another teacher already notified them)
+  if (!force) {
+    const { data: pendingInterests } = await supabase
+      .from('group_interests')
+      .select('id, level, applications(id, name, email, communication_lang, telegram_chat_id, country_code, learning_lang, ref_token)')
+      .eq('subject', subject)
+      .eq('teaching_language', teaching_language)
+      .in('level', target_levels as string[])
+      .eq('status', 'pending')
+
+    if (pendingInterests && pendingInterests.length > 0) {
+      const teacherName = teacher?.name ?? 'Your teacher'
+
+      await supabase
+        .from('group_interests')
+        .update({ status: 'fulfilled', fulfilled_batch_id: batch.id, fulfilled_by_name: teacherName })
+        .in('id', pendingInterests.map(i => i.id))
+
+      const BOOKING_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://booking.serfory.eu'
+      const sessionDateStrings = (createdSessions || []).map(s => {
+        const d = new Date((s.session_start_utc as string | null) ?? `${s.session_date}T${(s.start_time as string).slice(0, 5)}:00Z`)
+        return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false })
+      })
+
+      for (const interest of pendingInterests) {
+        type AppRow = { id: string; name: string; email: string; communication_lang: string | null; telegram_chat_id: number | null; country_code: string | null; learning_lang: string | null; ref_token: string | null }
+        const app = interest.applications as unknown as AppRow | null
+        if (!app?.email) continue
+
+        const commLang = (app.communication_lang as 'en' | 'et' | 'ru' | null) ?? 'en'
+        const emailLang: 'en' | 'et' | 'ru' = ['en', 'et', 'ru'].includes(commLang) ? commLang as 'en' | 'et' | 'ru' : 'en'
+        const packageLink = app.ref_token ? `${BOOKING_URL}/package?token=${app.ref_token}` : BOOKING_URL
+
+        sendGroupBatchOpenedEmail({
+          to: app.email,
+          name: app.name,
+          teacherName,
+          courseSubject: subject,
+          level: interest.level as string,
+          teachingLang: teaching_language as string,
+          sessionDates: sessionDateStrings,
+          packageLink,
+          lang: emailLang,
+        }).catch(() => {})
+
+        if (app.telegram_chat_id && isTelegramEligible(app.country_code, app.learning_lang)) {
+          const LANG_LABELS_TG: Record<string, string> = { en: 'English', ru: 'Russian', et: 'Estonian', ky: 'Kyrgyz' }
+          const tgMsg = `🎉 A new group ${subject} course opened!\n\n👩‍🏫 ${teacherName}\n📖 ${interest.level} · ${LANG_LABELS_TG[teaching_language as string] ?? teaching_language}\n\nSessions:\n${sessionDateStrings.map((d, i) => `  ${i + 1}. ${d}`).join('\n')}\n\n${packageLink}`
+          fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: app.telegram_chat_id, text: tgMsg }),
+          }).catch(() => {})
+        }
+      }
     }
   }
 

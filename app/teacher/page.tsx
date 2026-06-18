@@ -7,6 +7,7 @@ import GroupSlotsTeacher from '@/components/teacher/GroupSlotsTeacher'
 import PremadeBatchesTeacher from '@/components/teacher/PremadeBatchesTeacher'
 import CourseSettingsTeacher from '@/components/teacher/CourseSettingsTeacher'
 import TimezoneSelect from '@/components/TimezoneSelect'
+import DemandSection, { DemandRow } from '@/components/teacher/DemandSection'
 
 type Lang = 'en' | 'ru' | 'et'
 type NavSection = 'overview' | 'courses' | 'settings'
@@ -181,8 +182,23 @@ export default function TeacherPage() {
   const [savingAvail, setSavingAvail] = useState(false)
   const [savedAvail, setSavedAvail] = useState(false)
   const [overviewOpen, setOverviewOpen] = useState<Record<string, boolean>>({ oneToOne: true, group: true, premade: true })
+  const [pendingDemands, setPendingDemands] = useState<DemandRow[]>([])
+  const [loadingDemands, setLoadingDemands] = useState(false)
+  const [groupPrefillSubject, setGroupPrefillSubject] = useState('')
+  const [groupPrefillLang, setGroupPrefillLang] = useState('')
+  const [groupPrefillLevel, setGroupPrefillLevel] = useState('')
+  const [groupPrefillTrigger, setGroupPrefillTrigger] = useState(0)
 
   const t = T[lang]
+
+  function fetchDemands(teacherId: string) {
+    setLoadingDemands(true)
+    fetch(`/api/group-interest?teacherId=${teacherId}`)
+      .then(r => r.json())
+      .then(d => setPendingDemands(d.demands || []))
+      .catch(() => {})
+      .finally(() => setLoadingDemands(false))
+  }
 
   function reloadTeacherData(teacherId: string) {
     fetch(`/api/teachers?id=${teacherId}`)
@@ -221,6 +237,7 @@ export default function TeacherPage() {
           fetch(`/api/premade-batches?teacherId=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => setPremadeBatches(d.batches || []))
+          fetchDemands(d.user.teacherId)
           fetch(`/api/teachers?id=${d.user.teacherId}`)
             .then(r => r.json())
             .then(d => {
@@ -355,6 +372,11 @@ export default function TeacherPage() {
               {item.id === 'overview' && totalUpcoming > 0 && (
                 <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${nav === 'overview' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                   {totalUpcoming}
+                </span>
+              )}
+              {item.id === 'courses' && pendingDemands.length > 0 && (
+                <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${nav === 'courses' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-amber-600'}`}>
+                  {pendingDemands.reduce((s, d) => s + d.count, 0)}
                 </span>
               )}
             </button>
@@ -634,25 +656,43 @@ export default function TeacherPage() {
 
           {/* Courses - Groups + Premade 50/50 */}
           {nav === 'courses' && user?.teacherId && (
-            <div className="grid grid-cols-2 gap-5 items-start">
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <GroupSlotsTeacher
-                  teacherId={user.teacherId}
-                  subjects={teacherSubjects}
-                  subjectFormats={subjectFormats}
-                  subjectLevels={subjectLevels}
-                  teachingLanguages={teachingLanguages}
-                  lang={lang}
-                />
-              </div>
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <PremadeBatchesTeacher
-                  teacherId={user.teacherId}
-                  subjects={teacherSubjects}
-                  subjectFormats={subjectFormats}
-                  lang={lang}
-                  teachingLanguages={teachingLanguages}
-                />
+            <div className="flex flex-col gap-4">
+              <DemandSection
+                demands={pendingDemands}
+                loading={loadingDemands}
+                lang={lang}
+                onCreateBatch={(subject, teachingLang, level) => {
+                  setGroupPrefillSubject(subject)
+                  setGroupPrefillLang(teachingLang)
+                  setGroupPrefillLevel(level)
+                  setGroupPrefillTrigger(p => p + 1)
+                }}
+              />
+              <div className="grid grid-cols-2 gap-5 items-start">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                  <GroupSlotsTeacher
+                    teacherId={user.teacherId}
+                    subjects={teacherSubjects}
+                    subjectFormats={subjectFormats}
+                    subjectLevels={subjectLevels}
+                    teachingLanguages={teachingLanguages}
+                    lang={lang}
+                    prefillSubject={groupPrefillSubject}
+                    prefillLang={groupPrefillLang}
+                    prefillLevel={groupPrefillLevel}
+                    prefillTrigger={groupPrefillTrigger}
+                    onBatchCreated={() => user?.teacherId && fetchDemands(user.teacherId)}
+                  />
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                  <PremadeBatchesTeacher
+                    teacherId={user.teacherId}
+                    subjects={teacherSubjects}
+                    subjectFormats={subjectFormats}
+                    lang={lang}
+                    teachingLanguages={teachingLanguages}
+                  />
+                </div>
               </div>
             </div>
           )}

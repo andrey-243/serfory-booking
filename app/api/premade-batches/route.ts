@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
   // GCal events (fire-and-forget)
   const { data: teacher } = await supabase
     .from('teachers')
-    .select('google_refresh_token, google_calendar_id, name')
+    .select('google_refresh_token, google_calendar_id, name, email')
     .eq('id', teacher_id)
     .single()
 
