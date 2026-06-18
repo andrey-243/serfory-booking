@@ -19,6 +19,8 @@ const T = {
     lang: 'Teaching language',
     level: 'Level',
     grade: 'Grade',
+    grades: 'Grades',
+    cefr: 'CEFR',
     submit: 'Send request',
     sending: 'Sending...',
     successTitle: 'Request sent!',
@@ -42,6 +44,8 @@ const T = {
     lang: 'Язык обучения',
     level: 'Уровень',
     grade: 'Класс',
+    grades: 'Классы',
+    cefr: 'CEFR',
     submit: 'Отправить запрос',
     sending: 'Отправка...',
     successTitle: 'Запрос отправлен!',
@@ -65,6 +69,8 @@ const T = {
     lang: 'Õppekeel',
     level: 'Tase',
     grade: 'Klass',
+    grades: 'Klassid',
+    cefr: 'CEFR',
     submit: 'Saada taotlus',
     sending: 'Saatmine...',
     successTitle: 'Taotlus saadetud!',
@@ -108,11 +114,18 @@ export default function GroupInterestModal({ onClose, defaultSubject, defaultLan
   const [level, setLevel] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done'>('idle')
 
+  const [levelMode, setLevelMode] = useState<'grade' | 'cefr'>('grade')
   const isLangSubject = LANG_SUBJECTS.has(subject)
-  const levels = isLangSubject ? CEFR : ALL_GRADES
+  const levels = isLangSubject ? (levelMode === 'cefr' ? CEFR : ALL_GRADES) : ALL_GRADES
 
   function handleSubjectChange(s: string) {
     setSubject(s)
+    setLevel('')
+    setLevelMode('grade')
+  }
+
+  function handleLevelModeChange(mode: 'grade' | 'cefr') {
+    setLevelMode(mode)
     setLevel('')
   }
 
@@ -195,9 +208,25 @@ export default function GroupInterestModal({ onClose, defaultSubject, defaultLan
 
           {/* Level / Grade */}
           <div>
-            <label className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide block mb-1.5">
-              {isLangSubject ? t.level : t.grade}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
+                {isLangSubject ? (levelMode === 'cefr' ? t.level : t.grade) : t.grade}
+              </label>
+              {isLangSubject && (
+                <div className="flex rounded-lg overflow-hidden border border-gray-200 text-[10px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => handleLevelModeChange('grade')}
+                    className={`px-2 py-0.5 transition-colors ${levelMode === 'grade' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >{t.grades}</button>
+                  <button
+                    type="button"
+                    onClick={() => handleLevelModeChange('cefr')}
+                    className={`px-2 py-0.5 transition-colors ${levelMode === 'cefr' ? 'bg-blue-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >{t.cefr}</button>
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {levels.map(lv => (
                 <button
@@ -208,7 +237,7 @@ export default function GroupInterestModal({ onClose, defaultSubject, defaultLan
                     level === lv ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'
                   }`}
                 >
-                  {isLangSubject ? lv : ((t.gradeLabels as Record<string, string>)[lv] ?? lv)}
+                  {(isLangSubject && levelMode === 'cefr') ? lv : ((t.gradeLabels as Record<string, string>)[lv] ?? lv)}
                 </button>
               ))}
             </div>
