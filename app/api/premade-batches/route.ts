@@ -5,7 +5,7 @@ import { createPremadeSessionEvent } from '@/lib/google-calendar'
 import { createZoomMeeting } from '@/lib/zoom'
 import { checkTeacherConflicts } from '@/lib/schedule'
 
-const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
+const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Math', 'Kyrgyz', 'Chemistry', 'Physics']
 
 // Convert a local date+time in the given IANA timezone to a UTC ISO string.
 function localToUtc(dateStr: string, timeStr: string, tz: string): string {

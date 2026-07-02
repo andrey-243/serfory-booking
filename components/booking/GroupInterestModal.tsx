@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 
-const ALL_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Chemistry', 'Physics', 'Kyrgyz']
-const LANG_SUBJECTS = new Set(['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'])
+const ALL_SUBJECTS = ['Russian', 'English', 'Estonian', 'Math', 'Chemistry', 'Physics', 'Kyrgyz']
+const LANG_SUBJECTS = new Set(['Russian', 'English', 'Estonian', 'Kyrgyz'])
 const ALL_GRADES = ['kindergarten', '1', '2', '3-4', '5-6', '7-8', '9', '10-12']
 const CEFR = ['A1', 'A2', 'B1', 'B2']
 const TEACHING_LANGS = ['en', 'ru', 'et', 'ky'] as const
@@ -33,7 +33,7 @@ const T = {
       '9': 'Grade 9', '10-12': 'Grade 10-12',
     },
     subjectLabels: {
-      Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish',
+      Russian: 'Russian', English: 'English', Estonian: 'Estonian',
       Math: 'Math', Chemistry: 'Chemistry', Physics: 'Physics', Kyrgyz: 'Kyrgyz',
     },
   },
@@ -58,7 +58,7 @@ const T = {
       '9': '9 класс', '10-12': '10-12 класс',
     },
     subjectLabels: {
-      Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский',
+      Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский',
       Math: 'Математика', Chemistry: 'Химия', Physics: 'Физика', Kyrgyz: 'Кыргызский',
     },
   },
@@ -83,7 +83,7 @@ const T = {
       '9': '9. klass', '10-12': '10.-12. klass',
     },
     subjectLabels: {
-      Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel',
+      Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel',
       Math: 'Matemaatika', Chemistry: 'Keemia', Physics: 'Füüsika', Kyrgyz: 'Kirgiisi keel',
     },
   },

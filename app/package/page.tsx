@@ -56,11 +56,11 @@ const DAYS: Record<Lang, string[]> = {
   ru: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
 }
 
-const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'] as const
+const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Kyrgyz'] as const
 const OTHER_SUBJECTS = ['Math', 'Chemistry', 'Physics'] as const
 const VALID_SUBJECTS = [...LANG_SUBJECTS, ...OTHER_SUBJECTS] as const
 type Subject = typeof VALID_SUBJECTS[number]
-const LANG_SUBJECT_SET = new Set<Subject>(['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz'])
+const LANG_SUBJECT_SET = new Set<Subject>(['Russian', 'English', 'Estonian', 'Kyrgyz'])
 
 const TG_COUNTRIES = new Set(['RU','BY','UA','KZ','KG','TJ','TM','UZ','AZ','AM','GE','MD','EE','LV','LT','PL','RO','BG','RS','HU','CZ','SK','HR','BA','ME','MK','AL'])
 
@@ -87,7 +87,7 @@ const T = {
     title: (name: string) => `Hi ${name}, choose your package`,
     subtitle: 'Select a format and the number of lessons. You will receive an invoice by email.',
     course: 'Course',
-    courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Spanish: 'Spanish', Math: 'Math', Kyrgyz: 'Kyrgyz', Chemistry: 'Chemistry', Physics: 'Physics' } as Record<string, string>,
+    courseLabels: { Russian: 'Russian', English: 'English', Estonian: 'Estonian', Math: 'Math', Kyrgyz: 'Kyrgyz', Chemistry: 'Chemistry', Physics: 'Physics' } as Record<string, string>,
     grade: 'Grade / Level',
     gradeSection: 'Grade',
     levelSection: 'Level',
@@ -143,7 +143,7 @@ const T = {
     title: (name: string) => `Tere ${name}, vali oma pakett`,
     subtitle: 'Vali formaat ja tundide arv. Saad arve e-posti teel.',
     course: 'Kursus',
-    courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Spanish: 'Hispaania keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel', Chemistry: 'Keemia', Physics: 'Füüsika' } as Record<string, string>,
+    courseLabels: { Russian: 'Vene keel', English: 'Inglise keel', Estonian: 'Eesti keel', Math: 'Matemaatika', Kyrgyz: 'Kirgiisi keel', Chemistry: 'Keemia', Physics: 'Füüsika' } as Record<string, string>,
     grade: 'Klass / tase',
     gradeSection: 'Klass',
     levelSection: 'Tase',
@@ -199,7 +199,7 @@ const T = {
     title: (name: string) => `Привет ${name}, выберите пакет`,
     subtitle: 'Выберите формат и количество уроков. Счёт придёт на почту.',
     course: 'Курс',
-    courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Spanish: 'Испанский', Math: 'Математика', Kyrgyz: 'Кыргызский', Chemistry: 'Химия', Physics: 'Физика' } as Record<string, string>,
+    courseLabels: { Russian: 'Русский', English: 'Английский', Estonian: 'Эстонский', Math: 'Математика', Kyrgyz: 'Кыргызский', Chemistry: 'Химия', Physics: 'Физика' } as Record<string, string>,
     grade: 'Класс / уровень',
     gradeSection: 'Класс',
     levelSection: 'Уровень',

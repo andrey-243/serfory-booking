@@ -297,11 +297,10 @@ const SUBJECT_COLORS_CRM: Record<string, { bg: string; text: string }> = {
   Russian:  { bg: 'bg-pink-100',   text: 'text-pink-700'   },
   English:  { bg: 'bg-violet-100', text: 'text-violet-700' },
   Estonian: { bg: 'bg-teal-100',   text: 'text-teal-700'   },
-  Spanish:  { bg: 'bg-amber-100',  text: 'text-amber-700'  },
   Math:     { bg: 'bg-blue-100',   text: 'text-blue-700'   },
 }
 const SUBJECT_ABBR_CRM: Record<string, string> = {
-  Russian: 'RU', English: 'EN', Estonian: 'ET', Spanish: 'ES', Math: 'MA',
+  Russian: 'RU', English: 'EN', Estonian: 'ET', Math: 'MA',
 }
 const CRM_AVATAR_COLORS = [
   'bg-violet-100 text-violet-700',

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Kyrgyz']
+const LANG_SUBJECTS = ['Russian', 'English', 'Estonian', 'Kyrgyz']
 
 const ALL_GRADES = ['kindergarten', '1', '2', '3-4', '5-6', '7-8', '9', '10-12']
 const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2']

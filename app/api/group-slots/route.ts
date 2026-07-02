@@ -6,7 +6,7 @@ import { createZoomMeeting } from '@/lib/zoom'
 import { sendGroupBatchOpenedEmail, isTelegramEligible } from '@/lib/email'
 import { checkTeacherConflicts } from '@/lib/schedule'
 
-const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
+const VALID_SUBJECTS = ['Russian', 'English', 'Estonian', 'Math', 'Kyrgyz']
 const MAX_FUTURE_BATCHES = 5
 
 function toDateStr(d: Date): string {

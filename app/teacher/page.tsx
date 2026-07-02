@@ -74,7 +74,7 @@ const T = {
 
 const SUBJECT_COLORS: Record<string, string> = {
   Russian: 'bg-orange-100 text-orange-700', English: 'bg-blue-100 text-blue-700',
-  Estonian: 'bg-green-100 text-green-700',  Spanish: 'bg-rose-100 text-rose-700',
+  Estonian: 'bg-green-100 text-green-700',
   Math: 'bg-purple-100 text-purple-700',    Kyrgyz: 'bg-violet-100 text-violet-700',
   Physics: 'bg-sky-100 text-sky-700',       Chemistry: 'bg-teal-100 text-teal-700',
 }

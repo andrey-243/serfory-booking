@@ -94,7 +94,7 @@ function BookingPageInner() {
         if (!d.prefill) return
         setPrefill(d.prefill)
         if (d.prefill.grade) setStudentGrade(d.prefill.grade)
-        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
+        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Math']
         if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
           setSelectedCourse(d.prefill.subject as Course)
         }
@@ -118,7 +118,7 @@ function BookingPageInner() {
         setPrefill(d.prefill)
         if (d.bookingFormat) setBookingFormat(d.bookingFormat)
         if (d.prefill.grade) setStudentGrade(d.prefill.grade)
-        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Spanish', 'Math']
+        const VALID_COURSES: Course[] = ['Russian', 'English', 'Estonian', 'Math']
         if (d.prefill.subject && VALID_COURSES.includes(d.prefill.subject)) {
           setSelectedCourse(d.prefill.subject as Course)
         }

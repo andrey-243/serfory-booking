@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const validSubjects = ['Russian', 'English', 'Estonian', 'Spanish', 'Math', 'Kyrgyz']
+  const validSubjects = ['Russian', 'English', 'Estonian', 'Math', 'Kyrgyz']
   if (!validSubjects.includes(subject)) {
     return NextResponse.json(
       { error: 'Invalid subject' },
